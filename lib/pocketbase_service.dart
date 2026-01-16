@@ -105,6 +105,101 @@ class PocketBaseService {
     }
   }
 
+  // Get tool locations at a specific location
+  Future<List<dynamic>> getToolLocationsAtLocation(String locationId) async {
+    try {
+      final records = await pb.collection('tool_locations').getFullList(
+        filter: 'location = "$locationId" && quantity > 0',
+      );
+      return records;
+    } catch (e) {
+      print('Error getting tool locations: $e');
+      rethrow;
+    }
+  }
+
+  // Get tool by ID
+  Future<dynamic> getToolById(String toolId) async {
+    try {
+      final record = await pb.collection('tools').getOne(toolId);
+      return record;
+    } catch (e) {
+      print('Error getting tool: $e');
+      rethrow;
+    }
+  }
+
+  // Move tool between locations
+  Future<void> moveTool({
+    required String toolId,
+    required String fromLocationId,
+    required String toLocationId,
+    required int quantity,
+  }) async {
+    try {
+      // Get current tool_location records
+      final fromRecords = await pb.collection('tool_locations').getFullList(
+        filter: 'tool = "$toolId" && location = "$fromLocationId"',
+      );
+
+      if (fromRecords.isEmpty) {
+        throw Exception('Tool not found at source location');
+      }
+
+      final fromRecord = fromRecords.first;
+      final currentQty = fromRecord.data['quantity'] as int;
+
+      if (currentQty < quantity) {
+        throw Exception('Not enough quantity at source location');
+      }
+
+      // Update source location (reduce quantity or delete if 0)
+      if (currentQty == quantity) {
+        await pb.collection('tool_locations').delete(fromRecord.id);
+      } else {
+        await pb.collection('tool_locations').update(
+          fromRecord.id,
+          body: {'quantity': currentQty - quantity},
+        );
+      }
+
+      // Update or create destination location
+      final toRecords = await pb.collection('tool_locations').getFullList(
+        filter: 'tool = "$toolId" && location = "$toLocationId"',
+      );
+
+      if (toRecords.isEmpty) {
+        // Create new record
+        await pb.collection('tool_locations').create(body: {
+          'tool': toolId,
+          'location': toLocationId,
+          'quantity': quantity,
+        });
+      } else {
+        // Update existing record
+        final toRecord = toRecords.first;
+        final existingQty = toRecord.data['quantity'] as int;
+        await pb.collection('tool_locations').update(
+          toRecord.id,
+          body: {'quantity': existingQty + quantity},
+        );
+      }
+
+      // Create movement history record
+      await pb.collection('movement_history').create(body: {
+        'tool': toolId,
+        'from_location': fromLocationId,
+        'to_location': toLocationId,
+        'quantity': quantity,
+      });
+
+      print('Tool moved successfully');
+    } catch (e) {
+      print('Error moving tool: $e');
+      rethrow;
+    }
+  }
+
   // Create tool_location record
   Future<void> createToolLocation({
     required String toolId,

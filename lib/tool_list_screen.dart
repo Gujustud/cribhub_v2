@@ -1,5 +1,8 @@
+// tool_list_screen.dart
 import 'package:flutter/material.dart';
+import 'models.dart';
 import 'pocketbase_service.dart';
+import 'transfer_dialog.dart';
 
 class ToolListScreen extends StatefulWidget {
   const ToolListScreen({super.key});
@@ -9,10 +12,11 @@ class ToolListScreen extends StatefulWidget {
 }
 
 class _ToolListScreenState extends State<ToolListScreen> {
-  List<dynamic> _tools = [];
-  List<dynamic> _allLocations = [];
-  Map<String, String> _toolLocationTexts = {}; // Cache location texts
+  final _pbService = PocketBaseService();
+  List<ToolWithLocations> _toolsWithLocations = [];
+  List<Location> _allLocations = [];
   bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -23,74 +27,79 @@ class _ToolListScreenState extends State<ToolListScreen> {
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
+      _errorMessage = null;
     });
 
     try {
-      final pbService = PocketBaseService();
-      final tools = await pbService.getTools();
-      final locations = await pbService.getLocations();
-      
-      // Load all tool locations upfront
-      final Map<String, String> locationTexts = {};
-      for (var tool in tools) {
-        final locationText = await _getToolLocationText(tool.id, pbService, locations);
-        locationTexts[tool.id] = locationText;
-        print('Cached location for ${tool.id}: $locationText');
+      // Load all locations first
+      final locationRecords = await _pbService.getLocations();
+      print('DEBUG: locationRecords type: ${locationRecords.runtimeType}');
+      print('DEBUG: locationRecords length: ${locationRecords.length}');
+      if (locationRecords.isNotEmpty) {
+        final firstRecord = locationRecords[0];
+        print('DEBUG: first record type: ${firstRecord.runtimeType}');
+        print('DEBUG: first record: $firstRecord');
+        print('DEBUG: trying to access .id: ${firstRecord.id}');
+        print('DEBUG: trying to access .data: ${firstRecord.data}');
       }
       
-      print('Total cached locations: ${locationTexts.length}');
-      print('Cached data: $locationTexts');
-      
+      _allLocations = locationRecords.map((r) {
+        print('DEBUG: Converting record: ${r.id}');
+        return Location.fromRecord(r);
+      }).toList();
+
+      // Load all tools
+      final toolRecords = await _pbService.getTools();
+      final tools = toolRecords.map((r) => Tool.fromRecord(r)).toList();
+
+      // For each tool, load its locations with expand
+      final toolsWithLocs = <ToolWithLocations>[];
+      for (final tool in tools) {
+        final toolLocationRecords = await _pbService.pb
+            .collection('tool_locations')
+            .getFullList(
+              filter: 'tool = "${tool.id}"',
+              expand: 'location',
+            );
+
+        final toolLocations = toolLocationRecords
+            .map((r) => ToolLocation.fromRecord(r))
+            .toList();
+
+        toolsWithLocs.add(ToolWithLocations(
+          tool: tool,
+          locations: toolLocations,
+        ));
+      }
+
       setState(() {
-        _tools = tools;
-        _allLocations = locations;
-        _toolLocationTexts = locationTexts;
+        _toolsWithLocations = toolsWithLocs;
         _isLoading = false;
       });
-      
-      print('After setState - _toolLocationTexts has ${_toolLocationTexts.length} entries');
     } catch (e) {
       setState(() {
+        _errorMessage = e.toString();
         _isLoading = false;
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading data: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
     }
   }
 
-  Future<String> _getToolLocationText(String toolId, PocketBaseService pbService, List<dynamic> locations) async {
-    try {
-      final toolLocations = await pbService.getToolLocations(toolId);
-      
-      print('Tool $toolId has ${toolLocations.length} locations');
-      
-      if (toolLocations.isEmpty) {
-        print('Tool $toolId: Returning "Not assigned yet"');
-        return 'Not assigned yet';
-      }
-      
-      final locationTexts = <String>[];
-      for (var tl in toolLocations) {
-        final locationId = tl.data['location'];
-        final qty = tl.data['quantity'];
-        print('Tool $toolId: locationId=$locationId, qty=$qty');
-        final path = pbService.getLocationPath(locationId, locations);
-        print('Tool $toolId: path=$path');
-        locationTexts.add('$path (Qty: $qty)');
-      }
-      
-      final result = locationTexts.join(', ');
-      print('Tool $toolId: Final result=$result');
-      return result;
-    } catch (e) {
-      print('Error loading location for tool $toolId: $e');
-      return 'Error loading';
+  Future<void> _handleTransfer({
+    required Tool tool,
+    required ToolLocation sourceLocation,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => TransferDialog(
+        tool: tool,
+        sourceLocation: sourceLocation,
+        allLocations: _allLocations,
+      ),
+    );
+
+    if (result == true) {
+      // Refresh data after successful transfer
+      _loadData();
     }
   }
 
@@ -98,69 +107,305 @@ class _ToolListScreenState extends State<ToolListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        title: const Text('Tool Inventory'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('All Tools'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadData,
+            tooltip: 'Refresh',
           ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _tools.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No tools yet.\nAdd some tools to get started!',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
+          : _errorMessage != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: Colors.red,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error: $_errorMessage',
+                        style: const TextStyle(color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadData,
+                        child: const Text('Retry'),
+                      ),
+                    ],
                   ),
                 )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: _tools.length,
-                  itemBuilder: (context, index) {
-                    final tool = _tools[index];
-                    final locationText = _toolLocationTexts[tool.id] ?? 'Loading...';
-                    print('Displaying tool ${tool.id}: $locationText');
-                    
-                    return Card(
-                      key: ValueKey(tool.id),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        title: Text(
-                          tool.data['tool_name'] ?? 'Unknown Tool',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 4),
-                            if (tool.data['model_number'] != null && tool.data['model_number'] != '')
-                              Text('Model: ${tool.data['model_number']}'),
-                            Text(
-                              locationText,
-                              style: TextStyle(
-                                color: locationText.contains('Not assigned')
-                                    ? Colors.orange[700]
-                                    : Colors.green[700],
-                              ),
-                            ),
-                          ],
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          // TODO: Navigate to tool detail screen
-                          print('Tapped tool: ${tool.data['tool_name']}');
-                        },
+              : _toolsWithLocations.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No tools found.\nAdd some tools to get started!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
                       ),
-                    );
-                  },
-                ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _toolsWithLocations.length,
+                      itemBuilder: (context, index) {
+                        return ToolCard(
+                          toolWithLocations: _toolsWithLocations[index],
+                          onTransfer: (sourceLocation) {
+                            _handleTransfer(
+                              tool: _toolsWithLocations[index].tool,
+                              sourceLocation: sourceLocation,
+                            );
+                          },
+                        );
+                      },
+                    ),
     );
+  }
+}
+
+class ToolCard extends StatelessWidget {
+  final ToolWithLocations toolWithLocations;
+  final Function(ToolLocation) onTransfer;
+
+  const ToolCard({
+    Key? key,
+    required this.toolWithLocations,
+    required this.onTransfer,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final tool = toolWithLocations.tool;
+    final locations = toolWithLocations.sortedLocations;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Left column: Tool details
+            Expanded(
+              flex: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Tool name
+                  Text(
+                    tool.toolName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  
+                  // Category
+                  Text(
+                    tool.category,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  
+                  // Subcategory
+                  if (tool.subcategory != null && tool.subcategory!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      tool.subcategory!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[500],
+                      ),
+                    ),
+                  ],
+                  
+                  // Specs (diameter, flutes, model)
+                  if (tool.displaySpecs.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      tool.displaySpecs,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
+                  
+                  // Total quantity
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: Text(
+                      'Total Qty: ${toolWithLocations.totalQuantity}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[900],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            const SizedBox(width: 16),
+            
+            // Right column: Location tags (stacked vertically)
+            Expanded(
+              flex: 2,
+              child: locations.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No locations',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    )
+                  : Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      alignment: WrapAlignment.end,
+                      children: locations.map((toolLocation) {
+                        return LocationTag(
+                          toolLocation: toolLocation,
+                          onTap: () => onTransfer(toolLocation),
+                        );
+                      }).toList(),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class LocationTag extends StatelessWidget {
+  final ToolLocation toolLocation;
+  final VoidCallback onTap;
+
+  const LocationTag({
+    Key? key,
+    required this.toolLocation,
+    required this.onTap,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final location = toolLocation.location;
+    final quantity = toolLocation.quantity;
+    final hasQuantity = quantity > 0;
+    
+    if (location == null) {
+      return const SizedBox.shrink();
+    }
+
+    final colors = location.colors;
+
+    if (hasQuantity) {
+      // Filled style for Qty > 0
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Color(colors.fillColor),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Color(colors.borderColor),
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                location.name,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Color(colors.textColor),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$quantity',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Color(colors.textColor),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      // Outlined style for Qty: 0
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.grey[400]!,
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                location.name,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '0',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[500],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
 }

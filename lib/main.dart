@@ -4,6 +4,7 @@ import 'tool_list_screen.dart';
 import 'location_management_screen.dart';
 import 'brands_screen.dart';
 import 'suppliers_screen.dart';
+import 'return_tool_screen.dart';
 
 void main() {
   runApp(const CribhubApp());
@@ -53,8 +54,10 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _onReturnTool() {
-    // TODO: Navigate to return tool screen
-    print('Return tool from machine');
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ReturnToolScreen()),
+    );
   }
 
   @override
