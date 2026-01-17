@@ -254,7 +254,25 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
   void _showAddLocationDialog({String? parentId, String? parentName}) {
     final nameController = TextEditingController();
-    String locationType = _locationTypes.isNotEmpty ? _locationTypes.first : 'toolbox';
+
+    // Find parent location to inherit type for sublocations
+    String locationType;
+    if (parentId != null) {
+      // For sublocations, inherit parent's type
+      try {
+        final parentLocation = _locations.firstWhere(
+          (loc) => loc.id == parentId,
+        );
+        locationType = parentLocation.data['type'] ?? 'toolbox';
+        print('Found parent: ${parentLocation.data['name']}, type: $locationType'); // Debug
+      } catch (e) {
+        print('Parent location not found for id: $parentId'); // Debug
+        locationType = 'toolbox'; // Fallback
+      }
+    } else {
+      // For root locations, use default
+      locationType = _locationTypes.isNotEmpty ? _locationTypes.first : 'toolbox';
+    }
     
     showDialog(
       context: context,
@@ -380,10 +398,13 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.add, size: 20),
-                  onPressed: () => _showAddLocationDialog(
-                    parentId: location.id,
-                    parentName: location.data['name'],
-                  ),
+                  onPressed: () {
+                    print('Add sublocation tapped for: ${location.data['name']} (id: ${location.id})');
+                    _showAddLocationDialog(
+                      parentId: location.id,
+                      parentName: location.data['name'],
+                    );
+                  },
                   tooltip: 'Add sub-location',
                 ),
               ],

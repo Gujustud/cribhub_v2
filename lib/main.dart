@@ -4,7 +4,7 @@ import 'tool_list_screen.dart';
 import 'location_management_screen.dart';
 import 'brands_screen.dart';
 import 'suppliers_screen.dart';
-import 'return_tool_screen.dart';
+import 'return_dialog.dart';
 
 void main() {
   runApp(const CribhubApp());
@@ -53,11 +53,16 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  void _onReturnTool() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ReturnToolScreen()),
+  void _onReturnTool() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => const ReturnDialog(),
     );
+
+    // Could handle result if needed for refreshing data
+    if (result == true) {
+      // Refresh any necessary data if tool was returned
+    }
   }
 
   @override
