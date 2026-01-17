@@ -64,14 +64,12 @@ class Tool {
     );
   }
 
-  // Helper method to get display specs
+  // Helper method to get display specs - only show model number
   String get displaySpecs {
-    final parts = <String>[];
-    if (diameterIn != null) parts.add('Ø${diameterIn}"');
-    if (diameterMm != null) parts.add('Ø${diameterMm}mm');
-    if (flutes != null) parts.add('${flutes}FL');
-    if (modelNumber != null && modelNumber!.isNotEmpty) parts.add(modelNumber!);
-    return parts.isEmpty ? '' : parts.join(' • ');
+    if (modelNumber != null && modelNumber!.isNotEmpty) {
+      return 'Model: $modelNumber';
+    }
+    return '';
   }
 }
 
@@ -81,6 +79,7 @@ class Location {
   final String type; // machine, shelf, toolbox, recycle
   final String? qrCode;
   final String? machine; // For locations linked to machines
+  final String? parentId; // For hierarchical locations
 
   Location({
     required this.id,
@@ -88,6 +87,7 @@ class Location {
     required this.type,
     this.qrCode,
     this.machine,
+    this.parentId,
   });
 
   factory Location.fromRecord(dynamic record) {
@@ -99,6 +99,7 @@ class Location {
       type: data['type'] ?? '',
       qrCode: data['qr_code'],
       machine: data['machine'],
+      parentId: data['parent'],
     );
   }
 
@@ -188,10 +189,16 @@ class ToolLocation {
     Location? expandedLocation;
     try {
       if (record.expand != null && record.expand['location'] != null) {
-        expandedLocation = Location.fromRecord(record.expand['location']);
+        final locationData = record.expand['location'];
+        // The expanded location might be an array or a single object
+        if (locationData is List && locationData.isNotEmpty) {
+          expandedLocation = Location.fromRecord(locationData[0]);
+        } else {
+          expandedLocation = Location.fromRecord(locationData);
+        }
       }
     } catch (e) {
-      // Expand not available
+      print('⚠️  Error expanding location: $e');
     }
 
     return ToolLocation(

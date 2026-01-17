@@ -33,20 +33,7 @@ class _ToolListScreenState extends State<ToolListScreen> {
     try {
       // Load all locations first
       final locationRecords = await _pbService.getLocations();
-      print('DEBUG: locationRecords type: ${locationRecords.runtimeType}');
-      print('DEBUG: locationRecords length: ${locationRecords.length}');
-      if (locationRecords.isNotEmpty) {
-        final firstRecord = locationRecords[0];
-        print('DEBUG: first record type: ${firstRecord.runtimeType}');
-        print('DEBUG: first record: $firstRecord');
-        print('DEBUG: trying to access .id: ${firstRecord.id}');
-        print('DEBUG: trying to access .data: ${firstRecord.data}');
-      }
-      
-      _allLocations = locationRecords.map((r) {
-        print('DEBUG: Converting record: ${r.id}');
-        return Location.fromRecord(r);
-      }).toList();
+      _allLocations = locationRecords.map((r) => Location.fromRecord(r)).toList();
 
       // Load all tools
       final toolRecords = await _pbService.getTools();
@@ -76,7 +63,7 @@ class _ToolListScreenState extends State<ToolListScreen> {
         _toolsWithLocations = toolsWithLocs;
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;
@@ -98,7 +85,6 @@ class _ToolListScreenState extends State<ToolListScreen> {
     );
 
     if (result == true) {
-      // Refresh data after successful transfer
       _loadData();
     }
   }
@@ -124,11 +110,7 @@ class _ToolListScreenState extends State<ToolListScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
-                        Icons.error_outline,
-                        size: 48,
-                        color: Colors.red,
-                      ),
+                      const Icon(Icons.error_outline, size: 48, color: Colors.red),
                       const SizedBox(height: 16),
                       Text(
                         'Error: $_errorMessage',
@@ -157,6 +139,7 @@ class _ToolListScreenState extends State<ToolListScreen> {
                       itemBuilder: (context, index) {
                         return ToolCard(
                           toolWithLocations: _toolsWithLocations[index],
+                          allLocations: _allLocations,
                           onTransfer: (sourceLocation) {
                             _handleTransfer(
                               tool: _toolsWithLocations[index].tool,
@@ -172,11 +155,13 @@ class _ToolListScreenState extends State<ToolListScreen> {
 
 class ToolCard extends StatelessWidget {
   final ToolWithLocations toolWithLocations;
+  final List<Location> allLocations;
   final Function(ToolLocation) onTransfer;
 
   const ToolCard({
     Key? key,
     required this.toolWithLocations,
+    required this.allLocations,
     required this.onTransfer,
   }) : super(key: key);
 
@@ -199,68 +184,23 @@ class ToolCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Tool name
                   Text(
                     tool.toolName,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
-                  
-                  // Category
                   Text(
                     tool.category,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500),
                   ),
-                  
-                  // Subcategory
                   if (tool.subcategory != null && tool.subcategory!.isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    Text(
-                      tool.subcategory!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[500],
-                      ),
-                    ),
+                    Text(tool.subcategory!, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
                   ],
-                  
-                  // Specs (diameter, flutes, model)
                   if (tool.displaySpecs.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    Text(
-                      tool.displaySpecs,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[700],
-                      ),
-                    ),
+                    Text(tool.displaySpecs, style: TextStyle(fontSize: 13, color: Colors.grey[700])),
                   ],
-                  
-                  // Total quantity
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.blue[50],
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: Colors.blue[200]!),
-                    ),
-                    child: Text(
-                      'Total Qty: ${toolWithLocations.totalQuantity}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[900],
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -270,27 +210,35 @@ class ToolCard extends StatelessWidget {
             // Right column: Location tags (stacked vertically)
             Expanded(
               flex: 2,
-              child: locations.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No locations',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[500],
-                        ),
-                      ),
-                    )
-                  : Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      alignment: WrapAlignment.end,
-                      children: locations.map((toolLocation) {
-                        return LocationTag(
-                          toolLocation: toolLocation,
-                          onTap: () => onTransfer(toolLocation),
-                        );
-                      }).toList(),
+              child: () {
+                // Filter out recycle locations
+                final visibleLocations = locations.where((loc) => 
+                  loc.location?.type.toLowerCase() != 'recycle'
+                ).toList();
+                
+                if (visibleLocations.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No locations',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                     ),
+                  );
+                }
+                
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: visibleLocations.map((toolLocation) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: LocationTag(
+                        toolLocation: toolLocation,
+                        allLocations: allLocations,
+                        onTap: () => onTransfer(toolLocation),
+                      ),
+                    );
+                  }).toList(),
+                );
+              }(),
             ),
           ],
         ),
@@ -301,111 +249,99 @@ class ToolCard extends StatelessWidget {
 
 class LocationTag extends StatelessWidget {
   final ToolLocation toolLocation;
+  final List<Location> allLocations;
   final VoidCallback onTap;
 
   const LocationTag({
     Key? key,
     required this.toolLocation,
+    required this.allLocations,
     required this.onTap,
   }) : super(key: key);
+
+  // Build hierarchical path showing only names separated by dashes
+  String _buildLocationPath(Location location) {
+    final names = <String>[];
+    var current = location;
+    
+    // Walk up the parent chain
+    while (true) {
+      names.insert(0, current.name);
+      
+      if (current.parentId == null || current.parentId!.isEmpty) break;
+      
+      // Find parent
+      try {
+        current = allLocations.firstWhere((loc) => loc.id == current.parentId);
+      } catch (e) {
+        break; // Parent not found
+      }
+    }
+    
+    return names.join('-');
+  }
 
   @override
   Widget build(BuildContext context) {
     final location = toolLocation.location;
     final quantity = toolLocation.quantity;
-    final hasQuantity = quantity > 0;
     
     if (location == null) {
       return const SizedBox.shrink();
     }
 
-    final colors = location.colors;
-
-    if (hasQuantity) {
-      // Filled style for Qty > 0
-      return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Color(colors.fillColor),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Color(colors.borderColor),
-              width: 1.5,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                location.name,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Color(colors.textColor),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '$quantity',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Color(colors.textColor),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    } else {
-      // Outlined style for Qty: 0
-      return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Colors.grey[400]!,
-              width: 1.5,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                location.name,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[600],
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '0',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[500],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+    if (quantity <= 0) {
+      return const SizedBox.shrink();
     }
+
+    final locationPath = _buildLocationPath(location);
+    final type = location.type.toLowerCase();
+    
+    // Define colors based on type
+    Color backgroundColor;
+    Color borderColor;
+    Color textColor;
+    
+    switch (type) {
+      case 'toolbox':
+        backgroundColor = Colors.red[50]!;
+        borderColor = Colors.red[300]!;
+        textColor = Colors.red[900]!;
+        break;
+      case 'shelf':
+        backgroundColor = Colors.orange[50]!;
+        borderColor = Colors.orange[300]!;
+        textColor = Colors.orange[900]!;
+        break;
+      case 'machine':
+        backgroundColor = Colors.blue[50]!;
+        borderColor = Colors.blue[300]!;
+        textColor = Colors.blue[900]!;
+        break;
+      default:
+        backgroundColor = Colors.grey[50]!;
+        borderColor = Colors.grey[300]!;
+        textColor = Colors.grey[900]!;
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(4), // Small rounded corners
+          border: Border.all(color: borderColor, width: 1.5),
+        ),
+        child: Text(
+          'Qty: $quantity • $locationPath',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
+        ),
+      ),
+    );
   }
 }

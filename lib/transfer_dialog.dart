@@ -1,6 +1,5 @@
 // transfer_dialog.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'models.dart';
 import 'pocketbase_service.dart';
 
@@ -21,17 +20,47 @@ class TransferDialog extends StatefulWidget {
 }
 
 class _TransferDialogState extends State<TransferDialog> {
-  final _quantityController = TextEditingController(text: '1');
+  int _quantity = 1;
   String? _selectedDestination;
   bool _isSubmitting = false;
 
-  @override
-  void dispose() {
-    _quantityController.dispose();
-    super.dispose();
+  // Build full hierarchical path for a location
+  String _buildLocationPath(Location location) {
+    final names = <String>[];
+    var current = location;
+    
+    while (true) {
+      names.insert(0, current.name);
+      
+      if (current.parentId == null || current.parentId!.isEmpty) break;
+      
+      try {
+        current = widget.allLocations.firstWhere((loc) => loc.id == current.parentId);
+      } catch (e) {
+        break;
+      }
+    }
+    
+    return names.join(' - ');
   }
 
-  // Group locations by type for the dropdown
+  // Get the top-level parent's type for grouping
+  String _getTopLevelType(Location location) {
+    var current = location;
+    
+    // Walk up to the root
+    while (current.parentId != null && current.parentId!.isNotEmpty) {
+      try {
+        current = widget.allLocations.firstWhere((loc) => loc.id == current.parentId);
+      } catch (e) {
+        break;
+      }
+    }
+    
+    return current.type.toLowerCase();
+  }
+
+  // Group locations by their top-level parent's type
   Map<String, List<Location>> get _groupedLocations {
     final grouped = <String, List<Location>>{};
     
@@ -39,16 +68,16 @@ class _TransferDialogState extends State<TransferDialog> {
       // Exclude the source location
       if (loc.id == widget.sourceLocation.locationId) continue;
       
-      final type = loc.type.toLowerCase();
-      if (!grouped.containsKey(type)) {
-        grouped[type] = [];
+      final topLevelType = _getTopLevelType(loc);
+      if (!grouped.containsKey(topLevelType)) {
+        grouped[topLevelType] = [];
       }
-      grouped[type]!.add(loc);
+      grouped[topLevelType]!.add(loc);
     }
     
-    // Sort each group by name
+    // Sort each group by full path
     for (final key in grouped.keys) {
-      grouped[key]!.sort((a, b) => a.name.compareTo(b.name));
+      grouped[key]!.sort((a, b) => _buildLocationPath(a).compareTo(_buildLocationPath(b)));
     }
     
     return grouped;
@@ -70,29 +99,23 @@ class _TransferDialogState extends State<TransferDialog> {
     }
   }
 
+  void _incrementQuantity() {
+    if (_quantity < widget.sourceLocation.quantity) {
+      setState(() {
+        _quantity++;
+      });
+    }
+  }
+
+  void _decrementQuantity() {
+    if (_quantity > 1) {
+      setState(() {
+        _quantity--;
+      });
+    }
+  }
+
   Future<void> _handleSubmit() async {
-    // Validate quantity
-    final quantity = int.tryParse(_quantityController.text);
-    if (quantity == null || quantity < 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid quantity (minimum 1)'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    if (quantity > widget.sourceLocation.quantity) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Quantity cannot exceed available ${widget.sourceLocation.quantity}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
     // Validate destination
     if (_selectedDestination == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -114,7 +137,7 @@ class _TransferDialogState extends State<TransferDialog> {
         toolId: widget.tool.id,
         fromLocationId: widget.sourceLocation.locationId,
         toLocationId: _selectedDestination!,
-        quantity: quantity,
+        quantity: _quantity,
       );
 
       if (!mounted) return;
@@ -126,7 +149,6 @@ class _TransferDialogState extends State<TransferDialog> {
         ),
       );
 
-      // Close dialog and return success
       Navigator.of(context).pop(true);
     } catch (e) {
       setState(() {
@@ -148,100 +170,167 @@ class _TransferDialogState extends State<TransferDialog> {
   Widget build(BuildContext context) {
     final sourceLoc = widget.sourceLocation.location;
     final availableQty = widget.sourceLocation.quantity;
+    final sourceLocationPath = sourceLoc != null ? _buildLocationPath(sourceLoc) : 'Unknown Location';
 
     return AlertDialog(
-      title: Text('Transfer ${widget.tool.toolName}'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Source location info
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey[300]!),
+      title: Text(
+        'Transfer Tool: ${widget.tool.toolName}',
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      content: SizedBox(
+        width: 400, // Narrower dialog
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Source location info - just black outline, no background
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.black, width: 1),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'From: ',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            sourceLocationPath,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Available: $availableQty',
+                      style: const TextStyle(
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 24),
+
+              // Quantity selector with +/- buttons
+              const Text(
+                'Quantity',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
                 children: [
-                  const Text(
-                    'From:',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.bold,
+                  IconButton(
+                    onPressed: _isSubmitting ? null : _decrementQuantity,
+                    icon: const Icon(Icons.remove, size: 20),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.grey[200],
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(width: 16),
                   Text(
-                    sourceLoc?.name ?? 'Unknown Location',
+                    '$_quantity',
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(width: 16),
+                  IconButton(
+                    onPressed: _isSubmitting ? null : _incrementQuantity,
+                    icon: const Icon(Icons.add, size: 20),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.grey[300],
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
                   Text(
-                    'Available: $availableQty',
-                    style: TextStyle(
+                    'Max: $availableQty',
+                    style: const TextStyle(
                       fontSize: 14,
-                      color: Colors.grey[700],
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 20),
+              const SizedBox(height: 24),
 
-            // Quantity input
-            TextField(
-              controller: _quantityController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: InputDecoration(
-                labelText: 'Quantity',
-                hintText: 'Enter quantity',
-                helperText: 'Max: $availableQty',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.numbers),
+              // Destination dropdown
+              const Text(
+                'Destination',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-
-            // Destination dropdown
-            DropdownButtonFormField<String>(
-              value: _selectedDestination,
-              decoration: const InputDecoration(
-                labelText: 'Destination',
-                hintText: 'Select destination',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.place),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _selectedDestination,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.black,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Select destination',
+                  hintStyle: const TextStyle(fontSize: 14),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                items: _buildDropdownItems(),
+                onChanged: _isSubmitting
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _selectedDestination = value;
+                        });
+                      },
               ),
-              items: _buildDropdownItems(),
-              onChanged: _isSubmitting
-                  ? null
-                  : (value) {
-                      setState(() {
-                        _selectedDestination = value;
-                      });
-                    },
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       actions: [
         TextButton(
           onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(fontSize: 14),
+          ),
         ),
         ElevatedButton(
           onPressed: _isSubmitting ? null : _handleSubmit,
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.blue,
             foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           ),
           child: _isSubmitting
               ? const SizedBox(
@@ -252,7 +341,10 @@ class _TransferDialogState extends State<TransferDialog> {
                     valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 )
-              : const Text('Transfer'),
+              : const Text(
+                  'Transfer',
+                  style: TextStyle(fontSize: 14),
+                ),
         ),
       ],
     );
@@ -262,7 +354,7 @@ class _TransferDialogState extends State<TransferDialog> {
     final items = <DropdownMenuItem<String>>[];
     final grouped = _groupedLocations;
     
-    // Order of types
+    // Order of types - MACHINES FIRST
     final typeOrder = ['machine', 'shelf', 'toolbox', 'recycle'];
     
     for (final type in typeOrder) {
@@ -276,25 +368,31 @@ class _TransferDialogState extends State<TransferDialog> {
         DropdownMenuItem<String>(
           value: null,
           enabled: false,
-          child: Text(
-            _getTypeDisplayName(type),
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
-              fontSize: 12,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
+            child: Text(
+              _getTypeDisplayName(type),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+                fontSize: 14,
+              ),
             ),
           ),
         ),
       );
       
-      // Add locations in this group
+      // Add locations in this group with full paths
       for (final loc in locations) {
         items.add(
           DropdownMenuItem<String>(
             value: loc.id,
             child: Padding(
-              padding: const EdgeInsets.only(left: 16.0),
-              child: Text(loc.name),
+              padding: const EdgeInsets.only(left: 12.0),
+              child: Text(
+                _buildLocationPath(loc),
+                style: const TextStyle(fontSize: 14),
+              ),
             ),
           ),
         );

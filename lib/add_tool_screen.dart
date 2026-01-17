@@ -40,6 +40,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
   
   // Auto-generated tool name
   String _toolName = '';
+  bool _autoGenerateName = true; // Checkbox state for auto-generation
   
   @override
   void initState() {
@@ -85,7 +86,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
   }
   
   void _scheduleToolNameUpdate() {
-    // Update tool name without rebuilding the whole form
+    // Only auto-update if checkbox is checked
+    if (!_autoGenerateName) return;
+    
     final newName = _generateToolName();
     if (newName != _toolName) {
       setState(() {
@@ -210,7 +213,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
         
         // Create the tool
         final toolRecord = await pbService.pb.collection('tools').create(body: {
-          'tool_name': _toolName,
+          'tool_name': _toolNameController.text, // Use the field value (auto or manual)
           'category': _category,
           'subcategory': _subcategory,
           'sub_subcategory': _subSubcategory,
@@ -241,7 +244,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Tool "$_toolName" saved successfully!'),
+              content: Text('Tool "${_toolNameController.text}" saved successfully!'),
               backgroundColor: Colors.green,
             ),
           );
@@ -278,22 +281,47 @@ class _AddToolScreenState extends State<AddToolScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Auto-generated tool name display
-            if (_toolName.isNotEmpty)
-              TextFormField(
-                controller: _toolNameController,
-                decoration: const InputDecoration(
-                  labelText: 'Tool Name',
-                  border: OutlineInputBorder(),
-                ),
-                enabled: false,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black,
+            // Tool Name field - always visible with auto-generate checkbox
+            TextFormField(
+              controller: _toolNameController,
+              decoration: InputDecoration(
+                labelText: 'Tool Name',
+                border: const OutlineInputBorder(),
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Checkbox(
+                      value: _autoGenerateName,
+                      onChanged: (value) {
+                        setState(() {
+                          _autoGenerateName = value ?? true;
+                          if (_autoGenerateName) {
+                            // Overwrite with auto-generated name
+                            _toolName = _generateToolName();
+                            _toolNameController.text = _toolName;
+                          }
+                        });
+                      },
+                    ),
+                    const Text('Auto'),
+                    const SizedBox(width: 8),
+                  ],
                 ),
               ),
-            if (_toolName.isNotEmpty) const SizedBox(height: 16),
+              enabled: !_autoGenerateName, // Disabled when auto-generating
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.black,
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Tool name is required';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
             
             // Model Number
             TextFormField(
