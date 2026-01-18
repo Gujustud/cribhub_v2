@@ -8,7 +8,10 @@ class Tool {
   final String? subcategory;
   final String? subSubcategory;
   final String? modelNumber;
+  final String? url;  // NEW
   final String? manufacturerBarcode;
+  final String? brandId;  // NEW - stores the brand ID
+  final String? supplierId;  // NEW - stores the supplier ID
   final double? diameterIn;
   final double? diameterMm;
   final int? flutes;
@@ -17,8 +20,10 @@ class Tool {
   final double? neck;
   final String? size;
   final String? serialNumber;
-  final String? brand;
-  final String? supplier;
+  final String? photo;  // NEW
+  final String? brand;  // Display name (from expand)
+  final String? supplier;  // Display name (from expand)
+  final dynamic record;  // NEW - stores the original PocketBase record
 
   Tool({
     required this.id,
@@ -27,7 +32,10 @@ class Tool {
     this.subcategory,
     this.subSubcategory,
     this.modelNumber,
+    this.url,
     this.manufacturerBarcode,
+    this.brandId,
+    this.supplierId,
     this.diameterIn,
     this.diameterMm,
     this.flutes,
@@ -36,8 +44,10 @@ class Tool {
     this.neck,
     this.size,
     this.serialNumber,
+    this.photo,
     this.brand,
     this.supplier,
+    this.record,
   });
 
   factory Tool.fromRecord(dynamic record) {
@@ -50,7 +60,10 @@ class Tool {
       subcategory: data['subcategory'],
       subSubcategory: data['sub_subcategory'],
       modelNumber: data['model_number'],
+      url: data['url'],  // NEW
       manufacturerBarcode: data['manufacturer_barcode'],
+      brandId: data['brand'],  // NEW
+      supplierId: data['supplier'],  // NEW
       diameterIn: data['diameter_in']?.toDouble(),
       diameterMm: data['diameter_mm']?.toDouble(),
       flutes: data['flutes']?.toInt(),
@@ -59,17 +72,39 @@ class Tool {
       neck: data['neck']?.toDouble(),
       size: data['size'],
       serialNumber: data['serial_number'],
-      brand: data['brand'],
-      supplier: data['supplier'],
+      photo: data['photo'],  // NEW
+      brand: record.expand?['brand']?.data?['name'],  // UPDATED - from expand
+      supplier: record.expand?['supplier']?.data?['company_name'],  // UPDATED - from expand
+      record: record,  // NEW - store the original record
     );
   }
 
-  // Helper method to get display specs - only show model number
+  // Helper method to get display specs
   String get displaySpecs {
-    if (modelNumber != null && modelNumber!.isNotEmpty) {
+    final parts = <String>[];
+    
+    if (diameterIn != null) {
+      parts.add('Ø${diameterIn}"');
+    }
+    if (flutes != null) {
+      parts.add('${flutes}FL');
+    }
+    if (fluteLength != null) {
+      parts.add('LOC: $fluteLength"');
+    }
+    if (cornerRad != null && cornerRad! > 0) {
+      parts.add('CR: ${cornerRad}"');
+    }
+    if (neck != null && neck! > 0) {
+      parts.add('Neck: ${neck}"');
+    }
+    
+    // Fallback to model number if no specs
+    if (parts.isEmpty && modelNumber != null && modelNumber!.isNotEmpty) {
       return 'Model: $modelNumber';
     }
-    return '';
+    
+    return parts.join(' • ');
   }
 }
 

@@ -91,6 +91,37 @@ class PocketBaseService {
     }
   }
 
+  // Update a location
+  Future<void> updateLocation({
+    required String locationId,
+    required String name,
+    required String type,
+    String? parentId,
+  }) async {
+    try {
+      await pb.collection('locations').update(locationId, body: {
+        'name': name,
+        'type': type,
+        if (parentId != null) 'parent': parentId,
+      });
+      print('Location updated: $locationId');
+    } catch (e) {
+      print('Error updating location: $e');
+      rethrow;
+    }
+  }
+
+  // Delete a location
+  Future<void> deleteLocation(String locationId) async {
+    try {
+      await pb.collection('locations').delete(locationId);
+      print('Location deleted: $locationId');
+    } catch (e) {
+      print('Error deleting location: $e');
+      rethrow;
+    }
+  }
+
   // Get tool locations for a specific tool
   Future<List<dynamic>> getToolLocations(String toolId) async {
     try {
