@@ -113,19 +113,28 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
         dynamic currentLoc;
         
         // Find the location by walking the path
+        // FIXED: Removed orElse: () => null to fix type error
         for (final name in pathToParent) {
           if (currentLoc == null) {
-            currentLoc = widget.allLocations.firstWhere(
-              (loc) => loc.data['name'] == name && 
-                       loc.data['type'] == _selectedPath[0] &&
-                       (loc.data['parent'] == null || loc.data['parent'] == ''),
-              orElse: () => null,
-            );
+            try {
+              currentLoc = widget.allLocations.firstWhere(
+                (loc) => loc.data['name'] == name && 
+                         loc.data['type'] == _selectedPath[0] &&
+                         (loc.data['parent'] == null || loc.data['parent'] == ''),
+              );
+            } catch (e) {
+              // Location not found, stop searching
+              break;
+            }
           } else {
-            currentLoc = widget.allLocations.firstWhere(
-              (loc) => loc.data['name'] == name && loc.data['parent'] == currentLoc.id,
-              orElse: () => null,
-            );
+            try {
+              currentLoc = widget.allLocations.firstWhere(
+                (loc) => loc.data['name'] == name && loc.data['parent'] == currentLoc.id,
+              );
+            } catch (e) {
+              // Location not found, stop searching
+              break;
+            }
           }
         }
         

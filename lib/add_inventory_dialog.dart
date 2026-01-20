@@ -6,12 +6,14 @@ import 'models.dart';
 
 class AddInventoryDialog extends StatefulWidget {
   final List<dynamic> allLocations;
-  final List<ToolLocation>? existingLocations; // For edit mode
+  final List<ToolLocation>? existingLocations; // For edit mode - current locations
+  final List<String>? historicalLocationIds; // NEW - IDs of past add locations
   
   const AddInventoryDialog({
     Key? key,
     required this.allLocations,
     this.existingLocations,
+    this.historicalLocationIds, // NEW
   }) : super(key: key);
 
   @override
@@ -41,6 +43,10 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
   @override
   Widget build(BuildContext context) {
     final hasExistingLocations = widget.existingLocations != null && widget.existingLocations!.isNotEmpty;
+    
+    // NEW: Get historical locations that don't have current inventory
+    final historicalLocations = _getHistoricalLocationsWithoutInventory();
+    final hasHistoricalLocations = historicalLocations.isNotEmpty;
     
     return AlertDialog(
       title: const Text('Add Inventory'),
@@ -103,6 +109,55 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
                 ),
               ),
               const SizedBox(height: 16),
+            ],
+            
+            // NEW: Historical locations section (previously used, currently empty)
+            if (hasHistoricalLocations && _selectedLocationId == null) ...[
+              if (hasExistingLocations) const Divider(),
+              const Text(
+                'Previously Used Locations:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 120),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.orange[200]!),
+                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.orange[50],
+                ),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: historicalLocations.map((location) {
+                    final path = _buildLocationPathFromRecord(location);
+                    
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(Icons.history, color: Colors.orange[700]),
+                      title: Text(
+                        path,
+                        style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                      ),
+                      subtitle: Text(
+                        'Empty - previously used',
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600], fontStyle: FontStyle.italic),
+                      ),
+                      trailing: const Icon(Icons.chevron_right, size: 16),
+                      onTap: () {
+                        setState(() {
+                          _selectedLocationId = location.id;
+                          _selectedLocationPath = path;
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            
+            // Divider before "Select Different Location" if we have existing or historical
+            if ((hasExistingLocations || hasHistoricalLocations) && _selectedLocationId == null) ...[
               const Divider(),
               const Text(
                 'Or Select a Different Location:',
@@ -148,10 +203,11 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
             
             // Location picker
             if (_selectedLocationId == null) ...[
-              const Text(
-                'Select Location:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
+              if (!hasExistingLocations && !hasHistoricalLocations)
+                const Text(
+                  'Select Location:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
               const SizedBox(height: 8),
               Container(
                 constraints: const BoxConstraints(maxHeight: 400),
@@ -206,6 +262,32 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
     );
   }
   
+  // NEW: Get historical locations that don't have current inventory
+  List<dynamic> _getHistoricalLocationsWithoutInventory() {
+    if (widget.historicalLocationIds == null || widget.historicalLocationIds!.isEmpty) {
+      return [];
+    }
+    
+    final currentLocationIds = widget.existingLocations?.map((tl) => tl.locationId).toSet() ?? {};
+    final historicalLocs = <dynamic>[];
+    
+    for (final locationId in widget.historicalLocationIds!) {
+      // Skip if this location already has current inventory
+      if (currentLocationIds.contains(locationId)) continue;
+      
+      // Find the location record
+      try {
+        final loc = _currentLocations.firstWhere((l) => l.id == locationId);
+        historicalLocs.add(loc);
+      } catch (e) {
+        // Location not found, skip
+        continue;
+      }
+    }
+    
+    return historicalLocs;
+  }
+  
   String _buildLocationPath(String locationId) {
     final names = <String>[];
     var currentId = locationId;
@@ -226,6 +308,24 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
   String _buildLocationPathFromLocation(Location location) {
     final names = <String>[];
     var currentId = location.id;
+    
+    while (currentId.isNotEmpty) {
+      try {
+        final loc = _currentLocations.firstWhere((l) => l.id == currentId);
+        names.insert(0, loc.data['name']);
+        currentId = loc.data['parent'] ?? '';
+      } catch (e) {
+        break;
+      }
+    }
+    
+    return names.join(' → ');
+  }
+  
+  // NEW: Build path from a location record (for historical locations)
+  String _buildLocationPathFromRecord(dynamic locationRecord) {
+    final names = <String>[];
+    var currentId = locationRecord.id;
     
     while (currentId.isNotEmpty) {
       try {

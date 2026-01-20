@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'pocketbase_service.dart';
 import 'models.dart';
 import 'add_inventory_dialog.dart';
+import 'package:intl/intl.dart'; // For date formatting in history
 
 class AddToolScreen extends StatefulWidget {
   final Tool? tool; // If provided, we're in edit mode
@@ -65,6 +66,10 @@ class _AddToolScreenState extends State<AddToolScreen> {
   List<ToolLocation> _toolLocations = [];
   List<Location> _allLocations = [];
   
+  // NEW: History tracking
+  List<InventoryHistory> _recentHistory = [];
+  bool _loadingHistory = false;
+  
   bool get _isEditMode => widget.tool != null && !widget.isDuplicate;
   
   @override
@@ -86,6 +91,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
     
     if (_isEditMode) {
       _loadToolLocations();
+      _loadRecentHistory(); // NEW: Load history for edit mode
     }
   }
   
@@ -167,6 +173,35 @@ class _AddToolScreenState extends State<AddToolScreen> {
       });
     } catch (e) {
       print('Error loading tool locations: $e');
+    }
+  }
+  
+  // NEW: Load recent history for the tool
+  Future<void> _loadRecentHistory() async {
+    if (!_isEditMode) return;
+    
+    setState(() {
+      _loadingHistory = true;
+    });
+    
+    try {
+      final pbService = PocketBaseService();
+      final historyRecords = await pbService.getInventoryHistory(
+        toolId: widget.tool!.id,
+        limit: 5,
+      );
+      
+      setState(() {
+        _recentHistory = historyRecords
+            .map((r) => InventoryHistory.fromRecord(r))
+            .toList();
+        _loadingHistory = false;
+      });
+    } catch (e) {
+      print('Error loading history: $e');
+      setState(() {
+        _loadingHistory = false;
+      });
     }
   }
   
@@ -339,14 +374,25 @@ class _AddToolScreenState extends State<AddToolScreen> {
     print('DEBUG: widget.tool = ${widget.tool?.toolName}');
     print('DEBUG: widget.isDuplicate = ${widget.isDuplicate}');
     
+    final pbService = PocketBaseService();
+    
     // For edit mode, get existing locations
     List<ToolLocation>? existingLocations;
+    List<String>? historicalLocationIds;
+    
     if (_isEditMode) {
       existingLocations = _toolLocations;
       print('DEBUG: _toolLocations count: ${_toolLocations.length}');
       for (var tl in _toolLocations) {
         print('DEBUG: Location ${tl.location?.name ?? "null"}, qty: ${tl.quantity}');
       }
+      
+      // NEW: Get historical add locations
+      historicalLocationIds = await pbService.getHistoricalAddLocations(
+        toolId: widget.tool!.id,
+        limit: 3,
+      );
+      print('DEBUG: Historical location IDs: $historicalLocationIds');
     } else {
       print('DEBUG: NOT in edit mode - no existing locations');
     }
@@ -356,21 +402,58 @@ class _AddToolScreenState extends State<AddToolScreen> {
       builder: (context) => AddInventoryDialog(
         allLocations: _locations,
         existingLocations: existingLocations,
+        historicalLocationIds: historicalLocationIds, // NEW
       ),
     );
     
     if (result != null) {
       if (_isEditMode) {
-        // Edit mode: Add inventory immediately
+        // Edit mode: Add inventory immediately WITH HISTORY LOGGING
         try {
           final pbService = PocketBaseService();
-          await pbService.createToolLocation(
+          
+          // Get current quantity before adding
+          final quantityBefore = await pbService.getCurrentQuantityAtLocation(
             toolId: widget.tool!.id,
             locationId: result['locationId'],
-            quantity: result['quantity'],
+          );
+          
+          // Check if tool_location already exists at this location
+          final existingRecords = await pbService.pb
+              .collection('tool_locations')
+              .getFullList(
+                filter: 'tool = "${widget.tool!.id}" && location = "${result['locationId']}"',
+              );
+          
+          if (existingRecords.isNotEmpty) {
+            // Update existing record
+            final existingRecord = existingRecords.first;
+            final newQuantity = quantityBefore + (result['quantity'] as int);
+            await pbService.pb.collection('tool_locations').update(
+              existingRecord.id,
+              body: {'quantity': newQuantity},
+            );
+          } else {
+            // Create new record
+            await pbService.createToolLocation(
+              toolId: widget.tool!.id,
+              locationId: result['locationId'],
+              quantity: result['quantity'] as int,
+            );
+          }
+          
+          // Log history
+          await pbService.logInventoryHistory(
+            toolId: widget.tool!.id,
+            locationId: result['locationId'],
+            action: 'add',
+            quantity: result['quantity'] as int,
+            quantityBefore: quantityBefore,
+            quantityAfter: quantityBefore + (result['quantity'] as int),
           );
           
           await _loadToolLocations();
+          await _loadRecentHistory(); // Refresh history
           
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -501,7 +584,17 @@ class _AddToolScreenState extends State<AddToolScreen> {
             await pbService.createToolLocation(
               toolId: toolRecord.id,
               locationId: _inventoryToAdd!['locationId'],
-              quantity: _inventoryToAdd!['quantity'],
+              quantity: _inventoryToAdd!['quantity'] as int,
+            );
+            
+            // Log initial inventory add
+            await pbService.logInventoryHistory(
+              toolId: toolRecord.id,
+              locationId: _inventoryToAdd!['locationId'],
+              action: 'add',
+              quantity: _inventoryToAdd!['quantity'] as int,
+              quantityBefore: 0,
+              quantityAfter: _inventoryToAdd!['quantity'] as int,
             );
           }
         }
@@ -982,16 +1075,530 @@ class _AddToolScreenState extends State<AddToolScreen> {
                               allLocations: _allLocations,
                               onChanged: () {
                                 _loadToolLocations();
+                                _loadRecentHistory(); // Refresh history when inventory changes
                               },
                             ),
                           );
                         }),
+                    ],
+                    
+                    // NEW: History section (edit mode only)
+                    if (_isEditMode) ...[
+                      const SizedBox(height: 32),
+                      const Divider(),
+                      const SizedBox(height: 16),
+                      
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Recent History',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          if (_recentHistory.isNotEmpty)
+                            TextButton.icon(
+                              onPressed: () {
+                                _showAllHistory();
+                              },
+                              icon: const Icon(Icons.history, size: 18),
+                              label: const Text('View All'),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      
+                      if (_loadingHistory)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      else if (_recentHistory.isEmpty)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Text(
+                              'No history yet',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                          ),
+                        )
+                      else
+                        ..._buildHistoryItems(_recentHistory),
+                      
+                      // NEW: Performance Stats placeholder
+                      const SizedBox(height: 32),
+                      const Divider(),
+                      const SizedBox(height: 16),
+                      
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Performance Stats',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          Tooltip(
+                            message: 'Performance tracking coming soon',
+                            child: Icon(Icons.info_outline, color: Colors.grey[600], size: 20),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _buildStatItem(
+                                  icon: Icons.access_time,
+                                  label: 'Avg Tool Life',
+                                  value: '-- hrs',
+                                  color: Colors.blue,
+                                ),
+                                _buildStatItem(
+                                  icon: Icons.inventory_2,
+                                  label: 'Total Used',
+                                  value: '--',
+                                  color: Colors.orange,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _buildStatItem(
+                                  icon: Icons.trending_up,
+                                  label: 'Best Location',
+                                  value: '--',
+                                  color: Colors.green,
+                                ),
+                                _buildStatItem(
+                                  icon: Icons.trending_down,
+                                  label: 'Worst Location',
+                                  value: '--',
+                                  color: Colors.red,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ],
                 ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+  
+  // NEW: Build history items with smart transfer pairing
+  List<Widget> _buildHistoryItems(List<InventoryHistory> historyList) {
+    final widgets = <Widget>[];
+    final processedIndices = <int>{};
+    
+    for (int i = 0; i < historyList.length; i++) {
+      if (processedIndices.contains(i)) continue;
+      
+      final current = historyList[i];
+      
+      // Check if this is a transfer_out with a matching transfer_in
+      if (current.action == 'transfer_out' && i + 1 < historyList.length) {
+        final next = historyList[i + 1];
+        
+        // Check if next entry is the matching transfer_in
+        // (same time within 1 second, related locations match)
+        if (next.action == 'transfer_in' &&
+            current.created.difference(next.created).inSeconds.abs() <= 1 &&
+            current.relatedLocationId == next.locationId &&
+            next.relatedLocationId == current.locationId) {
+          
+          // Found a pair! Create combined widget
+          widgets.add(_buildCombinedTransferItem(current, next));
+          processedIndices.add(i);
+          processedIndices.add(i + 1);
+          continue;
+        }
+      }
+      
+      // Check if this is a transfer_in with a matching transfer_out before it
+      if (current.action == 'transfer_in' && i > 0) {
+        final prev = historyList[i - 1];
+        
+        if (prev.action == 'transfer_out' &&
+            prev.created.difference(current.created).inSeconds.abs() <= 1 &&
+            prev.relatedLocationId == current.locationId &&
+            current.relatedLocationId == prev.locationId) {
+          
+          // Already handled by the previous iteration
+          if (!processedIndices.contains(i - 1)) {
+            widgets.add(_buildCombinedTransferItem(prev, current));
+            processedIndices.add(i - 1);
+            processedIndices.add(i);
+          }
+          continue;
+        }
+      }
+      
+      // Not part of a pair, show as individual entry
+      widgets.add(_buildHistoryItem(current));
+    }
+    
+    return widgets;
+  }
+  
+  // NEW: Build combined transfer widget (single box for both transfer_out and transfer_in)
+  Widget _buildCombinedTransferItem(InventoryHistory transferOut, InventoryHistory transferIn) {
+    final dateFormat = DateFormat('MMM d, h:mm a');
+    
+    // Get location names
+    String sourceLocationName = 'Unknown';
+    if (transferOut.location != null) {
+      sourceLocationName = transferOut.location!.name;
+    } else {
+      try {
+        final loc = _allLocations.firstWhere((l) => l.id == transferOut.locationId);
+        sourceLocationName = loc.name;
+      } catch (e) {}
+    }
+    
+    String destLocationName = 'Unknown';
+    if (transferIn.location != null) {
+      destLocationName = transferIn.location!.name;
+    } else {
+      try {
+        final loc = _allLocations.firstWhere((l) => l.id == transferIn.locationId);
+        destLocationName = loc.name;
+      } catch (e) {}
+    }
+    
+    final locationDisplay = '$sourceLocationName → $destLocationName';
+    final actionColor = Colors.purple; // Use purple for combined transfers
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: actionColor.withOpacity(0.05),
+        border: Border.all(color: actionColor.withOpacity(0.2)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: actionColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Center(
+              child: Text(
+                '↔️',
+                style: TextStyle(fontSize: 14),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          
+          // Content
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Action description
+                Text(
+                  'Transferred ${transferOut.quantity}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: actionColor.withOpacity(0.9),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                
+                // Location with arrow
+                Text(
+                  locationDisplay,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          
+          // Date and quantity change on right
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                dateFormat.format(transferOut.created),
+                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${transferOut.quantityBefore} → ${transferOut.quantityAfter}',
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // NEW: Build history item widget
+  Widget _buildHistoryItem(InventoryHistory history) {
+    final dateFormat = DateFormat('MMM d, h:mm a');
+    
+    // Try to get location name, with fallback
+    String locationName = 'Unknown Location';
+    if (history.location != null) {
+      locationName = history.location!.name;
+    } else {
+      // Fallback: try to find location in _allLocations
+      try {
+        final loc = _allLocations.firstWhere((l) => l.id == history.locationId);
+        locationName = loc.name;
+      } catch (e) {
+        // Keep 'Unknown Location'
+      }
+    }
+    
+    // Get related location name
+    String? relatedLocationName;
+    if (history.relatedLocation != null) {
+      relatedLocationName = history.relatedLocation!.name;
+    } else if (history.relatedLocationId != null) {
+      // Fallback: try to find in _allLocations
+      try {
+        final loc = _allLocations.firstWhere((l) => l.id == history.relatedLocationId);
+        relatedLocationName = loc.name;
+      } catch (e) {
+        relatedLocationName = 'Unknown';
+      }
+    }
+    
+    Color actionColor;
+    switch (history.action) {
+      case 'add':
+        actionColor = Colors.green;
+        break;
+      case 'remove':
+        actionColor = Colors.red;
+        break;
+      case 'transfer_in':
+        actionColor = Colors.blue;
+        break;
+      case 'transfer_out':
+        actionColor = Colors.orange;
+        break;
+      case 'edit':
+        actionColor = Colors.purple;
+        break;
+      default:
+        actionColor = Colors.grey;
+    }
+    
+    // Build location display with arrow for transfers
+    String locationDisplay;
+    if (relatedLocationName != null) {
+      if (history.action == 'transfer_out') {
+        locationDisplay = '$locationName → $relatedLocationName';
+      } else if (history.action == 'transfer_in') {
+        locationDisplay = '$relatedLocationName → $locationName';
+      } else {
+        locationDisplay = locationName;
+      }
+    } else {
+      locationDisplay = locationName;
+    }
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: actionColor.withOpacity(0.05),
+        border: Border.all(color: actionColor.withOpacity(0.2)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: actionColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Center(
+              child: Text(
+                history.getActionIcon(),
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          
+          // Content
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Action description
+                Text(
+                  history.getActionDescription(),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: actionColor.withOpacity(0.9),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                
+                // Location with arrow
+                Text(
+                  locationDisplay,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          
+          // Date and quantity change on right
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                dateFormat.format(history.created),
+                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${history.quantityBefore} → ${history.quantityAfter}',
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // NEW: Build stat item widget for performance stats
+  Widget _buildStatItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 28),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[400],
+          ),
+        ),
+      ],
+    );
+  }
+  
+  // NEW: Show all history dialog
+  Future<void> _showAllHistory() async {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.8,
+          height: MediaQuery.of(context).size.height * 0.8,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Complete History',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const Divider(),
+              const SizedBox(height: 16),
+              Expanded(
+                child: FutureBuilder<List<dynamic>>(
+                  future: PocketBaseService().getAllInventoryHistory(
+                    toolId: widget.tool!.id,
+                  ),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text('Error loading history: ${snapshot.error}'),
+                      );
+                    }
+                    
+                    final allHistory = snapshot.data
+                        ?.map((r) => InventoryHistory.fromRecord(r))
+                        .toList() ?? [];
+                    
+                    if (allHistory.isEmpty) {
+                      return const Center(
+                        child: Text('No history found'),
+                      );
+                    }
+                    
+                    // Use smart pairing for all history too
+                    final historyWidgets = _buildHistoryItems(allHistory);
+                    
+                    return ListView.builder(
+                      itemCount: historyWidgets.length,
+                      itemBuilder: (context, index) {
+                        return historyWidgets[index];
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1087,170 +1694,112 @@ class InventoryLocationTag extends StatelessWidget {
         textColor = Colors.grey[900]!;
     }
 
-    return GestureDetector(
-      onTap: () async {
-        final action = await showDialog<String>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(locationPath),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.edit, color: Colors.blue),
-                  title: const Text('Edit Quantity'),
-                  subtitle: Text('Current: $quantity'),
-                  onTap: () => Navigator.pop(context, 'edit'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.swap_horiz, color: Colors.orange),
-                  title: const Text('Transfer'),
-                  subtitle: const Text('Move to another location'),
-                  onTap: () => Navigator.pop(context, 'transfer'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.delete, color: Colors.red),
-                  title: const Text('Remove from Location'),
-                  subtitle: const Text('Delete this inventory record'),
-                  onTap: () => Navigator.pop(context, 'delete'),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: borderColor, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Qty: $quantity • $locationPath',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: textColor,
               ),
-            ],
+            ),
           ),
-        );
-        
-        if (action == 'edit') {
-          final controller = TextEditingController(text: quantity.toString());
-          final newQty = await showDialog<int>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text('Edit Quantity - $locationPath'),
-              content: TextField(
-                controller: controller,
-                decoration: const InputDecoration(
-                  labelText: 'Quantity',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-                autofocus: true,
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    final qty = int.tryParse(controller.text);
-                    if (qty != null && qty > 0) {
-                      Navigator.pop(context, qty);
-                    }
-                  },
-                  child: const Text('Update'),
-                ),
-              ],
-            ),
-          );
-          
-          if (newQty != null) {
-            try {
-              final pbService = PocketBaseService();
-              await pbService.pb.collection('tool_locations').update(
-                toolLocation.id,
-                body: {'quantity': newQty},
-              );
-              onChanged();
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Quantity updated!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Error: $e'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          }
-        } else if (action == 'transfer') {
-          _showTransferDialog(context);
-        } else if (action == 'delete') {
-          final confirm = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Remove from Location'),
-              content: Text('Remove this tool from $locationPath?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  child: const Text('Remove'),
-                ),
-              ],
-            ),
-          );
-          
-          if (confirm == true) {
-            try {
-              final pbService = PocketBaseService();
-              await pbService.pb.collection('tool_locations').delete(toolLocation.id);
-              onChanged();
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Removed from location!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Error: $e'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          }
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: borderColor, width: 1.5),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Qty: $quantity • $locationPath',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-              ),
-            ),
-            Icon(Icons.more_horiz, size: 16, color: textColor),
-          ],
-        ),
+          // Transfer icon
+          IconButton(
+            icon: const Icon(Icons.swap_horiz, size: 18),
+            color: Colors.orange[700],
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            tooltip: 'Transfer',
+            onPressed: () => _showTransferDialog(context),
+          ),
+          const SizedBox(width: 8),
+          // Delete icon
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 18),
+            color: Colors.red[700],
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            tooltip: 'Remove from location',
+            onPressed: () => _confirmDelete(context),
+          ),
+        ],
       ),
     );
+  }
+  
+  // Delete confirmation and execution
+  Future<void> _confirmDelete(BuildContext context) async {
+    final location = toolLocation.location;
+    if (location == null) return;
+    
+    final locationPath = _buildLocationPath(location);
+    final quantity = toolLocation.quantity;
+    
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove from Location'),
+        content: Text('Remove this tool from $locationPath?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirm == true) {
+      try {
+        final pbService = PocketBaseService();
+        
+        // Log before deleting
+        await pbService.logInventoryHistory(
+          toolId: toolLocation.toolId,
+          locationId: toolLocation.locationId,
+          action: 'remove',
+          quantity: quantity,
+          quantityBefore: quantity,
+          quantityAfter: 0,
+        );
+        
+        await pbService.pb.collection('tool_locations').delete(toolLocation.id);
+        onChanged();
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Removed from location!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
   
   Future<void> _showTransferDialog(BuildContext context) async {
@@ -1334,6 +1883,12 @@ class InventoryLocationTag extends StatelessWidget {
                 }
                 
                 try {
+                  final sourceQtyBefore = toolLocation.quantity;
+                  final destQtyBefore = await pbService.getCurrentQuantityAtLocation(
+                    toolId: toolLocation.toolId,
+                    locationId: selectedLocationId!,
+                  );
+                  
                   final newSourceQty = toolLocation.quantity - transferQty;
                   if (newSourceQty == 0) {
                     await pbService.pb.collection('tool_locations').delete(toolLocation.id);
@@ -1364,6 +1919,28 @@ class InventoryLocationTag extends StatelessWidget {
                       quantity: transferQty,
                     );
                   }
+                  
+                  // Log transfer_out from source location
+                  await pbService.logInventoryHistory(
+                    toolId: toolLocation.toolId,
+                    locationId: toolLocation.locationId,
+                    action: 'transfer_out',
+                    quantity: transferQty,
+                    quantityBefore: sourceQtyBefore,
+                    quantityAfter: newSourceQty,
+                    relatedLocationId: selectedLocationId,
+                  );
+                  
+                  // Log transfer_in at destination location
+                  await pbService.logInventoryHistory(
+                    toolId: toolLocation.toolId,
+                    locationId: selectedLocationId!,
+                    action: 'transfer_in',
+                    quantity: transferQty,
+                    quantityBefore: destQtyBefore,
+                    quantityAfter: destQtyBefore + transferQty,
+                    relatedLocationId: toolLocation.locationId,
+                  );
                   
                   Navigator.pop(dialogContext);
                   onChanged();

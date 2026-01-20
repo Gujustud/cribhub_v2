@@ -233,7 +233,7 @@ class ToolLocation {
         }
       }
     } catch (e) {
-      print('⚠️  Error expanding location: $e');
+      print('⚠️ Error expanding location: $e');
     }
 
     return ToolLocation(
@@ -276,5 +276,127 @@ class ToolWithLocations {
       return (a.location?.name ?? '').compareTo(b.location?.name ?? '');
     });
     return sorted;
+  }
+}
+
+// NEW: Inventory History Model
+class InventoryHistory {
+  final String id;
+  final String toolId;
+  final String locationId;
+  final String action; // 'add', 'remove', 'transfer_in', 'transfer_out', 'edit'
+  final int quantity;
+  final int quantityBefore;
+  final int quantityAfter;
+  final String? relatedLocationId; // For transfers (destination or source)
+  final String? notes;
+  final double? toolLife; // Tool life in hours (optional)
+  final DateTime created;
+  
+  // Expanded fields
+  final Location? location;
+  final Location? relatedLocation;
+
+  InventoryHistory({
+    required this.id,
+    required this.toolId,
+    required this.locationId,
+    required this.action,
+    required this.quantity,
+    required this.quantityBefore,
+    required this.quantityAfter,
+    this.relatedLocationId,
+    this.notes,
+    this.toolLife,
+    required this.created,
+    this.location,
+    this.relatedLocation,
+  });
+
+  factory InventoryHistory.fromRecord(dynamic record) {
+    final data = record.data;
+    
+    // Parse location expansions
+    Location? expandedLocation;
+    Location? expandedRelatedLocation;
+    
+    try {
+      if (record.expand != null) {
+        if (record.expand['location'] != null) {
+          final locationData = record.expand['location'];
+          expandedLocation = locationData is List && locationData.isNotEmpty
+              ? Location.fromRecord(locationData[0])
+              : Location.fromRecord(locationData);
+        }
+        
+        if (record.expand['related_location'] != null) {
+          final relatedData = record.expand['related_location'];
+          expandedRelatedLocation = relatedData is List && relatedData.isNotEmpty
+              ? Location.fromRecord(relatedData[0])
+              : Location.fromRecord(relatedData);
+        }
+      }
+    } catch (e) {
+      print('⚠️ Error expanding history locations: $e');
+    }
+    
+    return InventoryHistory(
+      id: record.id,
+      toolId: data['tool'] ?? '',
+      locationId: data['location'] ?? '',
+      action: data['action'] ?? '',
+      quantity: (data['quantity'] ?? 0).toInt(),
+      quantityBefore: (data['quantity_before'] ?? 0).toInt(),
+      quantityAfter: (data['quantity_after'] ?? 0).toInt(),
+      relatedLocationId: data['related_location'],
+      notes: data['notes'],
+      toolLife: data['tool_life']?.toDouble(),
+      created: DateTime.parse(data['created'] ?? record.created),
+      location: expandedLocation,
+      relatedLocation: expandedRelatedLocation,
+    );
+  }
+  
+  // Get a user-friendly description of the action
+  String getActionDescription() {
+    switch (action) {
+      case 'add':
+        return 'Added $quantity';
+      case 'remove':
+        return 'Removed $quantity';
+      case 'transfer_out':
+        return 'Transferred $quantity out';
+      case 'transfer_in':
+        return 'Transferred $quantity in';
+      case 'edit':
+        final diff = quantityAfter - quantityBefore;
+        if (diff > 0) {
+          return 'Increased by ${diff.abs()}';
+        } else if (diff < 0) {
+          return 'Decreased by ${diff.abs()}';
+        } else {
+          return 'Quantity unchanged';
+        }
+      default:
+        return action;
+    }
+  }
+  
+  // Get icon for the action
+  String getActionIcon() {
+    switch (action) {
+      case 'add':
+        return '➕';
+      case 'remove':
+        return '➖';
+      case 'transfer_out':
+        return '📤';
+      case 'transfer_in':
+        return '📥';
+      case 'edit':
+        return '✏️';
+      default:
+        return '📝';
+    }
   }
 }
