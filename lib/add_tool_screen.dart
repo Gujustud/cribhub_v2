@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'pocketbase_service.dart';
 import 'models.dart';
+import 'add_inventory_dialog.dart';
 
 class AddToolScreen extends StatefulWidget {
   final Tool? tool; // If provided, we're in edit mode
@@ -33,7 +34,6 @@ class _AddToolScreenState extends State<AddToolScreen> {
   final _fluteLengthController = TextEditingController();
   final _cornerRadController = TextEditingController();
   final _neckController = TextEditingController();
-  final _quantityController = TextEditingController(text: '1');
   
   // Dropdown values
   String _category = 'Cutting Tools';
@@ -42,8 +42,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
   
   // Location selection
   List<dynamic> _locations = [];
-  String? _selectedLocationId;
-  bool _loadingLocations = true;
+  
+  // Inventory to add (for add/duplicate mode)
+  Map<String, dynamic>? _inventoryToAdd; // {quantity: int, locationId: String, locationPath: String}
   
   // Brand and Supplier selection
   List<dynamic> _brands = [];
@@ -175,12 +176,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
       final locations = await pbService.getLocations();
       setState(() {
         _locations = locations;
-        _loadingLocations = false;
       });
     } catch (e) {
-      setState(() {
-        _loadingLocations = false;
-      });
       print('Error loading locations: $e');
     }
   }
@@ -336,293 +333,98 @@ class _AddToolScreenState extends State<AddToolScreen> {
     );
   }
   
-  Future<void> _showAddToLocationDialog() async {
-    String? selectedLocationId;
-    final quantityController = TextEditingController(text: '1');
+  Future<void> _showAddInventoryDialog() async {
+    print('DEBUG: _showAddInventoryDialog called');
+    print('DEBUG: _isEditMode = $_isEditMode');
+    print('DEBUG: widget.tool = ${widget.tool?.toolName}');
+    print('DEBUG: widget.isDuplicate = ${widget.isDuplicate}');
     
-    await showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Add to Location'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: selectedLocationId,
-                decoration: const InputDecoration(
-                  labelText: 'Location',
-                  border: OutlineInputBorder(),
-                ),
-                hint: const Text('Select location'),
-                items: [
-                  // Deduplicate locations by ID first
-                  ...{
-                    for (var loc in _locations) loc.id: loc
-                  }.values.map((loc) {
-                    final pbService = PocketBaseService();
-                    final path = pbService.getLocationPath(loc.id, _locations);
-                    return DropdownMenuItem<String>(
-                      value: loc.id,
-                      child: Text(path),
-                    );
-                  }),
-                  const DropdownMenuItem<String>(
-                    value: '__create_new__',
-                    child: Text('+ Create New Location'),
-                  ),
-                ],
-                onChanged: (value) async {
-                  if (value == '__create_new__') {
-                    Navigator.pop(context);
-                    await _showCreateLocationDialog();
-                    await _loadLocations();
-                    _showAddToLocationDialog();
-                  } else {
-                    setDialogState(() {
-                      selectedLocationId = value;
-                    });
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: quantityController,
-                decoration: const InputDecoration(
-                  labelText: 'Quantity',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (selectedLocationId == null || selectedLocationId == '__create_new__') {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please select a location')),
-                  );
-                  return;
-                }
-                
-                final quantity = int.tryParse(quantityController.text);
-                if (quantity == null || quantity < 1) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Invalid quantity')),
-                  );
-                  return;
-                }
-                
-                try {
-                  final pbService = PocketBaseService();
-                  await pbService.createToolLocation(
-                    toolId: widget.tool!.id,
-                    locationId: selectedLocationId!,
-                    quantity: quantity,
-                  );
-                  
-                  Navigator.pop(context);
-                  await _loadToolLocations();
-                  
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Added to location!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              },
-              child: const Text('Add'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  
-  Future<void> _showCreateLocationDialog() async {
-    final nameController = TextEditingController();
-    String? selectedType;
-    String? selectedParentId;
-    
-    // Load location types from existing locations
-    final existingTypes = _locations
-        .map((loc) => loc.data['type'] as String)
-        .toSet()
-        .toList();
-    final defaultTypes = ['toolbox', 'machine', 'shelf', 'recycle'];
-    final allTypes = {...defaultTypes, ...existingTypes}.toList()..sort();
-    
-    // Don't set a default if list is empty
-    if (allTypes.isNotEmpty) {
-      selectedType = allTypes.first;
+    // For edit mode, get existing locations
+    List<ToolLocation>? existingLocations;
+    if (_isEditMode) {
+      existingLocations = _toolLocations;
+      print('DEBUG: _toolLocations count: ${_toolLocations.length}');
+      for (var tl in _toolLocations) {
+        print('DEBUG: Location ${tl.location?.name ?? "null"}, qty: ${tl.quantity}');
+      }
+    } else {
+      print('DEBUG: NOT in edit mode - no existing locations');
     }
     
-    await showDialog(
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Create New Location'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: selectedType,
-                decoration: const InputDecoration(
-                  labelText: 'Type',
-                  border: OutlineInputBorder(),
-                ),
-                items: allTypes.map((type) {
-                  return DropdownMenuItem(
-                    value: type,
-                    child: Text(type),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setDialogState(() {
-                    selectedType = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Location Name',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: selectedParentId,
-                decoration: const InputDecoration(
-                  labelText: 'Parent Location (optional)',
-                  border: OutlineInputBorder(),
-                ),
-                hint: const Text('None (root location)'),
-                items: {
-                  for (var loc in _locations) loc.id: loc
-                }.values.map((loc) {
-                  final pbService = PocketBaseService();
-                  final path = pbService.getLocationPath(loc.id, _locations);
-                  return DropdownMenuItem<String>(
-                    value: loc.id,
-                    child: Text(path),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setDialogState(() {
-                    selectedParentId = value;
-                  });
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (nameController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter a name')),
-                  );
-                  return;
-                }
-                
-                try {
-                  final pbService = PocketBaseService();
-                  await pbService.createLocation(
-                    name: nameController.text,
-                    type: selectedType!,
-                    parentId: selectedParentId,
-                  );
-                  
-                  Navigator.pop(context);
-                  
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Location "${nameController.text}" created!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              },
-              child: const Text('Create'),
-            ),
-          ],
-        ),
+      builder: (context) => AddInventoryDialog(
+        allLocations: _locations,
+        existingLocations: existingLocations,
       ),
     );
-  }
-  
-  Future<void> _updateLocationQuantity(ToolLocation toolLocation, int newQuantity) async {
-    try {
-      final pbService = PocketBaseService();
-      
-      if (newQuantity <= 0) {
-        // Delete the location
-        await pbService.pb.collection('tool_locations').delete(toolLocation.id);
+    
+    if (result != null) {
+      if (_isEditMode) {
+        // Edit mode: Add inventory immediately
+        try {
+          final pbService = PocketBaseService();
+          await pbService.createToolLocation(
+            toolId: widget.tool!.id,
+            locationId: result['locationId'],
+            quantity: result['quantity'],
+          );
+          
+          await _loadToolLocations();
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Inventory added!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       } else {
-        // Update quantity
-        await pbService.pb.collection('tool_locations').update(
-          toolLocation.id,
-          body: {'quantity': newQuantity},
+        // Add/duplicate mode: Store for later when tool is saved
+        setState(() {
+          _inventoryToAdd = {
+            'quantity': result['quantity'],
+            'locationId': result['locationId'],
+            'locationPath': _buildLocationPath(result['locationId']),
+          };
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Inventory of ${result['quantity']} will be added when tool is saved'),
+            backgroundColor: Colors.blue,
+          ),
         );
       }
-      
-      await _loadToolLocations();
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Quantity updated!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
     }
+  }
+  
+  String _buildLocationPath(String locationId) {
+    final names = <String>[];
+    var currentId = locationId;
+    
+    while (currentId.isNotEmpty) {
+      try {
+        final loc = _locations.firstWhere((l) => l.id == currentId);
+        names.insert(0, loc.data['name']);
+        currentId = loc.data['parent'] ?? '';
+      } catch (e) {
+        break;
+      }
+    }
+    
+    return names.join(' → ');
   }
   
   void _saveTool() async {
     if (_formKey.currentState!.validate()) {
-      // For add mode (not edit), check location is selected
-      if (!_isEditMode && _selectedLocationId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select a location'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-      
       try {
         showDialog(
           context: context,
@@ -694,12 +496,14 @@ class _AddToolScreenState extends State<AddToolScreen> {
             toolRecord = await pbService.pb.collection('tools').create(body: body);
           }
           
-          // Create the tool_location record
-          await pbService.createToolLocation(
-            toolId: toolRecord.id,
-            locationId: _selectedLocationId!,
-            quantity: int.parse(_quantityController.text),
-          );
+          // Create tool_location record if inventory was added
+          if (_inventoryToAdd != null) {
+            await pbService.createToolLocation(
+              toolId: toolRecord.id,
+              locationId: _inventoryToAdd!['locationId'],
+              quantity: _inventoryToAdd!['quantity'],
+            );
+          }
         }
 
         if (context.mounted) Navigator.pop(context);
@@ -714,6 +518,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
             ),
           );
           
+          // Pop back to tool list with refresh indicator
           Navigator.pop(context, true);
         }
       } catch (e) {
@@ -1029,76 +834,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
                     ),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   ),
-                  const SizedBox(height: 16),
-                  
-                  // Location (only for add/duplicate mode)
-                  if (!_isEditMode) ...[
-                    DropdownButtonFormField<String>(
-                      value: _selectedLocationId,
-                      decoration: const InputDecoration(
-                        labelText: 'Location',
-                        border: OutlineInputBorder(),
-                      ),
-                      hint: const Text('Select location'),
-                      items: [
-                        // Deduplicate locations by ID first
-                        ...{
-                          for (var loc in _locations) loc.id: loc
-                        }.values.map((loc) {
-                          final pbService = PocketBaseService();
-                          final path = pbService.getLocationPath(loc.id, _locations);
-                          return DropdownMenuItem<String>(
-                            value: loc.id,
-                            child: Text(path),
-                          );
-                        }),
-                        const DropdownMenuItem<String>(
-                          value: '__create_new__',
-                          child: Text('+ Create New Location'),
-                        ),
-                      ],
-                      onChanged: _loadingLocations
-                          ? null
-                          : (value) async {
-                              if (value == '__create_new__') {
-                                await _showCreateLocationDialog();
-                                await _loadLocations();
-                              } else {
-                                setState(() {
-                                  _selectedLocationId = value;
-                                });
-                              }
-                            },
-                      validator: (value) {
-                        if (value == null || value.isEmpty || value == '__create_new__') {
-                          return 'Please select a location';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // Quantity
-                    TextFormField(
-                      controller: _quantityController,
-                      decoration: const InputDecoration(
-                        labelText: 'Quantity',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.number,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Required';
-                        }
-                        final qty = int.tryParse(value);
-                        if (qty == null || qty < 1) {
-                          return 'Must be at least 1';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                  ],
+                  const SizedBox(height: 24),
                   
                   // Save button
                   SizedBox(
@@ -1169,32 +905,70 @@ class _AddToolScreenState extends State<AddToolScreen> {
                     ),
                     const SizedBox(height: 24),
                     
-                    // Inventory section (only in edit mode)
-                    if (_isEditMode) ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Inventory',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          IconButton(
-                            onPressed: _showAddToLocationDialog,
-                            icon: const Icon(Icons.add_circle),
-                            color: Colors.blue,
-                            tooltip: 'Add to location',
-                          ),
-                        ],
+                    // Inventory section
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Inventory',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        IconButton(
+                          onPressed: _showAddInventoryDialog,
+                          icon: const Icon(Icons.add_circle),
+                          color: Colors.blue,
+                          tooltip: 'Add Inventory',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    
+                    // Show pending inventory for add/duplicate mode
+                    if (!_isEditMode && _inventoryToAdd != null)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          border: Border.all(color: Colors.blue[300]!),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Qty: ${_inventoryToAdd!['quantity']}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    _inventoryToAdd!['locationPath'],
+                                    style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 20),
+                              onPressed: () {
+                                setState(() {
+                                  _inventoryToAdd = null;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                      
-                      // Location tags
+                    
+                    // Location tags for edit mode
+                    if (_isEditMode) ...[
                       if (_toolLocations.isEmpty)
                         const Center(
                           child: Padding(
                             padding: EdgeInsets.all(16.0),
                             child: Text(
-                              'No locations yet',
+                              'No inventory',
                               style: TextStyle(color: Colors.grey),
                             ),
                           ),
@@ -1234,11 +1008,11 @@ class _AddToolScreenState extends State<AddToolScreen> {
     _fluteLengthController.dispose();
     _cornerRadController.dispose();
     _neckController.dispose();
-    _quantityController.dispose();
     super.dispose();
   }
 }
 
+// Keep the InventoryLocationTag widget exactly as it was (from previous version)
 class InventoryLocationTag extends StatelessWidget {
   final ToolLocation toolLocation;
   final List<Location> allLocations;
@@ -1352,7 +1126,6 @@ class InventoryLocationTag extends StatelessWidget {
         );
         
         if (action == 'edit') {
-          // Edit quantity
           final controller = TextEditingController(text: quantity.toString());
           final newQty = await showDialog<int>(
             context: context,
@@ -1386,7 +1159,6 @@ class InventoryLocationTag extends StatelessWidget {
           );
           
           if (newQty != null) {
-            // Update quantity in database
             try {
               final pbService = PocketBaseService();
               await pbService.pb.collection('tool_locations').update(
@@ -1411,10 +1183,8 @@ class InventoryLocationTag extends StatelessWidget {
             }
           }
         } else if (action == 'transfer') {
-          // Transfer to another location
           _showTransferDialog(context);
         } else if (action == 'delete') {
-          // Confirm delete
           final confirm = await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
@@ -1484,11 +1254,8 @@ class InventoryLocationTag extends StatelessWidget {
   }
   
   Future<void> _showTransferDialog(BuildContext context) async {
-    // Get PocketBase service to load all locations
     final pbService = PocketBaseService();
     final allLocs = await pbService.getLocations();
-    
-    // Filter out current location
     final availableLocations = allLocs.where((loc) => loc.id != toolLocation.locationId).toList();
     
     String? selectedLocationId;
@@ -1567,7 +1334,6 @@ class InventoryLocationTag extends StatelessWidget {
                 }
                 
                 try {
-                  // Reduce quantity at source
                   final newSourceQty = toolLocation.quantity - transferQty;
                   if (newSourceQty == 0) {
                     await pbService.pb.collection('tool_locations').delete(toolLocation.id);
@@ -1578,7 +1344,6 @@ class InventoryLocationTag extends StatelessWidget {
                     );
                   }
                   
-                  // Add to destination (or update if exists)
                   final existingAtDest = await pbService.pb
                       .collection('tool_locations')
                       .getFullList(
@@ -1586,7 +1351,6 @@ class InventoryLocationTag extends StatelessWidget {
                       );
                   
                   if (existingAtDest.isNotEmpty) {
-                    // Update existing
                     final existing = existingAtDest.first;
                     final currentQty = existing.data['quantity'] as int;
                     await pbService.pb.collection('tool_locations').update(
@@ -1594,7 +1358,6 @@ class InventoryLocationTag extends StatelessWidget {
                       body: {'quantity': currentQty + transferQty},
                     );
                   } else {
-                    // Create new
                     await pbService.createToolLocation(
                       toolId: toolLocation.toolId,
                       locationId: selectedLocationId!,
@@ -1603,8 +1366,6 @@ class InventoryLocationTag extends StatelessWidget {
                   }
                   
                   Navigator.pop(dialogContext);
-                  
-                  // Trigger refresh
                   onChanged();
                   
                   ScaffoldMessenger.of(context).showSnackBar(
