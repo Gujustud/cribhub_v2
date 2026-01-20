@@ -1067,7 +1067,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
                           ),
                         )
                       else
-                        ..._toolLocations.map((toolLocation) {
+                        ..._getSortedToolLocations().map((toolLocation) {
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: InventoryLocationTag(
@@ -1206,6 +1206,40 @@ class _AddToolScreenState extends State<AddToolScreen> {
     );
   }
   
+  // NEW: Get sorted tool locations by type order (matches location types order)
+  List<ToolLocation> _getSortedToolLocations() {
+    final typeOrder = {
+      'toolbox': 1,
+      'machine': 2,
+      'shelf': 3,
+      'recycle': 4,
+      'bin': 5,      // fallback
+      'worn': 6,     // fallback
+      'broken': 7,   // fallback
+    };
+    
+    final sorted = List<ToolLocation>.from(_toolLocations);
+    sorted.sort((a, b) {
+      final typeA = a.location?.type.toLowerCase() ?? 'unknown';
+      final typeB = b.location?.type.toLowerCase() ?? 'unknown';
+      
+      final orderA = typeOrder[typeA] ?? 99;
+      final orderB = typeOrder[typeB] ?? 99;
+      
+      // First sort by type
+      if (orderA != orderB) {
+        return orderA.compareTo(orderB);
+      }
+      
+      // Then sort by location name within same type
+      final nameA = a.location?.name ?? '';
+      final nameB = b.location?.name ?? '';
+      return nameA.compareTo(nameB);
+    });
+    
+    return sorted;
+  }
+  
   // NEW: Build history items with smart transfer pairing
   List<Widget> _buildHistoryItems(List<InventoryHistory> historyList) {
     final widgets = <Widget>[];
@@ -1287,14 +1321,13 @@ class _AddToolScreenState extends State<AddToolScreen> {
     }
     
     final locationDisplay = '$sourceLocationName → $destLocationName';
-    final actionColor = Colors.purple; // Use purple for combined transfers
     
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: actionColor.withOpacity(0.05),
-        border: Border.all(color: actionColor.withOpacity(0.2)),
+        color: Colors.grey[50],
+        border: Border.all(color: Colors.grey[300]!),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
@@ -1304,7 +1337,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: actionColor.withOpacity(0.1),
+              color: Colors.grey[200],
               borderRadius: BorderRadius.circular(16),
             ),
             child: const Center(
@@ -1324,10 +1357,10 @@ class _AddToolScreenState extends State<AddToolScreen> {
                 // Action description
                 Text(
                   'Transferred ${transferOut.quantity}',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
-                    color: actionColor.withOpacity(0.9),
+                    color: Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -1395,27 +1428,6 @@ class _AddToolScreenState extends State<AddToolScreen> {
       }
     }
     
-    Color actionColor;
-    switch (history.action) {
-      case 'add':
-        actionColor = Colors.green;
-        break;
-      case 'remove':
-        actionColor = Colors.red;
-        break;
-      case 'transfer_in':
-        actionColor = Colors.blue;
-        break;
-      case 'transfer_out':
-        actionColor = Colors.orange;
-        break;
-      case 'edit':
-        actionColor = Colors.purple;
-        break;
-      default:
-        actionColor = Colors.grey;
-    }
-    
     // Build location display with arrow for transfers
     String locationDisplay;
     if (relatedLocationName != null) {
@@ -1434,8 +1446,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: actionColor.withOpacity(0.05),
-        border: Border.all(color: actionColor.withOpacity(0.2)),
+        color: Colors.grey[50],
+        border: Border.all(color: Colors.grey[300]!),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
@@ -1445,7 +1457,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: actionColor.withOpacity(0.1),
+              color: Colors.grey[200],
               borderRadius: BorderRadius.circular(16),
             ),
             child: Center(
@@ -1465,10 +1477,10 @@ class _AddToolScreenState extends State<AddToolScreen> {
                 // Action description
                 Text(
                   history.getActionDescription(),
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
-                    color: actionColor.withOpacity(0.9),
+                    color: Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 2),

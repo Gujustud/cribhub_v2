@@ -184,13 +184,20 @@ class PocketBaseService {
         throw Exception('Not enough quantity at source location');
       }
 
+      // Get destination quantity before transfer
+      final destQtyBefore = await getCurrentQuantityAtLocation(
+        toolId: toolId,
+        locationId: toLocationId,
+      );
+
       // Update source location (reduce quantity or delete if 0)
+      final newSourceQty = currentQty - quantity;
       if (currentQty == quantity) {
         await pb.collection('tool_locations').delete(fromRecord.id);
       } else {
         await pb.collection('tool_locations').update(
           fromRecord.id,
-          body: {'quantity': currentQty - quantity},
+          body: {'quantity': newSourceQty},
         );
       }
 
@@ -216,13 +223,35 @@ class PocketBaseService {
         );
       }
 
-      // Create movement history record
+      // Create OLD movement history record (keep for backwards compatibility)
       await pb.collection('movement_history').create(body: {
         'tool': toolId,
         'from_location': fromLocationId,
         'to_location': toLocationId,
         'quantity': quantity,
       });
+
+      // NEW: Log to inventory_history (transfer_out from source)
+      await logInventoryHistory(
+        toolId: toolId,
+        locationId: fromLocationId,
+        action: 'transfer_out',
+        quantity: quantity,
+        quantityBefore: currentQty,
+        quantityAfter: newSourceQty,
+        relatedLocationId: toLocationId,
+      );
+
+      // NEW: Log to inventory_history (transfer_in at destination)
+      await logInventoryHistory(
+        toolId: toolId,
+        locationId: toLocationId,
+        action: 'transfer_in',
+        quantity: quantity,
+        quantityBefore: destQtyBefore,
+        quantityAfter: destQtyBefore + quantity,
+        relatedLocationId: fromLocationId,
+      );
 
       print('Tool moved successfully');
     } catch (e) {
