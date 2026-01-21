@@ -28,7 +28,7 @@ class PocketBaseService {
     double? neck,
   }) async {
     try {
-      final record = await pb.collection('tools').create(body: {
+      final record = await pb.collection('inventory').create(body: {
         'tool_name': toolName,
         'category': category,
         'subcategory': subcategory,
@@ -51,7 +51,7 @@ class PocketBaseService {
   // Get all tools
   Future<List<dynamic>> getTools() async {
     try {
-      final records = await pb.collection('tools').getFullList();
+      final records = await pb.collection('inventory').getFullList();
       return records;
     } catch (e) {
       print('Error getting tools: $e');
@@ -152,7 +152,7 @@ class PocketBaseService {
   // Get tool by ID
   Future<dynamic> getToolById(String toolId) async {
     try {
-      final record = await pb.collection('tools').getOne(toolId);
+      final record = await pb.collection('inventory').getOne(toolId);
       return record;
     } catch (e) {
       print('Error getting tool: $e');
@@ -420,6 +420,127 @@ class PocketBaseService {
   }
 
   // ============================================================================
+  // CATEGORY MANAGEMENT
+  // ============================================================================
+
+  // Get all categories (sorted by sort_order)
+  Future<List<dynamic>> getCategories() async {
+    try {
+      final records = await pb.collection('categories').getFullList(
+        sort: 'sort_order,name',
+      );
+      return records;
+    } catch (e) {
+      print('Error getting categories: $e');
+      rethrow;
+    }
+  }
+
+  // Create a new category
+  Future<void> createCategory({
+    required String name,
+    required int sortOrder,
+  }) async {
+    try {
+      await pb.collection('categories').create(body: {
+        'name': name,
+        'sort_order': sortOrder,
+      });
+      print('Category created: $name');
+    } catch (e) {
+      print('Error creating category: $e');
+      rethrow;
+    }
+  }
+
+  // Update a category
+  Future<void> updateCategory({
+    required String categoryId,
+    required String name,
+    required int sortOrder,
+  }) async {
+    try {
+      await pb.collection('categories').update(categoryId, body: {
+        'name': name,
+        'sort_order': sortOrder,
+      });
+      print('Category updated: $categoryId');
+    } catch (e) {
+      print('Error updating category: $e');
+      rethrow;
+    }
+  }
+
+  // Delete a category
+  Future<void> deleteCategory(String categoryId) async {
+    try {
+      await pb.collection('categories').delete(categoryId);
+      print('Category deleted: $categoryId');
+    } catch (e) {
+      print('Error deleting category: $e');
+      rethrow;
+    }
+  }
+
+  // Check if category has inventory items
+  Future<int> getCategoryInventoryCount(String categoryName) async {
+    try {
+      final records = await pb.collection('inventory').getFullList(
+        filter: 'category = "$categoryName"',
+      );
+      return records.length;
+    } catch (e) {
+      print('Error checking category inventory: $e');
+      return 0;
+    }
+  }
+
+  // ============================================================================
+  // APP SETTINGS MANAGEMENT
+  // ============================================================================
+
+  // Get app settings (creates default if doesn't exist)
+  Future<dynamic> getAppSettings() async {
+    try {
+      final records = await pb.collection('app_settings').getFullList();
+      if (records.isEmpty) {
+        // Create default settings if none exist
+        final defaultSettings = await pb.collection('app_settings').create(body: {
+          'show_all_inventory_in_menu': true,
+        });
+        return defaultSettings;
+      }
+      return records.first;
+    } catch (e) {
+      print('Error getting app settings: $e');
+      rethrow;
+    }
+  }
+
+  // Update app settings
+  Future<void> updateAppSettings({
+    required String settingsId,
+    required bool showAllInventoryInMenu,
+    String? subcategoryDisplayMode,
+  }) async {
+    try {
+      final Map<String, dynamic> body = {
+        'show_all_inventory_in_menu': showAllInventoryInMenu,
+      };
+
+      if (subcategoryDisplayMode != null) {
+        body['subcategory_display_mode'] = subcategoryDisplayMode;
+      }
+
+      await pb.collection('app_settings').update(settingsId, body: body);
+      print('App settings updated');
+    } catch (e) {
+      print('Error updating app settings: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================================
   // INVENTORY HISTORY LOGGING
   // ============================================================================
 
@@ -566,19 +687,19 @@ class PocketBaseService {
         sort: '-created',
         expand: 'location',
       );
-      
+
       final historicalLocationIds = <String>{};
-      
+
       for (final record in records) {
         if (historicalLocationIds.length >= limit) break;
-        
+
         final locationId = record.data['location'];
         if (locationId == null) continue;
-        
+
         // Check if location is expanded
         final expandedData = record.expand?['location'];
         if (expandedData == null) continue;
-        
+
         // Handle if expandedData is a List or single object
         dynamic locationRecord;
         if (expandedData is List && expandedData.isNotEmpty) {
@@ -586,22 +707,295 @@ class PocketBaseService {
         } else {
           locationRecord = expandedData;
         }
-        
+
         // Get location type
         final locationType = locationRecord.data['type']?.toString().toLowerCase() ?? '';
-        
+
         // Only include bins, shelves, toolboxes
-        if (locationType == 'toolbox' || 
-            locationType == 'shelf' || 
+        if (locationType == 'toolbox' ||
+            locationType == 'shelf' ||
             locationType == 'bin') {
           historicalLocationIds.add(locationId);
         }
       }
-      
+
       return historicalLocationIds.toList();
     } catch (e) {
       print('Error getting historical add locations: $e');
       return [];
     }
   }
-}
+
+  // ============================================================================
+  // SUBCATEGORY MANAGEMENT
+  // ============================================================================
+
+  // Get all subcategories (sorted by sort_order)
+  Future<List<dynamic>> getSubcategories() async {
+    try {
+      final records = await pb.collection('subcategories').getFullList(
+        sort: 'sort_order,name',
+      );
+      return records;
+    } catch (e) {
+      print('Error getting subcategories: $e');
+      rethrow;
+    }
+  }
+
+  // Get top-level subcategories for a category
+  Future<List<dynamic>> getTopLevelSubcategories(String categoryId) async {
+    try {
+      final records = await pb.collection('subcategories').getFullList(
+        filter: 'category = "$categoryId"',
+        sort: 'sort_order,name',
+      );
+      return records;
+    } catch (e) {
+      print('Error getting top-level subcategories: $e');
+      rethrow;
+    }
+  }
+
+  // Get child subcategories of a parent
+  Future<List<dynamic>> getChildSubcategories(String parentId) async {
+    try {
+      final records = await pb.collection('subcategories').getFullList(
+        filter: 'parent_subcategory = "$parentId"',
+        sort: 'sort_order,name',
+      );
+      return records;
+    } catch (e) {
+      print('Error getting child subcategories: $e');
+      rethrow;
+    }
+  }
+
+  // Create subcategory
+  Future<void> createSubcategory({
+    required String name,
+    String? categoryId,
+    String? parentSubcategoryId,
+    required int sortOrder,
+    String? customLabel,
+    String? attributeListId,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'name': name,
+        'sort_order': sortOrder,
+      };
+      
+      // For child subcategories, only set parent_subcategory
+      // For top-level subcategories, only set category
+      if (parentSubcategoryId != null) {
+        body['parent_subcategory'] = parentSubcategoryId;
+        print('DEBUG createSubcategory: Setting parent_subcategory=$parentSubcategoryId for "$name"');
+        // Don't set category for child subcategories
+      } else if (categoryId != null) {
+        body['category'] = categoryId;
+        print('DEBUG createSubcategory: Setting category=$categoryId for "$name"');
+      }
+      
+      if (customLabel != null && customLabel.isNotEmpty) {
+        body['custom_label'] = customLabel;
+      }
+      
+      if (attributeListId != null) {
+        body['attribute_list'] = attributeListId;
+      }
+      
+      print('DEBUG createSubcategory: Creating "$name" with body: $body');
+      await pb.collection('subcategories').create(body: body);
+      print('Subcategory created: $name');
+    } catch (e) {
+      print('Error creating subcategory: $e');
+      rethrow;
+    }
+  }
+
+  // Update subcategory
+  Future<void> updateSubcategory({
+    required String subcategoryId,
+    required String name,
+    required int sortOrder,
+    String? customLabel,
+    String? attributeListId,
+    String? parentSubcategoryId,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'name': name,
+        'sort_order': sortOrder,
+        if (customLabel != null) 'custom_label': customLabel,
+        if (attributeListId != null) 'attribute_list': attributeListId,
+      };
+      
+      // If setting parent_subcategory, clear category
+      if (parentSubcategoryId != null) {
+        body['parent_subcategory'] = parentSubcategoryId;
+        body['category'] = null; // Explicitly clear category for child subcategories
+      }
+      
+      await pb.collection('subcategories').update(subcategoryId, body: body);
+      print('Subcategory updated: $subcategoryId');
+    } catch (e) {
+      print('Error updating subcategory: $e');
+      rethrow;
+    }
+  }
+
+  // Delete subcategory
+  Future<void> deleteSubcategory(String subcategoryId) async {
+    try {
+      await pb.collection('subcategories').delete(subcategoryId);
+      print('Subcategory deleted: $subcategoryId');
+    } catch (e) {
+      print('Error deleting subcategory: $e');
+      rethrow;
+    }
+  }
+
+  // Check if subcategory has children
+  Future<bool> subcategoryHasChildren(String subcategoryId) async {
+    try {
+      final records = await pb.collection('subcategories').getFullList(
+        filter: 'parent_subcategory = "$subcategoryId"',
+      );
+      return records.isNotEmpty;
+    } catch (e) {
+      print('Error checking subcategory children: $e');
+      return false;
+    }
+  }
+
+  // Check if subcategory is used in inventory
+  Future<int> getSubcategoryInventoryCount(String subcategoryName) async {
+    try {
+      final records = await pb.collection('inventory').getFullList(
+        filter: 'subcategory = "$subcategoryName"',
+      );
+      return records.length;
+    } catch (e) {
+      print('Error checking subcategory inventory: $e');
+      return 0;
+    }
+  }
+
+  // ============================================================================
+  // ATTRIBUTE LISTS MANAGEMENT
+  // ============================================================================
+
+  // Get all attribute lists
+  Future<List<dynamic>> getAttributeLists() async {
+    try {
+      final records = await pb.collection('attribute_lists').getFullList(
+        sort: 'name',
+      );
+      return records;
+    } catch (e) {
+      print('Error getting attribute lists: $e');
+      rethrow;
+    }
+  }
+
+  // Create attribute list
+  Future<void> createAttributeList({required String name}) async {
+    try {
+      await pb.collection('attribute_lists').create(body: {'name': name});
+      print('Attribute list created: $name');
+    } catch (e) {
+      print('Error creating attribute list: $e');
+      rethrow;
+    }
+  }
+
+  // Update attribute list
+  Future<void> updateAttributeList({
+    required String listId,
+    required String name,
+  }) async {
+    try {
+      await pb.collection('attribute_lists').update(listId, body: {'name': name});
+      print('Attribute list updated: $listId');
+    } catch (e) {
+      print('Error updating attribute list: $e');
+      rethrow;
+    }
+  }
+
+  // Delete attribute list
+  Future<void> deleteAttributeList(String listId) async {
+    try {
+      await pb.collection('attribute_lists').delete(listId);
+      print('Attribute list deleted: $listId');
+    } catch (e) {
+      print('Error deleting attribute list: $e');
+      rethrow;
+    }
+  }
+
+  // Get attribute values for a list
+  Future<List<dynamic>> getAttributeValues(String listId) async {
+    try {
+      final records = await pb.collection('attribute_values').getFullList(
+        filter: 'attribute_list = "$listId"',
+        sort: 'sort_order,value',
+      );
+      return records;
+    } catch (e) {
+      print('Error getting attribute values: $e');
+      rethrow;
+    }
+  }
+
+  // Create attribute value
+  Future<void> createAttributeValue({
+    required String listId,
+    required String value,
+    required int sortOrder,
+  }) async {
+    try {
+      await pb.collection('attribute_values').create(body: {
+        'attribute_list': listId,
+        'value': value,
+        'sort_order': sortOrder,
+      });
+      print('Attribute value created: $value');
+    } catch (e) {
+      print('Error creating attribute value: $e');
+      rethrow;
+    }
+  }
+
+  // Update attribute value
+  Future<void> updateAttributeValue({
+    required String valueId,
+    required String value,
+    required int sortOrder,
+  }) async {
+    try {
+      await pb.collection('attribute_values').update(valueId, body: {
+        'value': value,
+        'sort_order': sortOrder,
+      });
+      print('Attribute value updated: $valueId');
+    } catch (e) {
+      print('Error updating attribute value: $e');
+      rethrow;
+    }
+  }
+
+  // Delete attribute value
+  Future<void> deleteAttributeValue(String valueId) async {
+    try {
+      await pb.collection('attribute_values').delete(valueId);
+      print('Attribute value deleted: $valueId');
+    } catch (e) {
+      print('Error deleting attribute value: $e');
+      rethrow;
+    }
+  }
+
+ 
+  }

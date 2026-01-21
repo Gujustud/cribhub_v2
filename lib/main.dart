@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'add_tool_screen.dart';
-import 'tool_list_screen.dart';
+import 'inventory_screen.dart'; // UPDATED: Changed from tool_list_screen.dart
 import 'location_management_screen.dart';
 import 'brands_screen.dart';
 import 'suppliers_screen.dart';
 import 'return_dialog.dart';
+import 'app_drawer.dart';
 
 void main() {
   runApp(const CribhubApp());
@@ -78,126 +79,7 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ),
       ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(
-                color: Colors.blue,
-              ),
-              child: Text(
-                'Cribhub',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                ),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.home),
-              title: const Text('Home'),
-              onTap: () => Navigator.pop(context),
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.build),
-              title: const Text('Cutting Tools'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ToolListScreen()),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.precision_manufacturing),
-              title: const Text('Workholding'),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Navigate to workholding
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.straighten),
-              title: const Text('Inspection'),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Navigate to inspection
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.more_horiz),
-              title: const Text('Misc'),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Navigate to misc
-              },
-            ),
-            const Divider(),
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text(
-                'Management',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                ),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.label),
-              title: const Text('Brands'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const BrandsScreen()),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.store),
-              title: const Text('Suppliers'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const SuppliersScreen()),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: const Text('Settings'),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Navigate to settings
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.location_on),
-              title: const Text('Locations'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LocationManagementScreen()),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.info),
-              title: const Text('About'),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Navigate to about
-              },
-            ),
-          ],
-        ),
-      ),
+      drawer: const AppDrawer(),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),

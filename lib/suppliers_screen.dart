@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'pocketbase_service.dart';
+import 'app_drawer.dart';
 
 class SuppliersScreen extends StatefulWidget {
   const SuppliersScreen({super.key});
@@ -373,7 +374,14 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
       appBar: AppBar(
         title: const Text('Suppliers'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
       ),
+      drawer: const AppDrawer(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(

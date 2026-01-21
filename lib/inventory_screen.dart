@@ -1,19 +1,25 @@
-// tool_list_screen.dart
+// inventory_screen.dart
 import 'package:flutter/material.dart';
 import 'models.dart';
 import 'pocketbase_service.dart';
 import 'transfer_dialog.dart';
 import 'add_tool_screen.dart';
 import 'return_dialog.dart';
+import 'app_drawer.dart';
 
-class ToolListScreen extends StatefulWidget {
-  const ToolListScreen({super.key});
+class InventoryScreen extends StatefulWidget {
+  final String? categoryFilter; // NEW: Optional category filter
+  
+  const InventoryScreen({
+    super.key,
+    this.categoryFilter, // NEW: Optional parameter
+  });
 
   @override
-  State<ToolListScreen> createState() => _ToolListScreenState();
+  State<InventoryScreen> createState() => _InventoryScreenState();
 }
 
-class _ToolListScreenState extends State<ToolListScreen> {
+class _InventoryScreenState extends State<InventoryScreen> {
   final _pbService = PocketBaseService();
   List<ToolWithLocations> _toolsWithLocations = [];
   List<ToolWithLocations> _filteredTools = [];
@@ -129,7 +135,7 @@ class _ToolListScreenState extends State<ToolListScreen> {
         }
         
         // Delete the tool
-        await _pbService.pb.collection('tools').delete(tool.id);
+        await _pbService.pb.collection('inventory').delete(tool.id);
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -167,7 +173,14 @@ class _ToolListScreenState extends State<ToolListScreen> {
 
       // Load all tools
       final toolRecords = await _pbService.getTools();
-      final tools = toolRecords.map((r) => Tool.fromRecord(r)).toList();
+      List<Tool> tools = toolRecords.map((r) => Tool.fromRecord(r)).toList();
+
+      // NEW: Filter by category if specified
+      if (widget.categoryFilter != null) {
+        tools = tools.where((tool) {
+          return tool.category == widget.categoryFilter;
+        }).toList();
+      }
 
       // For each tool, load its locations with expand
       final toolsWithLocs = <ToolWithLocations>[];
@@ -242,8 +255,14 @@ class _ToolListScreenState extends State<ToolListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tool Inventory'),
+        title: Text(widget.categoryFilter ?? 'All Inventory'), // UPDATED: Dynamic title
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -252,6 +271,7 @@ class _ToolListScreenState extends State<ToolListScreen> {
           ),
         ],
       ),
+      drawer: const AppDrawer(),
       body: Column(
         children: [
           // Top action bar with search and buttons
@@ -624,7 +644,7 @@ class LocationTag extends StatelessWidget {
           color: backgroundColor,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(color: borderColor, width: 1.5),
-        ),
+          ),
         child: Text(
           'Qty: $quantity • $locationPath',
           style: TextStyle(

@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'pocketbase_service.dart';
 import 'models.dart';
 import 'add_inventory_dialog.dart';
+import 'app_drawer.dart';
 import 'package:intl/intl.dart'; // For date formatting in history
 
 class AddToolScreen extends StatefulWidget {
@@ -38,8 +39,28 @@ class _AddToolScreenState extends State<AddToolScreen> {
   
   // Dropdown values
   String _category = 'Cutting Tools';
-  String _subcategory = 'Endmills';
-  String _subSubcategory = 'Flat';
+  
+  // Subcategories
+  List<dynamic> _allSubcategories = [];
+  List<String?> _selectedSubcategoryIds = []; // Stack of selections for unlimited levels
+  String _subcategoryText = ''; // Combined subcategory text for saving
+  
+  // Temporary backward compatibility variables (will be replaced with dynamic system)
+  String? _subcategory = 'Endmills';
+  String? _subSubcategory = 'Flat';
+  
+  // Attribute
+  String? _selectedAttributeValue;
+  
+  // Display mode
+  String _subcategoryDisplayMode = 'dropdown'; // or 'buttons'
+  
+  // Categories (loaded dynamically)
+  List<dynamic> _categories = [];
+  String? _selectedCategoryId;
+  
+  // App Settings ID
+  String? _settingsId;
   
   // Location selection
   List<dynamic> _locations = [];
@@ -77,6 +98,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
     super.initState();
     _loadLocations();
     _loadBrandsAndSuppliers();
+    _loadCategories(); // Load categories dynamically
+    _loadSubcategories();
+    _loadDisplayMode();
     
     // If editing or duplicating, pre-fill fields
     if (widget.tool != null) {
@@ -101,17 +125,20 @@ class _AddToolScreenState extends State<AddToolScreen> {
     _modelNumberController.text = tool.modelNumber ?? '';
     _urlController.text = tool.url ?? '';
     
-    // Ensure category exists
-    final validCategories = ['Cutting Tools', 'Workholding', 'Inspection', 'Misc'];
-    _category = validCategories.contains(tool.category) ? tool.category : 'Cutting Tools';
+    // Ensure category exists (default to Cutting Tools)
+    _category = tool.category.isNotEmpty ? tool.category : 'Cutting Tools';
     
-    // Ensure subcategory exists
-    final validSubcategories = ['Endmills', 'Threading'];
-    _subcategory = validSubcategories.contains(tool.subcategory) ? tool.subcategory! : 'Endmills';
+    // Load subcategories and try to match existing values
+    // This will be handled after subcategories are loaded
+    _subcategory = tool.subcategory;
+    _subSubcategory = tool.subSubcategory;
     
-    // Ensure sub-subcategory exists
-    final validSubSubcategories = ['Flat', 'CR', 'Ball', 'Tslot', 'Misc'];
-    _subSubcategory = validSubSubcategories.contains(tool.subSubcategory) ? tool.subSubcategory! : 'Flat';
+    // Safely get attribute_value from record
+    if (tool.record != null && tool.record.data != null) {
+      _selectedAttributeValue = tool.record.data['attribute_value'];
+    } else {
+      _selectedAttributeValue = null;
+    }
     
     // Don't set brand/supplier until they're loaded
     // Will be set in _loadBrandsAndSuppliers if valid
@@ -217,6 +244,68 @@ class _AddToolScreenState extends State<AddToolScreen> {
     }
   }
   
+  Future<void> _loadSubcategories() async {
+    try {
+      final pbService = PocketBaseService();
+      final subcategories = await pbService.getSubcategories();
+      setState(() {
+        _allSubcategories = subcategories;
+        
+        // If editing/duplicating, try to match existing subcategory names to IDs
+        if (widget.tool != null && _subcategory != null && _subcategory!.isNotEmpty) {
+          _matchSubcategoryNamesToIds();
+        }
+      });
+    } catch (e) {
+      print('Error loading subcategories: $e');
+    }
+  }
+
+  void _matchSubcategoryNamesToIds() {
+    // Try to find subcategories by name and build the selection chain
+    _selectedSubcategoryIds.clear();
+    
+    if (_selectedCategoryId == null) return;
+    
+    // Find first level subcategory
+    final firstLevel = _allSubcategories.where((s) =>
+      s.data['category'] == _selectedCategoryId &&
+      s.data['name'] == _subcategory &&
+      (s.data['parent_subcategory'] == null || s.data['parent_subcategory'] == '')
+    ).toList();
+    
+    if (firstLevel.isNotEmpty) {
+      _selectedSubcategoryIds.add(firstLevel.first.id);
+      
+      // If there's a sub-subcategory, try to find it
+      if (_subSubcategory != null && _subSubcategory!.isNotEmpty) {
+        final secondLevel = _allSubcategories.where((s) =>
+          s.data['parent_subcategory'] == firstLevel.first.id &&
+          s.data['name'] == _subSubcategory
+        ).toList();
+        
+        if (secondLevel.isNotEmpty) {
+          _selectedSubcategoryIds.add(secondLevel.first.id);
+        }
+      }
+      
+      _updateSubcategoryText();
+    }
+  }
+
+  Future<void> _loadDisplayMode() async {
+    try {
+      final pbService = PocketBaseService();
+      final settings = await pbService.getAppSettings();
+      setState(() {
+        _subcategoryDisplayMode = settings.data['subcategory_display_mode'] ?? 'dropdown';
+        _settingsId = settings.id;
+      });
+    } catch (e) {
+      print('Error loading display mode: $e');
+    }
+  }
+
   Future<void> _loadBrandsAndSuppliers() async {
     try {
       final pbService = PocketBaseService();
@@ -247,6 +336,60 @@ class _AddToolScreenState extends State<AddToolScreen> {
       });
     } catch (e) {
       print('Error loading brands/suppliers: $e');
+    }
+  }
+  
+  Future<void> _loadCategories() async {
+    try {
+      final pbService = PocketBaseService();
+      final categories = await pbService.getCategories();
+      setState(() {
+        _categories = categories;
+        
+        // If editing/duplicating, find the category by name
+        if (widget.tool != null && categories.isNotEmpty) {
+          final toolCategory = widget.tool!.category;
+          final matchingCategory = categories.where(
+            (c) => c.data['name'] == toolCategory,
+          );
+          
+          if (matchingCategory.isNotEmpty) {
+            _selectedCategoryId = matchingCategory.first.id;
+            _category = matchingCategory.first.data['name'];
+          } else {
+            // Category doesn't exist, default to Cutting Tools or first
+            final cuttingTools = categories.where(
+              (c) => c.data['name'] == 'Cutting Tools',
+            );
+            if (cuttingTools.isNotEmpty) {
+              _selectedCategoryId = cuttingTools.first.id;
+              _category = cuttingTools.first.data['name'];
+            } else {
+              _selectedCategoryId = categories.first.id;
+              _category = categories.first.data['name'];
+            }
+          }
+          
+          // After setting category, try to match subcategories if they're loaded
+          if (_allSubcategories.isNotEmpty) {
+            _matchSubcategoryNamesToIds();
+          }
+        } else if (_selectedCategoryId == null && categories.isNotEmpty) {
+          // New tool - default to "Cutting Tools" if it exists
+          final cuttingTools = categories.where(
+            (c) => c.data['name'] == 'Cutting Tools',
+          );
+          if (cuttingTools.isNotEmpty) {
+            _selectedCategoryId = cuttingTools.first.id;
+            _category = cuttingTools.first.data['name'];
+          } else {
+            _selectedCategoryId = categories.first.id;
+            _category = categories.first.data['name'];
+          }
+        }
+      });
+    } catch (e) {
+      print('Error loading categories: $e');
     }
   }
   
@@ -360,12 +503,12 @@ class _AddToolScreenState extends State<AddToolScreen> {
   
   void _extractFromUrl() {
     // Placeholder for future implementation
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
         content: Text('Extract from URL feature coming soon!'),
-        backgroundColor: Colors.orange,
-      ),
-    );
+            backgroundColor: Colors.orange,
+          ),
+        );
   }
   
   Future<void> _showAddInventoryDialog() async {
@@ -505,6 +648,261 @@ class _AddToolScreenState extends State<AddToolScreen> {
     
     return names.join(' → ');
   }
+
+  // Build dynamic cascading subcategory selectors
+  List<Widget> _buildSubcategorySelectors() {
+    if (_selectedCategoryId == null) return [];
+
+    final widgets = <Widget>[];
+
+    // Get top-level subcategories for selected category
+    final topLevel = _allSubcategories.where((s) =>
+      s.data['category'] == _selectedCategoryId &&
+      (s.data['parent_subcategory'] == null || s.data['parent_subcategory'] == '')
+    ).toList();
+
+    if (topLevel.isEmpty) return widgets;
+
+    // Build selector for level 0
+    widgets.add(_buildSubcategorySelector(topLevel, 0));
+
+    // Build selectors for nested levels
+    for (int i = 0; i < _selectedSubcategoryIds.length; i++) {
+      if (_selectedSubcategoryIds[i] == null) break;
+
+      final children = _allSubcategories.where((s) =>
+        s.data['parent_subcategory'] == _selectedSubcategoryIds[i]
+      ).toList();
+
+      if (children.isNotEmpty) {
+        widgets.add(const SizedBox(height: 16));
+        widgets.add(_buildSubcategorySelector(children, i + 1));
+      }
+    }
+
+    // Check if deepest selected subcategory has attribute list
+    if (_selectedSubcategoryIds.isNotEmpty) {
+      final deepestId = _selectedSubcategoryIds.last;
+      if (deepestId != null) {
+        try {
+          final deepest = _allSubcategories.firstWhere((s) => s.id == deepestId);
+          final attrListId = deepest.data['attribute_list'];
+          if (attrListId != null && attrListId.toString().isNotEmpty) {
+            widgets.add(const SizedBox(height: 16));
+            widgets.add(_buildAttributeSelector(attrListId));
+          }
+        } catch (e) {
+          // Deepest subcategory not found, skip attribute list
+          print('Deepest subcategory not found: $e');
+        }
+      }
+    }
+
+    return widgets;
+  }
+
+  Widget _buildSubcategorySelector(List<dynamic> options, int level) {
+    // Get label from parent or use default
+    String label = 'Subcategory';
+    if (level > 0 && _selectedSubcategoryIds.length >= level) {
+      final parentId = _selectedSubcategoryIds[level - 1];
+      if (parentId != null) {
+        try {
+          final parent = _allSubcategories.firstWhere((s) => s.id == parentId);
+          label = parent.data['custom_label'] ?? 'Type';
+        } catch (e) {
+          // Parent not found, use default label
+        }
+      }
+    } else if (level == 0 && _selectedCategoryId != null) {
+      // Try to get label from first subcategory
+      if (options.isNotEmpty) {
+        final firstSub = options.first;
+        label = firstSub.data['custom_label'] ?? 'Subcategory';
+      }
+    }
+
+    // Use display mode preference
+    if (_subcategoryDisplayMode == 'buttons') {
+      return _buildButtonSelector(options, level, label);
+    } else {
+      return _buildDropdownSelector(options, level, label);
+    }
+  }
+
+  Widget _buildDropdownSelector(List<dynamic> options, int level, String label) {
+    // Ensure _selectedSubcategoryIds has enough slots
+    while (_selectedSubcategoryIds.length <= level) {
+      _selectedSubcategoryIds.add(null);
+    }
+
+    return DropdownButtonFormField<String>(
+      value: _selectedSubcategoryIds[level],
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+      ),
+      items: options.map<DropdownMenuItem<String>>((sub) {
+        return DropdownMenuItem<String>(
+          value: sub.id,
+          child: Text(sub.data['name']),
+        );
+      }).toList(),
+      onChanged: (value) {
+        setState(() {
+          _selectedSubcategoryIds[level] = value;
+          // Clear selections beyond this level
+          _selectedSubcategoryIds = _selectedSubcategoryIds.sublist(0, level + 1);
+          _selectedAttributeValue = null;
+          _updateSubcategoryText();
+          _updateToolName();
+        });
+      },
+    );
+  }
+
+  Widget _buildButtonSelector(List<dynamic> options, int level, String label) {
+    // Ensure _selectedSubcategoryIds has enough slots
+    while (_selectedSubcategoryIds.length <= level) {
+      _selectedSubcategoryIds.add(null);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.map((sub) {
+            final isSelected = _selectedSubcategoryIds[level] == sub.id;
+            return ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _selectedSubcategoryIds[level] = sub.id;
+                  // Clear selections beyond this level
+                  _selectedSubcategoryIds = _selectedSubcategoryIds.sublist(0, level + 1);
+                  _selectedAttributeValue = null;
+                  _updateSubcategoryText();
+                  _updateToolName();
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isSelected ? Colors.blue : Colors.grey[300],
+                foregroundColor: isSelected ? Colors.white : Colors.black,
+              ),
+              child: Text(sub.data['name']),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAttributeSelector(String attrListId) {
+    return FutureBuilder<List<dynamic>>(
+      future: PocketBaseService().getAttributeValues(attrListId),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+
+        final values = snapshot.data!;
+        
+        if (values.isEmpty) return const SizedBox.shrink();
+
+        // Use a generic label (could be enhanced to load attribute list name)
+        const String label = 'Attribute';
+
+        if (_subcategoryDisplayMode == 'buttons') {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: values.map((value) {
+                  final isSelected = _selectedAttributeValue == value.data['value'];
+                  return ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _selectedAttributeValue = value.data['value'];
+                        _updateToolName();
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isSelected ? Colors.blue : Colors.grey[300],
+                      foregroundColor: isSelected ? Colors.white : Colors.black,
+                    ),
+                    child: Text(value.data['value']),
+                  );
+                }).toList(),
+              ),
+            ],
+          );
+        } else {
+          return DropdownButtonFormField<String>(
+            value: _selectedAttributeValue,
+            decoration: InputDecoration(
+              labelText: label,
+              border: const OutlineInputBorder(),
+            ),
+            items: values.map<DropdownMenuItem<String>>((val) {
+              return DropdownMenuItem<String>(
+                value: val.data['value'],
+                child: Text(val.data['value']),
+              );
+            }).toList(),
+            onChanged: (value) {
+              setState(() {
+                _selectedAttributeValue = value;
+                _updateToolName();
+              });
+            },
+          );
+        }
+      },
+    );
+  }
+
+  void _updateSubcategoryText() {
+    // Build subcategory text from selected IDs
+    final subcategoryNames = <String>[];
+    for (final id in _selectedSubcategoryIds) {
+      if (id != null) {
+        try {
+          final sub = _allSubcategories.firstWhere((s) => s.id == id);
+          subcategoryNames.add(sub.data['name']);
+        } catch (e) {
+          // Subcategory not found, skip it
+          print('Subcategory with id $id not found: $e');
+        }
+      }
+    }
+
+    // Update backward compatibility variables
+    _subcategory = subcategoryNames.isNotEmpty ? subcategoryNames[0] : null;
+    _subSubcategory = subcategoryNames.length > 1 ? subcategoryNames[1] : null;
+    _subcategoryText = subcategoryNames.join(' > ');
+  }
+
+  Future<void> _saveDisplayMode() async {
+    if (_settingsId == null) return;
+    try {
+      final pbService = PocketBaseService();
+      final settings = await pbService.getAppSettings();
+      await pbService.updateAppSettings(
+        settingsId: settings.id,
+        showAllInventoryInMenu: settings.data['show_all_inventory_in_menu'] ?? true,
+        subcategoryDisplayMode: _subcategoryDisplayMode,
+      );
+    } catch (e) {
+      print('Error saving display mode: $e');
+    }
+  }
   
   void _saveTool() async {
     if (_formKey.currentState!.validate()) {
@@ -519,11 +917,39 @@ class _AddToolScreenState extends State<AddToolScreen> {
 
         final pbService = PocketBaseService();
         
+        // Build subcategory strings from selected IDs
+        String subcategoryStr = '';
+        String subSubcategoryStr = '';
+        if (_selectedSubcategoryIds.isNotEmpty) {
+          try {
+            final firstSub = _allSubcategories.firstWhere(
+              (s) => s.id == _selectedSubcategoryIds[0],
+            );
+            subcategoryStr = firstSub.data['name'];
+            
+            if (_selectedSubcategoryIds.length > 1) {
+              try {
+                final secondSub = _allSubcategories.firstWhere(
+                  (s) => s.id == _selectedSubcategoryIds[1],
+                );
+                subSubcategoryStr = secondSub.data['name'];
+              } catch (e) {
+                // Second subcategory not found
+                print('Second subcategory not found: $e');
+              }
+            }
+          } catch (e) {
+            // First subcategory not found
+            print('First subcategory not found: $e');
+          }
+        }
+        
         final body = {
           'tool_name': _toolNameController.text,
           'category': _category,
-          'subcategory': _subcategory,
-          'sub_subcategory': _subSubcategory,
+          'subcategory': subcategoryStr.isNotEmpty ? subcategoryStr : (_subcategory ?? ''),
+          'sub_subcategory': subSubcategoryStr.isNotEmpty ? subSubcategoryStr : (_subSubcategory ?? ''),
+          'attribute_value': _selectedAttributeValue,
           'model_number': _modelNumberController.text.isEmpty 
               ? null 
               : _modelNumberController.text,
@@ -545,7 +971,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
         if (_isEditMode) {
           // Update existing tool
           if (_photoChanged && _photoBytes != null) {
-            toolRecord = await pbService.pb.collection('tools').update(
+            toolRecord = await pbService.pb.collection('inventory').update(
               widget.tool!.id,
               body: body,
               files: [
@@ -557,7 +983,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
               ],
             );
           } else {
-            toolRecord = await pbService.pb.collection('tools').update(
+            toolRecord = await pbService.pb.collection('inventory').update(
               widget.tool!.id,
               body: body,
             );
@@ -565,7 +991,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
         } else {
           // Create new tool
           if (_photoBytes != null) {
-            toolRecord = await pbService.pb.collection('tools').create(
+            toolRecord = await pbService.pb.collection('inventory').create(
               body: body,
               files: [
                 http.MultipartFile.fromBytes(
@@ -576,13 +1002,13 @@ class _AddToolScreenState extends State<AddToolScreen> {
               ],
             );
           } else {
-            toolRecord = await pbService.pb.collection('tools').create(body: body);
+            toolRecord = await pbService.pb.collection('inventory').create(body: body);
           }
           
           // Create tool_location record if inventory was added
           if (_inventoryToAdd != null) {
-            await pbService.createToolLocation(
-              toolId: toolRecord.id,
+        await pbService.createToolLocation(
+          toolId: toolRecord.id,
               locationId: _inventoryToAdd!['locationId'],
               quantity: _inventoryToAdd!['quantity'] as int,
             );
@@ -635,7 +1061,14 @@ class _AddToolScreenState extends State<AddToolScreen> {
       appBar: AppBar(
         title: Text(_isEditMode ? 'Edit Tool' : widget.isDuplicate ? 'Duplicate Tool' : 'Add Tool'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
       ),
+        ),
+      ),
+      drawer: const AppDrawer(),
       body: Form(
         key: _formKey,
         child: Row(
@@ -644,14 +1077,14 @@ class _AddToolScreenState extends State<AddToolScreen> {
             // LEFT COLUMN - Tool Details
             Expanded(
               flex: 3,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
                   // Tool Name
-                  TextFormField(
-                    controller: _toolNameController,
+              TextFormField(
+                controller: _toolNameController,
                     decoration: InputDecoration(
-                      labelText: 'Tool Name',
+                  labelText: 'Tool Name',
                       border: const OutlineInputBorder(),
                       suffixIcon: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -674,11 +1107,11 @@ class _AddToolScreenState extends State<AddToolScreen> {
                       ),
                     ),
                     enabled: !_autoGenerateName,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black,
-                    ),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black,
+                ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Tool name is required';
@@ -687,65 +1120,65 @@ class _AddToolScreenState extends State<AddToolScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  
-                  // Model Number
-                  TextFormField(
-                    controller: _modelNumberController,
+            
+            // Model Number
+            TextFormField(
+              controller: _modelNumberController,
+              decoration: const InputDecoration(
+                labelText: 'Model Number (optional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Brand and Supplier row
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedBrandId,
                     decoration: const InputDecoration(
-                      labelText: 'Model Number (optional)',
+                      labelText: 'Brand (optional)',
                       border: OutlineInputBorder(),
                     ),
+                    hint: const Text('Select brand'),
+                    items: _brands.map((brand) {
+                      return DropdownMenuItem<String>(
+                        value: brand.id,
+                        child: Text(brand.data['name']),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedBrandId = value;
+                      });
+                    },
                   ),
-                  const SizedBox(height: 16),
-                  
-                  // Brand and Supplier row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedBrandId,
-                          decoration: const InputDecoration(
-                            labelText: 'Brand (optional)',
-                            border: OutlineInputBorder(),
-                          ),
-                          hint: const Text('Select brand'),
-                          items: _brands.map((brand) {
-                            return DropdownMenuItem<String>(
-                              value: brand.id,
-                              child: Text(brand.data['name']),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedBrandId = value;
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedSupplierId,
-                          decoration: const InputDecoration(
-                            labelText: 'Supplier (optional)',
-                            border: OutlineInputBorder(),
-                          ),
-                          hint: const Text('Select supplier'),
-                          items: _suppliers.map((supplier) {
-                            return DropdownMenuItem<String>(
-                              value: supplier.id,
-                              child: Text(supplier.data['company_name']),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedSupplierId = value;
-                            });
-                          },
-                        ),
-                      ),
-                    ],
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedSupplierId,
+                    decoration: const InputDecoration(
+                      labelText: 'Supplier (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                    hint: const Text('Select supplier'),
+                    items: _suppliers.map((supplier) {
+                      return DropdownMenuItem<String>(
+                        value: supplier.id,
+                        child: Text(supplier.data['company_name']),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedSupplierId = value;
+                      });
+                    },
                   ),
+                ),
+              ],
+            ),
                   const SizedBox(height: 16),
                   
                   // URL
@@ -756,140 +1189,83 @@ class _AddToolScreenState extends State<AddToolScreen> {
                       border: OutlineInputBorder(),
                       hintText: 'Product URL',
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // Category
-                  DropdownButtonFormField<String>(
-                    value: _category,
-                    decoration: const InputDecoration(
-                      labelText: 'Category',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'Cutting Tools', child: Text('Cutting Tools')),
-                      DropdownMenuItem(value: 'Workholding', child: Text('Workholding')),
-                      DropdownMenuItem(value: 'Inspection', child: Text('Inspection')),
-                      DropdownMenuItem(value: 'Misc', child: Text('Misc')),
+            ),
+            const SizedBox(height: 16),
+            
+            // Category
+            DropdownButtonFormField<String>(
+              value: _selectedCategoryId,
+              decoration: const InputDecoration(
+                labelText: 'Category',
+                border: OutlineInputBorder(),
+              ),
+              items: _categories.map<DropdownMenuItem<String>>((cat) {
+                return DropdownMenuItem<String>(
+                  value: cat.id,
+                  child: Text(cat.data['name']),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedCategoryId = value;
+                  _category = _categories.firstWhere((c) => c.id == value).data['name'];
+                  // Clear subcategory selections when category changes
+                  _selectedSubcategoryIds.clear();
+                  _selectedAttributeValue = null;
+                  _updateSubcategoryText();
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // Display Mode Toggle
+            if (_selectedCategoryId != null)
+              Row(
+                children: [
+                  const Text('Display Mode:'),
+                  const SizedBox(width: 16),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: 'dropdown',
+                        label: Text('Dropdown'),
+                        icon: Icon(Icons.arrow_drop_down),
+                      ),
+                      ButtonSegment(
+                        value: 'buttons',
+                        label: Text('Buttons'),
+                        icon: Icon(Icons.grid_view),
+                      ),
                     ],
-                    onChanged: (value) {
+                    selected: {_subcategoryDisplayMode},
+                    onSelectionChanged: (Set<String> newSelection) {
                       setState(() {
-                        _category = value!;
+                        _subcategoryDisplayMode = newSelection.first;
                       });
+                      _saveDisplayMode();
                     },
                   ),
-                  const SizedBox(height: 16),
-                  
-                  // Subcategory
-                  DropdownButtonFormField<String>(
-                    value: _subcategory,
-                    decoration: const InputDecoration(
-                      labelText: 'Subcategory',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'Endmills', child: Text('Endmills')),
-                      DropdownMenuItem(value: 'Threading', child: Text('Threading')),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        _subcategory = value!;
-                        _updateToolName();
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // Sub-subcategory
-                  DropdownButtonFormField<String>(
-                    value: _subSubcategory,
-                    decoration: const InputDecoration(
-                      labelText: 'Type',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'Flat', child: Text('Flat')),
-                      DropdownMenuItem(value: 'CR', child: Text('Corner Radius')),
-                      DropdownMenuItem(value: 'Ball', child: Text('Ball')),
-                      DropdownMenuItem(value: 'Tslot', child: Text('T-Slot')),
-                      DropdownMenuItem(value: 'Misc', child: Text('Misc')),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        _subSubcategory = value!;
-                        _updateToolName();
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  
+                ],
+              ),
+            if (_selectedCategoryId != null) const SizedBox(height: 16),
+            
+            // Dynamic Cascading Subcategories
+            ..._buildSubcategorySelectors(),
+            
+            const SizedBox(height: 16),
+            
                   // Diameter row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _diameterInController,
-                          decoration: const InputDecoration(
-                            labelText: 'Diameter (in)',
-                            border: OutlineInputBorder(),
-                          ),
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          onChanged: _onDiameterInChanged,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Required';
-                            }
-                            if (double.tryParse(value) == null) {
-                              return 'Invalid number';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _diameterMmController,
-                          decoration: const InputDecoration(
-                            labelText: 'Diameter (mm)',
-                            border: OutlineInputBorder(),
-                          ),
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          onChanged: _onDiameterMmChanged,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // Flutes
-                  TextFormField(
-                    controller: _flutesController,
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _diameterInController,
                     decoration: const InputDecoration(
-                      labelText: 'Number of Flutes',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Required';
-                      }
-                      if (int.tryParse(value) == null) {
-                        return 'Must be a whole number';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // Flute Length
-                  TextFormField(
-                    controller: _fluteLengthController,
-                    decoration: const InputDecoration(
-                      labelText: 'Flute Length',
+                      labelText: 'Diameter (in)',
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: _onDiameterInChanged,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Required';
@@ -900,33 +1276,88 @@ class _AddToolScreenState extends State<AddToolScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 16),
-                  
-                  // Corner Radius
-                  if (_subSubcategory == 'CR')
-                    Column(
-                      children: [
-                        TextFormField(
-                          controller: _cornerRadController,
-                          decoration: const InputDecoration(
-                            labelText: 'Corner Radius',
-                            border: OutlineInputBorder(),
-                          ),
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                    ),
-                  
-                  // Neck
-                  TextFormField(
-                    controller: _neckController,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextFormField(
+                    controller: _diameterMmController,
                     decoration: const InputDecoration(
-                      labelText: 'Neck (optional)',
+                      labelText: 'Diameter (mm)',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: _onDiameterMmChanged,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Flutes
+            TextFormField(
+              controller: _flutesController,
+              decoration: const InputDecoration(
+                labelText: 'Number of Flutes',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Required';
+                }
+                if (int.tryParse(value) == null) {
+                  return 'Must be a whole number';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // Flute Length
+            TextFormField(
+              controller: _fluteLengthController,
+              decoration: const InputDecoration(
+                labelText: 'Flute Length',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Required';
+                }
+                if (double.tryParse(value) == null) {
+                  return 'Invalid number';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            
+                  // Corner Radius
+            if (_subSubcategory == 'CR')
+              Column(
+                children: [
+                  TextFormField(
+                    controller: _cornerRadController,
+                    decoration: const InputDecoration(
+                      labelText: 'Corner Radius',
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            
+            // Neck
+            TextFormField(
+              controller: _neckController,
+              decoration: const InputDecoration(
+                labelText: 'Neck (optional)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
                   const SizedBox(height: 24),
                   
                   // Save button
@@ -944,8 +1375,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
+            ),
+            const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -1045,10 +1476,10 @@ class _AddToolScreenState extends State<AddToolScreen> {
                             IconButton(
                               icon: const Icon(Icons.close, size: 20),
                               onPressed: () {
-                                setState(() {
+                      setState(() {
                                   _inventoryToAdd = null;
-                                });
-                              },
+                      });
+                    },
                             ),
                           ],
                         ),
@@ -1086,8 +1517,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
                     if (_isEditMode) ...[
                       const SizedBox(height: 32),
                       const Divider(),
-                      const SizedBox(height: 16),
-                      
+            const SizedBox(height: 16),
+            
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1137,8 +1568,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
                         children: [
                           const Text(
                             'Performance Stats',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
                           Tooltip(
                             message: 'Performance tracking coming soon',
                             child: Icon(Icons.info_outline, color: Colors.grey[600], size: 20),
@@ -1173,8 +1604,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
                                   color: Colors.orange,
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 16),
+            ),
+            const SizedBox(height: 16),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
                               children: [
