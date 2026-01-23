@@ -294,8 +294,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
             ),
             child: Row(
               children: [
-                // Search field
-                Expanded(
+                // Search field - CHANGED: Constrained to 500px width to match main page
+                SizedBox(
+                  width: 500,
                   child: TextField(
                     controller: _searchController,
                     decoration: InputDecoration(

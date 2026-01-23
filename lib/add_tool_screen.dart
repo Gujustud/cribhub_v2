@@ -430,7 +430,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
     
     String name = '${diaStr}_${flutes}F_${flStr}FL';
     
-    if (cornerRad != null && cornerRad > 0) {
+    // Only include corner radius if the subcategory is CR
+    if (cornerRad != null && cornerRad > 0 && _subSubcategory == 'CR') {
       String crStr = cornerRad.toString();
       if (cornerRad < 1 && crStr.startsWith('0.')) {
         crStr = crStr.substring(1);
@@ -438,6 +439,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
       name += '_${crStr}CR';
     }
     
+    // Only include neck radius if there's a value (independent of type)
     if (neck != null && neck > 0) {
       String neckStr = neck.toString();
       if (neck < 1 && neckStr.startsWith('0.')) {
@@ -446,6 +448,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
       name += '_${neckStr}NR';
     }
     
+    // Add type suffix for Ball and Tslot
     if (_subSubcategory == 'Ball') {
       name += '_BALL';
     } else if (_subSubcategory == 'Tslot') {
@@ -699,6 +702,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
       if (parentId != null) {
         try {
           final parent = _allSubcategories.firstWhere((s) => s.id == parentId);
+          // For children, use parent's custom_label (label for children)
           label = parent.data['custom_label'] ?? 'Type';
           // Read display_mode and field_type from parent
           displayMode = parent.data['display_mode'] ?? 'dropdown';
@@ -708,10 +712,11 @@ class _AddToolScreenState extends State<AddToolScreen> {
         }
       }
     } else if (level == 0 && _selectedCategoryId != null) {
-      // Try to get label, display_mode, and field_type from first subcategory
+      // For first level, use the subcategory's own label field
       if (options.isNotEmpty) {
         final firstSub = options.first;
-        label = firstSub.data['custom_label'] ?? 'Subcategory';
+        // NEW: Use 'label' field for this subcategory's own label
+        label = firstSub.data['label'] ?? 'Subcategory';
         displayMode = firstSub.data['display_mode'] ?? 'dropdown';
         fieldType = firstSub.data['field_type'] ?? 'selection';
       }
@@ -971,6 +976,16 @@ class _AddToolScreenState extends State<AddToolScreen> {
     _subcategory = subcategoryNames.isNotEmpty ? subcategoryNames[0] : null;
     _subSubcategory = subcategoryNames.length > 1 ? subcategoryNames[1] : null;
     _subcategoryText = subcategoryNames.join(' > ');
+    
+    // Clear corner radius field if not CR type (prevents stale CR values in tool name)
+    if (_subSubcategory != 'CR' && _cornerRadController.text.isNotEmpty) {
+      _cornerRadController.clear();
+    }
+    
+    // Update tool name to reflect subcategory changes (fixes Ball/CR suffix sticking)
+    if (_autoGenerateName) {
+      _updateToolName();
+    }
   }
 
   void _saveTool() async {
@@ -1207,46 +1222,110 @@ class _AddToolScreenState extends State<AddToolScreen> {
             // Brand and Supplier row
             Row(
               children: [
+                // BRAND - Searchable Autocomplete
                 Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: _selectedBrandId,
-                    decoration: const InputDecoration(
-                      labelText: 'Brand (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                    hint: const Text('Select brand'),
-                    items: _brands.map((brand) {
-                      return DropdownMenuItem<String>(
-                        value: brand.id,
-                        child: Text(brand.data['name']),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
+                  child: Autocomplete<String>(
+                    initialValue: _selectedBrandId != null && _brands.any((b) => b.id == _selectedBrandId)
+                        ? TextEditingValue(
+                            text: _brands.firstWhere((b) => b.id == _selectedBrandId).data['name'],
+                          )
+                        : const TextEditingValue(),
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) {
+                        return _brands.map((brand) => brand.data['name'] as String);
+                      }
+                      return _brands
+                          .where((brand) => (brand.data['name'] as String)
+                              .toLowerCase()
+                              .contains(textEditingValue.text.toLowerCase()))
+                          .map((brand) => brand.data['name'] as String);
+                    },
+                    onSelected: (String selectedName) {
+                      final brand = _brands.firstWhere((b) => b.data['name'] == selectedName);
                       setState(() {
-                        _selectedBrandId = value;
+                        _selectedBrandId = brand.id;
                       });
+                    },
+                    fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                      return TextFormField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        decoration: InputDecoration(
+                          labelText: 'Brand (optional)',
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              controller.clear();
+                              setState(() {
+                                _selectedBrandId = null;
+                              });
+                            },
+                          ),
+                        ),
+                        onChanged: (value) {
+                          // Clear selection if text doesn't match any brand
+                          if (!_brands.any((b) => b.data['name'] == value)) {
+                            setState(() {
+                              _selectedBrandId = null;
+                            });
+                          }
+                        },
+                      );
                     },
                   ),
                 ),
                 const SizedBox(width: 16),
+                // SUPPLIER - Searchable Autocomplete
                 Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: _selectedSupplierId,
-                    decoration: const InputDecoration(
-                      labelText: 'Supplier (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                    hint: const Text('Select supplier'),
-                    items: _suppliers.map((supplier) {
-                      return DropdownMenuItem<String>(
-                        value: supplier.id,
-                        child: Text(supplier.data['company_name']),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
+                  child: Autocomplete<String>(
+                    initialValue: _selectedSupplierId != null && _suppliers.any((s) => s.id == _selectedSupplierId)
+                        ? TextEditingValue(
+                            text: _suppliers.firstWhere((s) => s.id == _selectedSupplierId).data['company_name'],
+                          )
+                        : const TextEditingValue(),
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) {
+                        return _suppliers.map((supplier) => supplier.data['company_name'] as String);
+                      }
+                      return _suppliers
+                          .where((supplier) => (supplier.data['company_name'] as String)
+                              .toLowerCase()
+                              .contains(textEditingValue.text.toLowerCase()))
+                          .map((supplier) => supplier.data['company_name'] as String);
+                    },
+                    onSelected: (String selectedName) {
+                      final supplier = _suppliers.firstWhere((s) => s.data['company_name'] == selectedName);
                       setState(() {
-                        _selectedSupplierId = value;
+                        _selectedSupplierId = supplier.id;
                       });
+                    },
+                    fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                      return TextFormField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        decoration: InputDecoration(
+                          labelText: 'Supplier (optional)',
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              controller.clear();
+                              setState(() {
+                                _selectedSupplierId = null;
+                              });
+                            },
+                          ),
+                        ),
+                        onChanged: (value) {
+                          // Clear selection if text doesn't match any supplier
+                          if (!_suppliers.any((s) => s.data['company_name'] == value)) {
+                            setState(() {
+                              _selectedSupplierId = null;
+                            });
+                          }
+                        },
+                      );
                     },
                   ),
                 ),
@@ -1265,28 +1344,64 @@ class _AddToolScreenState extends State<AddToolScreen> {
             ),
             const SizedBox(height: 16),
             
-            // Category
-            DropdownButtonFormField<String>(
-              value: _selectedCategoryId,
-              decoration: const InputDecoration(
-                labelText: 'Category',
-                border: OutlineInputBorder(),
-              ),
-              items: _categories.map<DropdownMenuItem<String>>((cat) {
-                return DropdownMenuItem<String>(
-                  value: cat.id,
-                  child: Text(cat.data['name']),
-                );
-              }).toList(),
-              onChanged: (value) {
+            // CATEGORY - Searchable Autocomplete
+            Autocomplete<String>(
+              initialValue: _selectedCategoryId != null && _categories.any((c) => c.id == _selectedCategoryId)
+                  ? TextEditingValue(
+                      text: _categories.firstWhere((c) => c.id == _selectedCategoryId).data['name'],
+                    )
+                  : const TextEditingValue(),
+              optionsBuilder: (TextEditingValue textEditingValue) {
+                if (textEditingValue.text.isEmpty) {
+                  return _categories.map((cat) => cat.data['name'] as String);
+                }
+                return _categories
+                    .where((cat) => (cat.data['name'] as String)
+                        .toLowerCase()
+                        .contains(textEditingValue.text.toLowerCase()))
+                    .map((cat) => cat.data['name'] as String);
+              },
+              onSelected: (String selectedName) {
+                final category = _categories.firstWhere((c) => c.data['name'] == selectedName);
                 setState(() {
-                  _selectedCategoryId = value;
-                  _category = _categories.firstWhere((c) => c.id == value).data['name'];
+                  _selectedCategoryId = category.id;
+                  _category = category.data['name'];
                   // Clear subcategory selections when category changes
                   _selectedSubcategoryIds.clear();
                   _selectedAttributeValue = null;
                   _updateSubcategoryText();
                 });
+              },
+              fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                return TextFormField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  decoration: const InputDecoration(
+                    labelText: 'Category',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please select a category';
+                    }
+                    if (!_categories.any((c) => c.data['name'] == value)) {
+                      return 'Please select a valid category from the list';
+                    }
+                    return null;
+                  },
+                  onChanged: (value) {
+                    // Clear selection if text doesn't match any category
+                    if (!_categories.any((c) => c.data['name'] == value)) {
+                      setState(() {
+                        _selectedCategoryId = null;
+                        _category = '';
+                        _selectedSubcategoryIds.clear();
+                        _selectedAttributeValue = null;
+                        _updateSubcategoryText();
+                      });
+                    }
+                  },
+                );
               },
             ),
             const SizedBox(height: 16),

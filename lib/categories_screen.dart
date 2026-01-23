@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'pocketbase_service.dart';
 import 'app_drawer.dart';
+import 'settings_screen.dart'; // NEW: For back button navigation
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -621,6 +622,21 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                      // NEW: Back to Settings button
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                          );
+                        },
+                        icon: const Icon(Icons.arrow_back, size: 18),
+                        label: const Text('Back to Settings'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
                     ],

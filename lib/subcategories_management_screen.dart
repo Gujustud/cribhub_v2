@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'pocketbase_service.dart';
 import 'app_drawer.dart';
+import 'settings_screen.dart'; // NEW: For back button navigation
 
 class SubcategoriesManagementScreen extends StatefulWidget {
   const SubcategoriesManagementScreen({super.key});
@@ -187,6 +188,29 @@ class _SubcategoriesManagementScreenState extends State<SubcategoriesManagementS
                   },
                 ),
               ),
+              // NEW: Back to Settings button
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.arrow_back, size: 18),
+                    label: const Text('Back to Settings'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -294,9 +318,15 @@ class _SubcategoriesManagementScreenState extends State<SubcategoriesManagementS
                 _buildFieldTypeBadge(fieldType, displayMode),
               ],
             ),
-            subtitle: subcategory.data['custom_label'] != null
-                ? Text('Child Label: ${subcategory.data['custom_label']}')
-                : null,
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (subcategory.data['label'] != null)
+                  Text('Label: ${subcategory.data['label']}', style: const TextStyle(fontSize: 12)),
+                if (subcategory.data['custom_label'] != null)
+                  Text('Child Label: ${subcategory.data['custom_label']}', style: const TextStyle(fontSize: 12)),
+              ],
+            ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -366,7 +396,8 @@ class _SubcategoriesManagementScreenState extends State<SubcategoriesManagementS
 
   void _showAddSubcategoryDialog(String? categoryId, String? parentId) {
     final nameController = TextEditingController();
-    final labelController = TextEditingController();
+    final selfLabelController = TextEditingController(); // NEW: For this subcategory's label
+    final childLabelController = TextEditingController(); // Renamed from labelController
     final sortController = TextEditingController(text: '1');
     String? selectedAttrListId;
     String selectedDisplayMode = 'dropdown';
@@ -386,8 +417,18 @@ class _SubcategoriesManagementScreenState extends State<SubcategoriesManagementS
                   decoration: const InputDecoration(labelText: 'Name'),
                 ),
                 TextField(
-                  controller: labelController,
-                  decoration: const InputDecoration(labelText: 'Custom Label for Children (optional)'),
+                  controller: selfLabelController,
+                  decoration: const InputDecoration(
+                    labelText: 'Custom Label (optional)',
+                    hintText: 'e.g., Tool Type, Style',
+                  ),
+                ),
+                TextField(
+                  controller: childLabelController,
+                  decoration: const InputDecoration(
+                    labelText: 'Custom Label for Children (optional)',
+                    hintText: 'e.g., Style, Thread Type',
+                  ),
                 ),
                 TextField(
                   controller: sortController,
@@ -454,7 +495,8 @@ class _SubcategoriesManagementScreenState extends State<SubcategoriesManagementS
                       categoryId: parentId != null ? null : categoryId,
                       parentSubcategoryId: parentId,
                       sortOrder: int.tryParse(sortController.text) ?? 1,
-                      customLabel: labelController.text.isEmpty ? null : labelController.text,
+                      label: selfLabelController.text.isEmpty ? null : selfLabelController.text, // NEW
+                      customLabel: childLabelController.text.isEmpty ? null : childLabelController.text,
                       attributeListId: selectedFieldType == 'selection' ? selectedAttrListId : null,
                       displayMode: selectedFieldType == 'selection' ? selectedDisplayMode : null,
                       fieldType: selectedFieldType,
@@ -483,7 +525,8 @@ class _SubcategoriesManagementScreenState extends State<SubcategoriesManagementS
 
   void _showEditSubcategoryDialog(dynamic subcategory) {
     final nameController = TextEditingController(text: subcategory.data['name']);
-    final labelController = TextEditingController(text: subcategory.data['custom_label'] ?? '');
+    final selfLabelController = TextEditingController(text: subcategory.data['label'] ?? ''); // NEW
+    final childLabelController = TextEditingController(text: subcategory.data['custom_label'] ?? ''); // Renamed
     final sortController = TextEditingController(text: subcategory.data['sort_order'].toString());
     String? selectedAttrListId = subcategory.data['attribute_list'];
     
@@ -525,8 +568,18 @@ class _SubcategoriesManagementScreenState extends State<SubcategoriesManagementS
                   decoration: const InputDecoration(labelText: 'Name'),
                 ),
                 TextField(
-                  controller: labelController,
-                  decoration: const InputDecoration(labelText: 'Custom Label for Children (optional)'),
+                  controller: selfLabelController,
+                  decoration: const InputDecoration(
+                    labelText: 'Custom Label (optional)',
+                    hintText: 'e.g., Tool Type, Style',
+                  ),
+                ),
+                TextField(
+                  controller: childLabelController,
+                  decoration: const InputDecoration(
+                    labelText: 'Custom Label for Children (optional)',
+                    hintText: 'e.g., Style, Thread Type',
+                  ),
                 ),
                 TextField(
                   controller: sortController,
@@ -591,7 +644,8 @@ class _SubcategoriesManagementScreenState extends State<SubcategoriesManagementS
                       subcategoryId: subcategory.id,
                       name: nameController.text,
                       sortOrder: int.tryParse(sortController.text) ?? 1,
-                      customLabel: labelController.text.isEmpty ? null : labelController.text,
+                      label: selfLabelController.text.isEmpty ? null : selfLabelController.text, // NEW
+                      customLabel: childLabelController.text.isEmpty ? null : childLabelController.text,
                       attributeListId: selectedFieldType == 'selection' ? selectedAttrListId : null,
                       displayMode: selectedFieldType == 'selection' ? selectedDisplayMode : null,
                       fieldType: selectedFieldType,

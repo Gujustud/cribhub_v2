@@ -48,22 +48,27 @@ class _AppDrawerState extends State<AppDrawer> {
 
   @override
   Widget build(BuildContext context) {
-    return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          const DrawerHeader(
-            decoration: BoxDecoration(
-              color: Colors.blue,
-            ),
-            child: Text(
-              'Cribhub',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
+    return SizedBox(
+      width: 240, // Constrain drawer width
+      child: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            // FIXED: Using Container instead of DrawerHeader for precise control
+            Container(
+              decoration: const BoxDecoration(
+                color: Colors.blue,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              child: const Text(
+                'Cribhub',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
-          ),
           ListTile(
             leading: const Icon(Icons.home),
             title: const Text('Home'),
@@ -176,6 +181,63 @@ class _AppDrawerState extends State<AppDrawer> {
               Navigator.pop(context);
               // TODO: Navigate to about
             },
+          ),
+        ],
+      ),
+    ), // Close Drawer
+    ); // Close SizedBox
+  }
+}
+
+// NEW: Wrapper widget to enable hover-to-open drawer on desktop
+class DrawerWithHover extends StatefulWidget {
+  final Widget child;
+  final Widget drawer;
+
+  const DrawerWithHover({
+    Key? key,
+    required this.child,
+    required this.drawer,
+  }) : super(key: key);
+
+  @override
+  State<DrawerWithHover> createState() => _DrawerWithHoverState();
+}
+
+class _DrawerWithHoverState extends State<DrawerWithHover> {
+  bool _isHovering = false;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      key: _scaffoldKey,
+      drawer: widget.drawer,
+      body: Stack(
+        children: [
+          widget.child,
+          // NEW: Hover detection area on left edge (desktop only)
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 20, // Hover zone width
+            child: MouseRegion(
+              onEnter: (_) {
+                setState(() {
+                  _isHovering = true;
+                });
+                _scaffoldKey.currentState?.openDrawer();
+              },
+              onExit: (_) {
+                setState(() {
+                  _isHovering = false;
+                });
+              },
+              child: Container(
+                color: Colors.transparent,
+              ),
+            ),
           ),
         ],
       ),

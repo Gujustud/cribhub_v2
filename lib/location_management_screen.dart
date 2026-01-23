@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'pocketbase_service.dart';
 import 'app_drawer.dart';
+import 'settings_screen.dart'; // NEW: For back button
 
 class LocationManagementScreen extends StatefulWidget {
   const LocationManagementScreen({super.key});
@@ -21,6 +22,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   };
   bool _isLoading = true;
   Set<String> _expandedLocations = {};
+  String? _selectedType; // NEW: Currently selected type
 
   @override
   void initState() {
@@ -112,6 +114,11 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       setState(() {
         _locations = locations;
         _isLoading = false;
+        
+        // Auto-select first type if none selected
+        if (_selectedType == null && _sortedLocationTypes.isNotEmpty) {
+          _selectedType = _sortedLocationTypes.first;
+        }
       });
       
       await _saveTypeOrder();
@@ -234,15 +241,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   }
 
   void _showAddTypeDialog() {
-    final typeController = TextEditingController();
-    final orderController = TextEditingController();
-    
-    // Default to next available order number
-    final maxOrder = _locationTypeOrder.values.isEmpty 
-        ? 0 
-        : _locationTypeOrder.values.reduce((a, b) => a > b ? a : b);
-    orderController.text = (maxOrder + 1).toString();
-    
+    final nameController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -251,22 +251,12 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: typeController,
+              controller: nameController,
               decoration: const InputDecoration(
                 labelText: 'Type Name',
-                border: OutlineInputBorder(),
-                hintText: 'e.g., Cart, Cabinet, Workbench',
-              ),
-              textCapitalization: TextCapitalization.words,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: orderController,
-              decoration: const InputDecoration(
-                labelText: 'Order (lower numbers appear first)',
+                hintText: 'e.g., Cabinet, Drawer, etc.',
                 border: OutlineInputBorder(),
               ),
-              keyboardType: TextInputType.number,
             ),
           ],
         ),
@@ -277,33 +267,33 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              if (typeController.text.isEmpty) {
+              final typeName = nameController.text.toLowerCase().trim();
+              if (typeName.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Please enter a type name')),
                 );
                 return;
               }
-              
-              final newType = typeController.text.toLowerCase();
-              if (_locationTypeOrder.containsKey(newType)) {
+
+              if (_locationTypeOrder.containsKey(typeName)) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Type already exists')),
+                  const SnackBar(content: Text('This type already exists')),
                 );
                 return;
               }
-              
-              final order = int.tryParse(orderController.text) ?? maxOrder + 1;
-              
+
               setState(() {
-                _locationTypeOrder[newType] = order;
+                final maxOrder = _locationTypeOrder.values.isEmpty
+                    ? 0
+                    : _locationTypeOrder.values.reduce((a, b) => a > b ? a : b);
+                _locationTypeOrder[typeName] = maxOrder + 1;
               });
-              
               _saveTypeOrder();
               Navigator.pop(context);
-              
+
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Type "$newType" added!'),
+                  content: Text('Type "$typeName" added!'),
                   backgroundColor: Colors.green,
                 ),
               );
@@ -316,11 +306,11 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   }
 
   void _showEditTypeDialog(String oldType) {
-    final typeController = TextEditingController(text: oldType);
+    final nameController = TextEditingController(text: oldType);
     final orderController = TextEditingController(
-      text: _locationTypeOrder[oldType].toString()
+      text: _locationTypeOrder[oldType].toString(),
     );
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -329,18 +319,17 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: typeController,
+              controller: nameController,
               decoration: const InputDecoration(
                 labelText: 'Type Name',
                 border: OutlineInputBorder(),
               ),
-              textCapitalization: TextCapitalization.words,
             ),
             const SizedBox(height: 16),
             TextField(
               controller: orderController,
               decoration: const InputDecoration(
-                labelText: 'Order (lower numbers appear first)',
+                labelText: 'Sort Order',
                 border: OutlineInputBorder(),
               ),
               keyboardType: TextInputType.number,
@@ -353,36 +342,45 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
-              if (typeController.text.isEmpty) {
+            onPressed: () async {
+              final newName = nameController.text.toLowerCase().trim();
+              final newOrder = int.tryParse(orderController.text) ?? 1;
+
+              if (newName.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Please enter a type name')),
                 );
                 return;
               }
-              
-              final newType = typeController.text.toLowerCase();
-              if (_locationTypeOrder.containsKey(newType) && newType != oldType) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Type already exists')),
-                );
-                return;
+
+              // Update all locations of this type to new type name
+              if (oldType != newName) {
+                final pbService = PocketBaseService();
+                final locationsOfType = _locations.where(
+                  (loc) => loc.data['type'] == oldType,
+                ).toList();
+
+                for (final loc in locationsOfType) {
+                  await pbService.updateLocation(
+                    locationId: loc.id,
+                    name: loc.data['name'],
+                    type: newName,
+                    parentId: loc.data['parent'],
+                  );
+                }
               }
-              
-              final order = int.tryParse(orderController.text) ?? _locationTypeOrder[oldType]!;
-              
+
               setState(() {
                 _locationTypeOrder.remove(oldType);
-                _locationTypeOrder[newType] = order;
+                _locationTypeOrder[newName] = newOrder;
               });
-              
               _saveTypeOrder();
-              Navigator.pop(context);
-              _showManageTypesDialog();
+              await _loadData();
               
+              Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Type updated!'),
+                  content: Text('Type updated to "$newName"!'),
                   backgroundColor: Colors.green,
                 ),
               );
@@ -396,57 +394,56 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
   void _showAddLocationDialog({String? parentId, String? parentName}) {
     final nameController = TextEditingController();
+    String selectedType = _selectedType ?? _sortedLocationTypes.first;
 
-    String locationType;
-    if (parentId != null) {
-      try {
-        final parentLocation = _locations.firstWhere(
-          (loc) => loc.id == parentId,
-        );
-        locationType = parentLocation.data['type'] ?? _sortedLocationTypes.first;
-      } catch (e) {
-        locationType = _sortedLocationTypes.first;
-      }
-    } else {
-      locationType = _sortedLocationTypes.first;
-    }
-    
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(parentName == null 
-              ? 'Add New Location' 
-              : 'Add to $parentName'),
+          title: Text(parentId == null ? 'Add Location' : 'Add Sub-Location'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (parentId == null)
-                DropdownButtonFormField<String>(
-                  value: locationType,
-                  decoration: const InputDecoration(
-                    labelText: 'Type',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: _sortedLocationTypes.map((type) {
-                    return DropdownMenuItem(
-                      value: type,
-                      child: Text(type),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setDialogState(() {
-                      locationType = value!;
-                    });
-                  },
+              if (parentName != null) ...[
+                Text(
+                  'Parent: $parentName',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-              if (parentId == null) const SizedBox(height: 16),
+                const SizedBox(height: 16),
+              ],
               TextField(
                 controller: nameController,
                 decoration: const InputDecoration(
                   labelText: 'Location Name',
+                  hintText: 'e.g., Toolbox-1, Drawer-A, etc.',
                   border: OutlineInputBorder(),
                 ),
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: selectedType,
+                decoration: const InputDecoration(
+                  labelText: 'Type',
+                  border: OutlineInputBorder(),
+                ),
+                items: _sortedLocationTypes.map((type) {
+                  return DropdownMenuItem(
+                    value: type,
+                    child: Row(
+                      children: [
+                        Icon(_getIconForType(type), color: _getColorForType(type)),
+                        const SizedBox(width: 12),
+                        Text(type.toUpperCase()),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setDialogState(() {
+                    selectedType = value!;
+                  });
+                },
               ),
             ],
           ),
@@ -459,7 +456,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               onPressed: () async {
                 if (nameController.text.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter a name')),
+                    const SnackBar(content: Text('Please enter a location name')),
                   );
                   return;
                 }
@@ -468,17 +465,17 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   final pbService = PocketBaseService();
                   await pbService.createLocation(
                     name: nameController.text,
-                    type: locationType,
+                    type: selectedType,
                     parentId: parentId,
                   );
-                  
+
                   Navigator.pop(context);
                   _loadData();
-                  
+
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Location "${nameController.text}" created!'),
+                        content: Text('Location "${nameController.text}" added!'),
                         backgroundColor: Colors.green,
                       ),
                     );
@@ -504,7 +501,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
   void _showEditLocationDialog(dynamic location) {
     final nameController = TextEditingController(text: location.data['name']);
-    String locationType = location.data['type'];
+    String selectedType = location.data['type'];
 
     showDialog(
       context: context,
@@ -520,10 +517,11 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   labelText: 'Location Name',
                   border: OutlineInputBorder(),
                 ),
+                textCapitalization: TextCapitalization.words,
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: locationType,
+                value: selectedType,
                 decoration: const InputDecoration(
                   labelText: 'Type',
                   border: OutlineInputBorder(),
@@ -531,12 +529,18 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 items: _sortedLocationTypes.map((type) {
                   return DropdownMenuItem(
                     value: type,
-                    child: Text(type),
+                    child: Row(
+                      children: [
+                        Icon(_getIconForType(type), color: _getColorForType(type)),
+                        const SizedBox(width: 12),
+                        Text(type.toUpperCase()),
+                      ],
+                    ),
                   );
                 }).toList(),
                 onChanged: (value) {
                   setDialogState(() {
-                    locationType = value!;
+                    selectedType = value!;
                   });
                 },
               ),
@@ -551,7 +555,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               onPressed: () async {
                 if (nameController.text.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter a name')),
+                    const SnackBar(content: Text('Please enter a location name')),
                   );
                   return;
                 }
@@ -561,7 +565,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   await pbService.updateLocation(
                     locationId: location.id,
                     name: nameController.text,
-                    type: locationType,
+                    type: selectedType,
                     parentId: location.data['parent'],
                   );
 
@@ -571,24 +575,23 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Location "${nameController.text}" updated!'),
+                        content: Text('Location updated to "${nameController.text}"!'),
                         backgroundColor: Colors.green,
                       ),
                     );
                   }
                 } catch (e) {
-                  Navigator.pop(context);
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Error updating location: $e'),
+                        content: Text('Error: $e'),
                         backgroundColor: Colors.red,
                       ),
                     );
                   }
                 }
               },
-              child: const Text('Update'),
+              child: const Text('Save'),
             ),
           ],
         ),
@@ -665,8 +668,13 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     );
   }
 
-  List<dynamic> _getRootLocations() {
-    return _locations.where((loc) => loc.data['parent'] == null || loc.data['parent'] == '').toList();
+  // NEW: Get root locations filtered by selected type
+  List<dynamic> _getRootLocationsByType() {
+    if (_selectedType == null) return [];
+    return _locations.where((loc) => 
+      loc.data['type'] == _selectedType && 
+      (loc.data['parent'] == null || loc.data['parent'] == '')
+    ).toList();
   }
 
   List<dynamic> _getChildLocations(String parentId) {
@@ -706,9 +714,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               location.data['name'],
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            subtitle: depth == 0 
-                ? Text(location.data['type'].toString().toUpperCase())
-                : null,
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -788,43 +793,160 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       drawer: const AppDrawer(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                // LEFT PANEL - Location Types
+                Container(
+                  width: 250,
+                  decoration: BoxDecoration(
+                    border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                    color: Colors.grey[50],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ElevatedButton.icon(
-                        onPressed: _showManageTypesDialog,
-                        icon: const Icon(Icons.category),
-                        label: const Text('Manage Types'),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+                        ),
+                        child: const Text(
+                          'LOCATION TYPES',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
                       ),
-                      const SizedBox(width: 16),
-                      ElevatedButton.icon(
-                        onPressed: () => _showAddLocationDialog(),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add Location'),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: _sortedLocationTypes.length,
+                          itemBuilder: (context, index) {
+                            final type = _sortedLocationTypes[index];
+                            final isSelected = _selectedType == type;
+                            
+                            return ListTile(
+                              selected: isSelected,
+                              selectedTileColor: Colors.blue[50],
+                              leading: Icon(
+                                _getIconForType(type),
+                                color: _getColorForType(type),
+                              ),
+                              title: Text(
+                                type.toUpperCase(),
+                                style: TextStyle(
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                              onTap: () {
+                                setState(() {
+                                  _selectedType = type;
+                                });
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                      // Manage Types button
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          border: Border(top: BorderSide(color: Colors.grey[300]!)),
+                        ),
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _showManageTypesDialog,
+                                icon: const Icon(Icons.category, size: 18),
+                                label: const Text('Manage Types'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                                  );
+                                },
+                                icon: const Icon(Icons.arrow_back, size: 18),
+                                label: const Text('Back to Settings'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-                const Divider(height: 1),
+                
+                // RIGHT PANEL - Locations Tree
                 Expanded(
-                  child: _locations.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No locations yet.\nClick "Add Location" above to get started.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 16, color: Colors.grey),
-                          ),
-                        )
-                      : ListView(
-                          padding: const EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header with Add button
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            ..._getRootLocations().map((loc) => _buildLocationTree(loc, 0)),
+                            Text(
+                              _selectedType != null
+                                  ? '${_selectedType!.toUpperCase()} LOCATIONS'
+                                  : 'Select a type',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (_selectedType != null)
+                              ElevatedButton.icon(
+                                onPressed: () => _showAddLocationDialog(),
+                                icon: const Icon(Icons.add),
+                                label: const Text('Add Location'),
+                              ),
                           ],
                         ),
+                      ),
+                      
+                      // Locations tree
+                      Expanded(
+                        child: _selectedType == null
+                            ? const Center(child: Text('Select a location type'))
+                            : _getRootLocationsByType().isEmpty
+                                ? Center(
+                                    child: Text(
+                                      'No ${_selectedType!} locations yet.\nClick "Add Location" to create one.',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                                    ),
+                                  )
+                                : ListView(
+                                    padding: const EdgeInsets.all(8),
+                                    children: [
+                                      ..._getRootLocationsByType().map((loc) => _buildLocationTree(loc, 0)),
+                                    ],
+                                  ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

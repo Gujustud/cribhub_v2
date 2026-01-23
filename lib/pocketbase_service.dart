@@ -782,7 +782,8 @@ class PocketBaseService {
     String? categoryId,
     String? parentSubcategoryId,
     required int sortOrder,
-    String? customLabel,
+    String? label, // NEW: Label for this subcategory itself
+    String? customLabel, // Label for children
     String? attributeListId,
     String? displayMode, // dropdown or buttons
     String? fieldType, // NEW: selection, text, number
@@ -802,6 +803,10 @@ class PocketBaseService {
       } else if (categoryId != null) {
         body['category'] = categoryId;
         print('DEBUG createSubcategory: Setting category=$categoryId for "$name"');
+      }
+      
+      if (label != null && label.isNotEmpty) {
+        body['label'] = label;
       }
       
       if (customLabel != null && customLabel.isNotEmpty) {
@@ -834,7 +839,8 @@ class PocketBaseService {
     required String subcategoryId,
     required String name,
     required int sortOrder,
-    String? customLabel,
+    String? label, // NEW: Label for this subcategory itself
+    String? customLabel, // Label for children
     String? attributeListId,
     String? parentSubcategoryId,
     String? displayMode, // dropdown or buttons
@@ -844,6 +850,7 @@ class PocketBaseService {
       final body = <String, dynamic>{
         'name': name,
         'sort_order': sortOrder,
+        if (label != null) 'label': label,
         if (customLabel != null) 'custom_label': customLabel,
         if (attributeListId != null) 'attribute_list': attributeListId,
       };
