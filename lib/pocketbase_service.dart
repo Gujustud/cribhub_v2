@@ -522,6 +522,7 @@ class PocketBaseService {
     required String settingsId,
     required bool showAllInventoryInMenu,
     String? subcategoryDisplayMode,
+    bool? showToolDetailsInList, // NEW
   }) async {
     try {
       final Map<String, dynamic> body = {
@@ -530,6 +531,10 @@ class PocketBaseService {
 
       if (subcategoryDisplayMode != null) {
         body['subcategory_display_mode'] = subcategoryDisplayMode;
+      }
+      
+      if (showToolDetailsInList != null) {
+        body['show_tool_details_in_list'] = showToolDetailsInList;
       }
 
       await pb.collection('app_settings').update(settingsId, body: body);
@@ -779,6 +784,8 @@ class PocketBaseService {
     required int sortOrder,
     String? customLabel,
     String? attributeListId,
+    String? displayMode, // dropdown or buttons
+    String? fieldType, // NEW: selection, text, number
   }) async {
     try {
       final body = <String, dynamic>{
@@ -805,6 +812,14 @@ class PocketBaseService {
         body['attribute_list'] = attributeListId;
       }
       
+      if (displayMode != null) {
+        body['display_mode'] = displayMode;
+      }
+      
+      if (fieldType != null) {
+        body['field_type'] = fieldType;
+      }
+      
       print('DEBUG createSubcategory: Creating "$name" with body: $body');
       await pb.collection('subcategories').create(body: body);
       print('Subcategory created: $name');
@@ -822,6 +837,8 @@ class PocketBaseService {
     String? customLabel,
     String? attributeListId,
     String? parentSubcategoryId,
+    String? displayMode, // dropdown or buttons
+    String? fieldType, // NEW: selection, text, number
   }) async {
     try {
       final body = <String, dynamic>{
@@ -835,6 +852,14 @@ class PocketBaseService {
       if (parentSubcategoryId != null) {
         body['parent_subcategory'] = parentSubcategoryId;
         body['category'] = null; // Explicitly clear category for child subcategories
+      }
+      
+      if (displayMode != null) {
+        body['display_mode'] = displayMode;
+      }
+      
+      if (fieldType != null) {
+        body['field_type'] = fieldType;
       }
       
       await pb.collection('subcategories').update(subcategoryId, body: body);
@@ -900,9 +925,16 @@ class PocketBaseService {
   }
 
   // Create attribute list
-  Future<void> createAttributeList({required String name}) async {
+  Future<void> createAttributeList({
+    required String name,
+    String? displayMode, // NEW: dropdown or buttons
+  }) async {
     try {
-      await pb.collection('attribute_lists').create(body: {'name': name});
+      final body = <String, dynamic>{'name': name};
+      if (displayMode != null) {
+        body['display_mode'] = displayMode;
+      }
+      await pb.collection('attribute_lists').create(body: body);
       print('Attribute list created: $name');
     } catch (e) {
       print('Error creating attribute list: $e');
@@ -914,9 +946,14 @@ class PocketBaseService {
   Future<void> updateAttributeList({
     required String listId,
     required String name,
+    String? displayMode, // NEW: dropdown or buttons
   }) async {
     try {
-      await pb.collection('attribute_lists').update(listId, body: {'name': name});
+      final body = <String, dynamic>{'name': name};
+      if (displayMode != null) {
+        body['display_mode'] = displayMode;
+      }
+      await pb.collection('attribute_lists').update(listId, body: body);
       print('Attribute list updated: $listId');
     } catch (e) {
       print('Error updating attribute list: $e');

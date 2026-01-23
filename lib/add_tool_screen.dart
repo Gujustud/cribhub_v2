@@ -24,6 +24,9 @@ class AddToolScreen extends StatefulWidget {
 }
 
 class _AddToolScreenState extends State<AddToolScreen> {
+  // Cutting Tools category ID from PocketBase
+  static const String CUTTING_TOOLS_CATEGORY_ID = '0ro99ktjwyl14dc';
+  
   final _formKey = GlobalKey<FormState>();
   
   // Form controllers
@@ -45,6 +48,10 @@ class _AddToolScreenState extends State<AddToolScreen> {
   List<String?> _selectedSubcategoryIds = []; // Stack of selections for unlimited levels
   String _subcategoryText = ''; // Combined subcategory text for saving
   
+  // NEW: Store text/number input values for subcategories
+  Map<int, String> _subcategoryTextValues = {}; // level → text value
+  Map<int, double?> _subcategoryNumberValues = {}; // level → number value
+  
   // Temporary backward compatibility variables (will be replaced with dynamic system)
   String? _subcategory = 'Endmills';
   String? _subSubcategory = 'Flat';
@@ -52,15 +59,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
   // Attribute
   String? _selectedAttributeValue;
   
-  // Display mode
-  String _subcategoryDisplayMode = 'dropdown'; // or 'buttons'
-  
   // Categories (loaded dynamically)
   List<dynamic> _categories = [];
   String? _selectedCategoryId;
-  
-  // App Settings ID
-  String? _settingsId;
   
   // Location selection
   List<dynamic> _locations = [];
@@ -100,7 +101,6 @@ class _AddToolScreenState extends State<AddToolScreen> {
     _loadBrandsAndSuppliers();
     _loadCategories(); // Load categories dynamically
     _loadSubcategories();
-    _loadDisplayMode();
     
     // If editing or duplicating, pre-fill fields
     if (widget.tool != null) {
@@ -290,19 +290,6 @@ class _AddToolScreenState extends State<AddToolScreen> {
       }
       
       _updateSubcategoryText();
-    }
-  }
-
-  Future<void> _loadDisplayMode() async {
-    try {
-      final pbService = PocketBaseService();
-      final settings = await pbService.getAppSettings();
-      setState(() {
-        _subcategoryDisplayMode = settings.data['subcategory_display_mode'] ?? 'dropdown';
-        _settingsId = settings.id;
-      });
-    } catch (e) {
-      print('Error loading display mode: $e');
     }
   }
 
@@ -702,28 +689,43 @@ class _AddToolScreenState extends State<AddToolScreen> {
   }
 
   Widget _buildSubcategorySelector(List<dynamic> options, int level) {
-    // Get label from parent or use default
+    // Get label, display_mode, and field_type from parent or first option
     String label = 'Subcategory';
+    String displayMode = 'dropdown'; // Default
+    String fieldType = 'selection'; // Default
+    
     if (level > 0 && _selectedSubcategoryIds.length >= level) {
       final parentId = _selectedSubcategoryIds[level - 1];
       if (parentId != null) {
         try {
           final parent = _allSubcategories.firstWhere((s) => s.id == parentId);
           label = parent.data['custom_label'] ?? 'Type';
+          // Read display_mode and field_type from parent
+          displayMode = parent.data['display_mode'] ?? 'dropdown';
+          fieldType = parent.data['field_type'] ?? 'selection';
         } catch (e) {
           // Parent not found, use default label
         }
       }
     } else if (level == 0 && _selectedCategoryId != null) {
-      // Try to get label from first subcategory
+      // Try to get label, display_mode, and field_type from first subcategory
       if (options.isNotEmpty) {
         final firstSub = options.first;
         label = firstSub.data['custom_label'] ?? 'Subcategory';
+        displayMode = firstSub.data['display_mode'] ?? 'dropdown';
+        fieldType = firstSub.data['field_type'] ?? 'selection';
       }
     }
 
-    // Use display mode preference
-    if (_subcategoryDisplayMode == 'buttons') {
+    // Check field type FIRST
+    if (fieldType == 'text') {
+      return _buildTextInputSelector(level, label);
+    } else if (fieldType == 'number') {
+      return _buildNumberInputSelector(level, label);
+    }
+    
+    // For 'selection' type, use display mode
+    if (displayMode == 'buttons') {
       return _buildButtonSelector(options, level, label);
     } else {
       return _buildDropdownSelector(options, level, label);
@@ -800,22 +802,65 @@ class _AddToolScreenState extends State<AddToolScreen> {
     );
   }
 
+  // NEW: Build text input selector for text field type
+  Widget _buildTextInputSelector(int level, String label) {
+    return TextFormField(
+      initialValue: _subcategoryTextValues[level] ?? '',
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+      ),
+      onChanged: (value) {
+        setState(() {
+          _subcategoryTextValues[level] = value;
+          // Text inputs don't have children, so clear beyond this level
+          _selectedSubcategoryIds = _selectedSubcategoryIds.sublist(0, level);
+          _selectedAttributeValue = null;
+          _updateSubcategoryText();
+        });
+      },
+    );
+  }
+
+  // NEW: Build number input selector for number field type
+  Widget _buildNumberInputSelector(int level, String label) {
+    return TextFormField(
+      initialValue: _subcategoryNumberValues[level]?.toString() ?? '',
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+      ),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onChanged: (value) {
+        setState(() {
+          _subcategoryNumberValues[level] = double.tryParse(value);
+          // Number inputs don't have children, so clear beyond this level
+          _selectedSubcategoryIds = _selectedSubcategoryIds.sublist(0, level);
+          _selectedAttributeValue = null;
+          _updateSubcategoryText();
+        });
+      },
+    );
+  }
+
   Widget _buildAttributeSelector(String attrListId) {
-    return FutureBuilder<List<dynamic>>(
-      future: PocketBaseService().getAttributeValues(attrListId),
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _loadAttributeListAndValues(attrListId),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const SizedBox.shrink();
         }
 
-        final values = snapshot.data!;
+        final data = snapshot.data!;
+        final values = data['values'] as List<dynamic>;
+        final displayMode = data['display_mode'] as String;
         
         if (values.isEmpty) return const SizedBox.shrink();
 
-        // Use a generic label (could be enhanced to load attribute list name)
+        // Use a generic label (could be enhanced to use attribute list name)
         const String label = 'Attribute';
 
-        if (_subcategoryDisplayMode == 'buttons') {
+        if (displayMode == 'buttons') {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -867,11 +912,37 @@ class _AddToolScreenState extends State<AddToolScreen> {
       },
     );
   }
+  
+  // Helper method to load both attribute list and its values
+  Future<Map<String, dynamic>> _loadAttributeListAndValues(String attrListId) async {
+    final pbService = PocketBaseService();
+    final attributeLists = await pbService.getAttributeLists();
+    final values = await pbService.getAttributeValues(attrListId);
+    
+    // Find the attribute list to get its display_mode
+    dynamic attributeList;
+    try {
+      attributeList = attributeLists.firstWhere((al) => al.id == attrListId);
+    } catch (e) {
+      // If not found, use default
+      return {
+        'values': values,
+        'display_mode': 'dropdown',
+      };
+    }
+    
+    return {
+      'values': values,
+      'display_mode': attributeList.data['display_mode'] ?? 'dropdown',
+    };
+  }
 
   void _updateSubcategoryText() {
-    // Build subcategory text from selected IDs
+    // Build subcategory text from selected IDs and text/number inputs
     final subcategoryNames = <String>[];
-    for (final id in _selectedSubcategoryIds) {
+    
+    for (int i = 0; i < _selectedSubcategoryIds.length; i++) {
+      final id = _selectedSubcategoryIds[i];
       if (id != null) {
         try {
           final sub = _allSubcategories.firstWhere((s) => s.id == id);
@@ -882,6 +953,19 @@ class _AddToolScreenState extends State<AddToolScreen> {
         }
       }
     }
+    
+    // Add text/number values
+    _subcategoryTextValues.forEach((level, value) {
+      if (value.isNotEmpty) {
+        subcategoryNames.add(value);
+      }
+    });
+    
+    _subcategoryNumberValues.forEach((level, value) {
+      if (value != null) {
+        subcategoryNames.add(value.toString());
+      }
+    });
 
     // Update backward compatibility variables
     _subcategory = subcategoryNames.isNotEmpty ? subcategoryNames[0] : null;
@@ -889,21 +973,6 @@ class _AddToolScreenState extends State<AddToolScreen> {
     _subcategoryText = subcategoryNames.join(' > ');
   }
 
-  Future<void> _saveDisplayMode() async {
-    if (_settingsId == null) return;
-    try {
-      final pbService = PocketBaseService();
-      final settings = await pbService.getAppSettings();
-      await pbService.updateAppSettings(
-        settingsId: settings.id,
-        showAllInventoryInMenu: settings.data['show_all_inventory_in_menu'] ?? true,
-        subcategoryDisplayMode: _subcategoryDisplayMode,
-      );
-    } catch (e) {
-      print('Error saving display mode: $e');
-    }
-  }
-  
   void _saveTool() async {
     if (_formKey.currentState!.validate()) {
       try {
@@ -1086,27 +1155,31 @@ class _AddToolScreenState extends State<AddToolScreen> {
                     decoration: InputDecoration(
                   labelText: 'Tool Name',
                       border: const OutlineInputBorder(),
-                      suffixIcon: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Checkbox(
-                            value: _autoGenerateName,
-                            onChanged: (value) {
-                              setState(() {
-                                _autoGenerateName = value ?? true;
-                                if (_autoGenerateName) {
-                                  _toolName = _generateToolName();
-                                  _toolNameController.text = _toolName;
-                                }
-                              });
-                            },
-                          ),
-                          const Text('Auto'),
-                          const SizedBox(width: 8),
-                        ],
-                      ),
+                      suffixIcon: _selectedCategoryId == CUTTING_TOOLS_CATEGORY_ID
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Checkbox(
+                                  value: _autoGenerateName,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _autoGenerateName = value ?? true;
+                                      if (_autoGenerateName) {
+                                        _toolName = _generateToolName();
+                                        _toolNameController.text = _toolName;
+                                      }
+                                    });
+                                  },
+                                ),
+                                const Text('Auto'),
+                                const SizedBox(width: 8),
+                              ],
+                            )
+                          : null,
                     ),
-                    enabled: !_autoGenerateName,
+                    enabled: _selectedCategoryId == CUTTING_TOOLS_CATEGORY_ID 
+                        ? !_autoGenerateName 
+                        : true,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
@@ -1218,43 +1291,14 @@ class _AddToolScreenState extends State<AddToolScreen> {
             ),
             const SizedBox(height: 16),
             
-            // Display Mode Toggle
-            if (_selectedCategoryId != null)
-              Row(
-                children: [
-                  const Text('Display Mode:'),
-                  const SizedBox(width: 16),
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(
-                        value: 'dropdown',
-                        label: Text('Dropdown'),
-                        icon: Icon(Icons.arrow_drop_down),
-                      ),
-                      ButtonSegment(
-                        value: 'buttons',
-                        label: Text('Buttons'),
-                        icon: Icon(Icons.grid_view),
-                      ),
-                    ],
-                    selected: {_subcategoryDisplayMode},
-                    onSelectionChanged: (Set<String> newSelection) {
-                      setState(() {
-                        _subcategoryDisplayMode = newSelection.first;
-                      });
-                      _saveDisplayMode();
-                    },
-                  ),
-                ],
-              ),
-            if (_selectedCategoryId != null) const SizedBox(height: 16),
-            
             // Dynamic Cascading Subcategories
             ..._buildSubcategorySelectors(),
             
             const SizedBox(height: 16),
             
-                  // Diameter row
+            // Hardcoded Fields - Only show for Cutting Tools category
+            if (_selectedCategoryId == CUTTING_TOOLS_CATEGORY_ID) ...[
+              // Diameter row
             Row(
               children: [
                 Expanded(
@@ -1358,10 +1402,12 @@ class _AddToolScreenState extends State<AddToolScreen> {
               ),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
-                  const SizedBox(height: 24),
+            ], // End of hardcoded Cutting Tools fields
                   
-                  // Save button
-                  SizedBox(
+            const SizedBox(height: 24),
+                  
+            // Save button
+            SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _saveTool,

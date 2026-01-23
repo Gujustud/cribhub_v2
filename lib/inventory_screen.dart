@@ -25,6 +25,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   List<ToolWithLocations> _filteredTools = [];
   List<Location> _allLocations = [];
   bool _isLoading = true;
+  bool _showToolDetails = true; // NEW: Default to true
   String? _errorMessage;
   final TextEditingController _searchController = TextEditingController();
 
@@ -167,6 +168,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
     });
 
     try {
+      // NEW: Load app settings first
+      final settings = await _pbService.getAppSettings();
+      final showDetails = settings.data['show_tool_details_in_list'] ?? true;
+      
       // Load all locations first
       final locationRecords = await _pbService.getLocations();
       _allLocations = locationRecords.map((r) => Location.fromRecord(r)).toList();
@@ -223,6 +228,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       setState(() {
         _toolsWithLocations = toolsWithLocs;
         _filteredTools = toolsWithLocs;
+        _showToolDetails = showDetails; // NEW
         _isLoading = false;
       });
     } catch (e, stackTrace) {
@@ -394,6 +400,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                   return ToolCard(
                                     toolWithLocations: _filteredTools[index],
                                     allLocations: _allLocations,
+                                    showToolDetails: _showToolDetails, // NEW
                                     onTap: () => _navigateToEditTool(_filteredTools[index].tool),
                                     onEdit: () => _navigateToEditTool(_filteredTools[index].tool),
                                     onDuplicate: () => _navigateToDuplicateTool(_filteredTools[index].tool),
@@ -422,6 +429,7 @@ class ToolCard extends StatelessWidget {
   final VoidCallback onDuplicate;
   final VoidCallback onDelete;
   final Function(ToolLocation) onTransfer;
+  final bool showToolDetails; // NEW
 
   const ToolCard({
     Key? key,
@@ -432,6 +440,7 @@ class ToolCard extends StatelessWidget {
     required this.onDuplicate,
     required this.onDelete,
     required this.onTransfer,
+    required this.showToolDetails, // NEW
   }) : super(key: key);
 
   @override
@@ -468,7 +477,7 @@ class ToolCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(tool.subcategory!, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
                     ],
-                    if (tool.displaySpecs.isNotEmpty) ...[
+                    if (showToolDetails && tool.displaySpecs.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Text(tool.displaySpecs, style: TextStyle(fontSize: 13, color: Colors.grey[700])),
                     ],

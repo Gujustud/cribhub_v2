@@ -14,6 +14,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoading = true;
   bool _showAllInventoryInMenu = true;
+  bool _showToolDetailsInList = true; // NEW
   String? _settingsId;
 
   @override
@@ -33,6 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {
         _settingsId = settings.id;
         _showAllInventoryInMenu = settings.data['show_all_inventory_in_menu'] ?? true;
+        _showToolDetailsInList = settings.data['show_tool_details_in_list'] ?? true; // NEW
         _isLoading = false;
       });
     } catch (e) {
@@ -70,6 +72,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
             content: Text(value 
               ? '"All Inventory" will appear in menu' 
               : '"All Inventory" hidden from menu'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating setting: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _updateShowToolDetails(bool value) async {
+    if (_settingsId == null) return;
+
+    try {
+      final pbService = PocketBaseService();
+      await pbService.updateAppSettings(
+        settingsId: _settingsId!,
+        showAllInventoryInMenu: _showAllInventoryInMenu,
+        showToolDetailsInList: value, // NEW
+      );
+
+      setState(() {
+        _showToolDetailsInList = value;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(value 
+              ? 'Tool details will show in inventory lists' 
+              : 'Tool details hidden from inventory lists'),
             backgroundColor: Colors.green,
           ),
         );
@@ -173,12 +212,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 8),
                 Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.palette, color: Colors.grey),
-                    title: const Text('Theme'),
-                    subtitle: const Text('Coming soon'),
-                    enabled: false,
-                    trailing: const Icon(Icons.chevron_right),
+                  child: Column(
+                    children: [
+                      SwitchListTile(
+                        secondary: const Icon(Icons.info_outline, color: Colors.blue),
+                        title: const Text('Show tool details in inventory lists'),
+                        subtitle: const Text('Display diameter, flutes, and length info'),
+                        value: _showToolDetailsInList,
+                        onChanged: _updateShowToolDetails,
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.palette, color: Colors.grey),
+                        title: const Text('Theme'),
+                        subtitle: const Text('Coming soon'),
+                        enabled: false,
+                        trailing: const Icon(Icons.chevron_right),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 24),
