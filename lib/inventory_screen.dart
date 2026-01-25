@@ -63,7 +63,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
   void _navigateToAddTool() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const AddToolScreen()),
+      MaterialPageRoute(
+        builder: (context) => AddToolScreen(
+          initialCategory: widget.categoryFilter, // Pass the category filter
+        ),
+      ),
     );
     if (result == true) {
       _loadData();
@@ -280,7 +284,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       drawer: const AppDrawer(),
       body: Column(
         children: [
-          // Top action bar with search and buttons
+          // Top action bar with search and buttons (centered)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -292,50 +296,56 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 ),
               ),
             ),
-            child: Row(
-              children: [
-                // Search field - CHANGED: Constrained to 500px width to match main page
-                SizedBox(
-                  width: 500,
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search tools...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1200),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Search field
+                    Flexible(
+                      flex: 3,
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Search tools...',
+                          prefixIcon: const Icon(Icons.search),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 12),
+                    const SizedBox(width: 12),
 
-                // Add Tool button (matching main screen colors)
-                ElevatedButton.icon(
-                  onPressed: _navigateToAddTool,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Tool'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey[700],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                ),
-                const SizedBox(width: 8),
+                    // Add Tool button (matching main screen colors)
+                    ElevatedButton.icon(
+                      onPressed: _navigateToAddTool,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Tool'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[700],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
 
-                // Return Tool button (matching main screen colors)
-                ElevatedButton.icon(
-                  onPressed: _navigateToReturnTool,
-                  icon: const Icon(Icons.keyboard_return),
-                  label: const Text('Return Tool'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey[700],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
+                    // Return Tool button (matching main screen colors)
+                    ElevatedButton.icon(
+                      onPressed: _navigateToReturnTool,
+                      icon: const Icon(Icons.keyboard_return),
+                      label: const Text('Return Tool'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[700],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
 

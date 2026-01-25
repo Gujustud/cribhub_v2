@@ -12,11 +12,13 @@ import 'package:intl/intl.dart'; // For date formatting in history
 class AddToolScreen extends StatefulWidget {
   final Tool? tool; // If provided, we're in edit mode
   final bool isDuplicate; // If true, we're duplicating (don't update, create new)
+  final String? initialCategory; // If provided, pre-select this category
   
   const AddToolScreen({
     super.key,
     this.tool,
     this.isDuplicate = false,
+    this.initialCategory,
   });
 
   @override
@@ -79,6 +81,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
   String _toolName = '';
   bool _autoGenerateName = true;
   
+  // Display preferences
+  bool _useCategoryButtons = false; // Load from settings
+  
   // Photo
   String? _photoUrl;
   Uint8List? _photoBytes;
@@ -97,10 +102,16 @@ class _AddToolScreenState extends State<AddToolScreen> {
   @override
   void initState() {
     super.initState();
+    _loadSettings(); // NEW: Load display settings
     _loadLocations();
     _loadBrandsAndSuppliers();
     _loadCategories(); // Load categories dynamically
     _loadSubcategories();
+    
+    // If initialCategory is provided, use it
+    if (widget.initialCategory != null && widget.tool == null) {
+      _category = widget.initialCategory!;
+    }
     
     // If editing or duplicating, pre-fill fields
     if (widget.tool != null) {
@@ -117,6 +128,110 @@ class _AddToolScreenState extends State<AddToolScreen> {
       _loadToolLocations();
       _loadRecentHistory(); // NEW: Load history for edit mode
     }
+  }
+  
+  Future<void> _loadSettings() async {
+    try {
+      final pbService = PocketBaseService();
+      final settings = await pbService.getAppSettings();
+      setState(() {
+        _useCategoryButtons = settings.data['use_category_buttons'] ?? false;
+      });
+    } catch (e) {
+      print('Error loading settings: $e');
+      // Default to dropdown if can't load
+      setState(() {
+        _useCategoryButtons = false;
+      });
+    }
+  }
+  
+  Widget _buildCategorySelector() {
+    if (_useCategoryButtons) {
+      return _buildCategoryButtons();
+    } else {
+      return _buildCategoryDropdown();
+    }
+  }
+  
+  Widget _buildCategoryDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _selectedCategoryId,
+      decoration: const InputDecoration(
+        labelText: 'Category',
+        border: OutlineInputBorder(),
+      ),
+      items: _categories.map((category) {
+        return DropdownMenuItem<String>(
+          value: category.id,
+          child: Text(category.data['name']),
+        );
+      }).toList(),
+      onChanged: (value) async {
+        if (value != null) {
+          final category = _categories.firstWhere((c) => c.id == value);
+          print('DEBUG category dropdown: Selected category ${category.data['name']} with id $value');
+          setState(() {
+            _selectedCategoryId = value;
+            _category = category.data['name'];
+            // Clear subcategory selections when category changes
+            _selectedSubcategoryIds.clear();
+            _selectedAttributeValue = null;
+            _updateSubcategoryText();
+            _updateToolName();
+          });
+          // Reload brands and suppliers filtered by new category - pass categoryId directly
+          _loadBrandsAndSuppliers(categoryId: value);
+        }
+      },
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Please select a category';
+        }
+        return null;
+      },
+    );
+  }
+  
+  Widget _buildCategoryButtons() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Category',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _categories.map((category) {
+            final isSelected = _selectedCategoryId == category.id;
+            return ElevatedButton(
+              onPressed: () async {
+                print('DEBUG category button: Selected category ${category.data['name']} with id ${category.id}');
+                setState(() {
+                  _selectedCategoryId = category.id;
+                  _category = category.data['name'];
+                  // Clear subcategory selections when category changes
+                  _selectedSubcategoryIds.clear();
+                  _selectedAttributeValue = null;
+                  _updateSubcategoryText();
+                  _updateToolName();
+                });
+                // Reload brands and suppliers filtered by new category - pass categoryId directly
+                _loadBrandsAndSuppliers(categoryId: category.id);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isSelected ? Colors.blue : Colors.grey[300],
+                foregroundColor: isSelected ? Colors.white : Colors.black,
+              ),
+              child: Text(category.data['name']),
+            );
+          }).toList(),
+        ),
+      ],
+    );
   }
   
   void _prefillFields() {
@@ -142,11 +257,14 @@ class _AddToolScreenState extends State<AddToolScreen> {
     
     // Don't set brand/supplier until they're loaded
     // Will be set in _loadBrandsAndSuppliers if valid
+    print('DEBUG _prefillFields: tool.brandId = ${tool.brandId}, tool.supplierId = ${tool.supplierId}');
     if (tool.brandId != null && tool.brandId!.isNotEmpty) {
       _selectedBrandId = tool.brandId;
+      print('DEBUG _prefillFields: Set _selectedBrandId = $_selectedBrandId');
     }
     if (tool.supplierId != null && tool.supplierId!.isNotEmpty) {
       _selectedSupplierId = tool.supplierId;
+      print('DEBUG _prefillFields: Set _selectedSupplierId = $_selectedSupplierId');
     }
     
     if (tool.diameterIn != null) {
@@ -264,8 +382,16 @@ class _AddToolScreenState extends State<AddToolScreen> {
   void _matchSubcategoryNamesToIds() {
     // Try to find subcategories by name and build the selection chain
     _selectedSubcategoryIds.clear();
+    _subcategoryTextValues.clear();
+    _subcategoryNumberValues.clear();
     
     if (_selectedCategoryId == null) return;
+    
+    // Parse the full subcategory text (e.g., "Colors > Red")
+    final subcategoryText = widget.tool?.record?.data['subcategory'] ?? '';
+    if (subcategoryText.isEmpty) return;
+    
+    final parts = subcategoryText.split(' > ');
     
     // Find first level subcategory
     final firstLevel = _allSubcategories.where((s) =>
@@ -277,8 +403,17 @@ class _AddToolScreenState extends State<AddToolScreen> {
     if (firstLevel.isNotEmpty) {
       _selectedSubcategoryIds.add(firstLevel.first.id);
       
-      // If there's a sub-subcategory, try to find it
-      if (_subSubcategory != null && _subSubcategory!.isNotEmpty) {
+      // Check if this subcategory has children or attribute list
+      final firstLevelSub = firstLevel.first;
+      final hasChildren = _allSubcategories.any((s) => s.data['parent_subcategory'] == firstLevelSub.id);
+      final hasAttributeList = firstLevelSub.data['attribute_list'] != null && 
+                               firstLevelSub.data['attribute_list'].toString().isNotEmpty;
+      
+      if (!hasChildren && !hasAttributeList && parts.length > 1) {
+        // This is a dynamic value (like "Red" in "Colors > Red")
+        _subcategoryTextValues[1] = parts[1];
+      } else if (_subSubcategory != null && _subSubcategory!.isNotEmpty) {
+        // If there's a sub-subcategory, try to find it
         final secondLevel = _allSubcategories.where((s) =>
           s.data['parent_subcategory'] == firstLevel.first.id &&
           s.data['name'] == _subSubcategory
@@ -286,6 +421,17 @@ class _AddToolScreenState extends State<AddToolScreen> {
         
         if (secondLevel.isNotEmpty) {
           _selectedSubcategoryIds.add(secondLevel.first.id);
+          
+          // Check if second level has dynamic values
+          final secondLevelSub = secondLevel.first;
+          final hasChildren2 = _allSubcategories.any((s) => s.data['parent_subcategory'] == secondLevelSub.id);
+          final hasAttributeList2 = secondLevelSub.data['attribute_list'] != null && 
+                                   secondLevelSub.data['attribute_list'].toString().isNotEmpty;
+          
+          if (!hasChildren2 && !hasAttributeList2 && parts.length > 2) {
+            // This is a dynamic value at level 2
+            _subcategoryTextValues[2] = parts[2];
+          }
         }
       }
       
@@ -293,11 +439,22 @@ class _AddToolScreenState extends State<AddToolScreen> {
     }
   }
 
-  Future<void> _loadBrandsAndSuppliers() async {
+  Future<void> _loadBrandsAndSuppliers({String? categoryId, bool preserveSelections = false}) async {
     try {
       final pbService = PocketBaseService();
-      final brands = await pbService.getBrands();
-      final suppliers = await pbService.getSuppliers();
+      // Use provided categoryId or fall back to _selectedCategoryId
+      final filterCategoryId = categoryId ?? _selectedCategoryId;
+      print('DEBUG _loadBrandsAndSuppliers: filterCategoryId = $filterCategoryId, _selectedCategoryId = $_selectedCategoryId, preserveSelections = $preserveSelections');
+      
+      // Store current selections if preserving
+      final preservedBrandId = preserveSelections ? _selectedBrandId : null;
+      final preservedSupplierId = preserveSelections ? _selectedSupplierId : null;
+      
+      // Filter brands and suppliers by selected category
+      final brands = await pbService.getBrands(categoryId: filterCategoryId);
+      final suppliers = await pbService.getSuppliers(categoryId: filterCategoryId);
+      print('DEBUG _loadBrandsAndSuppliers: Loaded ${brands.length} brands, ${suppliers.length} suppliers');
+      
       setState(() {
         _brands = brands;
         _suppliers = suppliers;
@@ -308,7 +465,13 @@ class _AddToolScreenState extends State<AddToolScreen> {
           if (_selectedBrandId != null) {
             final brandExists = brands.any((b) => b.id == _selectedBrandId);
             if (!brandExists) {
-              _selectedBrandId = null;
+              // If preserving and brand was set, keep it even if not in filtered list
+              if (preserveSelections && preservedBrandId != null) {
+                print('DEBUG _loadBrandsAndSuppliers: Preserving brand $preservedBrandId even though not in filtered list');
+                _selectedBrandId = preservedBrandId;
+              } else {
+                _selectedBrandId = null;
+              }
             }
           }
           
@@ -316,7 +479,13 @@ class _AddToolScreenState extends State<AddToolScreen> {
           if (_selectedSupplierId != null) {
             final supplierExists = suppliers.any((s) => s.id == _selectedSupplierId);
             if (!supplierExists) {
-              _selectedSupplierId = null;
+              // If preserving and supplier was set, keep it even if not in filtered list
+              if (preserveSelections && preservedSupplierId != null) {
+                print('DEBUG _loadBrandsAndSuppliers: Preserving supplier $preservedSupplierId even though not in filtered list');
+                _selectedSupplierId = preservedSupplierId;
+              } else {
+                _selectedSupplierId = null;
+              }
             }
           }
         }
@@ -362,19 +531,50 @@ class _AddToolScreenState extends State<AddToolScreen> {
             _matchSubcategoryNamesToIds();
           }
         } else if (_selectedCategoryId == null && categories.isNotEmpty) {
-          // New tool - default to "Cutting Tools" if it exists
-          final cuttingTools = categories.where(
-            (c) => c.data['name'] == 'Cutting Tools',
-          );
-          if (cuttingTools.isNotEmpty) {
-            _selectedCategoryId = cuttingTools.first.id;
-            _category = cuttingTools.first.data['name'];
+          // New tool - check for initialCategory first, otherwise default to "Cutting Tools"
+          if (widget.initialCategory != null) {
+            // Find the initialCategory in the list
+            final matchingCategory = categories.where(
+              (c) => c.data['name'] == widget.initialCategory,
+            );
+            if (matchingCategory.isNotEmpty) {
+              _selectedCategoryId = matchingCategory.first.id;
+              _category = matchingCategory.first.data['name'];
+            } else {
+              // initialCategory not found, fallback to Cutting Tools or first
+              final cuttingTools = categories.where(
+                (c) => c.data['name'] == 'Cutting Tools',
+              );
+              if (cuttingTools.isNotEmpty) {
+                _selectedCategoryId = cuttingTools.first.id;
+                _category = cuttingTools.first.data['name'];
+              } else {
+                _selectedCategoryId = categories.first.id;
+                _category = categories.first.data['name'];
+              }
+            }
           } else {
-            _selectedCategoryId = categories.first.id;
-            _category = categories.first.data['name'];
+            // No initialCategory - default to "Cutting Tools" if it exists
+            final cuttingTools = categories.where(
+              (c) => c.data['name'] == 'Cutting Tools',
+            );
+            if (cuttingTools.isNotEmpty) {
+              _selectedCategoryId = cuttingTools.first.id;
+              _category = cuttingTools.first.data['name'];
+            } else {
+              _selectedCategoryId = categories.first.id;
+              _category = categories.first.data['name'];
+            }
           }
         }
       });
+      
+      // After categories are loaded and _selectedCategoryId is set, reload brands/suppliers with the category filter
+      if (_selectedCategoryId != null) {
+        print('DEBUG _loadCategories: Category loaded, reloading brands/suppliers with categoryId = $_selectedCategoryId');
+        // When editing, preserve existing brand/supplier selections
+        _loadBrandsAndSuppliers(categoryId: _selectedCategoryId, preserveSelections: widget.tool != null);
+      }
     } catch (e) {
       print('Error loading categories: $e');
     }
@@ -670,16 +870,24 @@ class _AddToolScreenState extends State<AddToolScreen> {
       }
     }
 
-    // Check if deepest selected subcategory has attribute list
+    // Check if deepest selected subcategory has attribute list OR needs dynamic dropdown
     if (_selectedSubcategoryIds.isNotEmpty) {
       final deepestId = _selectedSubcategoryIds.last;
       if (deepestId != null) {
         try {
           final deepest = _allSubcategories.firstWhere((s) => s.id == deepestId);
           final attrListId = deepest.data['attribute_list'];
+          final hasChildren = _allSubcategories.any((s) => s.data['parent_subcategory'] == deepestId);
+          
           if (attrListId != null && attrListId.toString().isNotEmpty) {
+            // Has attribute list - show attribute selector
             widgets.add(const SizedBox(height: 16));
             widgets.add(_buildAttributeSelector(attrListId));
+          } else if (!hasChildren) {
+            // No attribute list and no children - show dynamic dropdown for VALUES
+            final label = deepest.data['custom_label'] ?? deepest.data['label'] ?? 'Value';
+            widgets.add(const SizedBox(height: 16));
+            widgets.add(_buildDynamicDropdownSelector([], _selectedSubcategoryIds.length, label));
           }
         } catch (e) {
           // Deepest subcategory not found, skip attribute list
@@ -715,7 +923,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
       // For first level, use the subcategory's own label field
       if (options.isNotEmpty) {
         final firstSub = options.first;
-        // NEW: Use 'label' field for this subcategory's own label
+        // Use 'label' field for this subcategory's own label
         label = firstSub.data['label'] ?? 'Subcategory';
         displayMode = firstSub.data['display_mode'] ?? 'dropdown';
         fieldType = firstSub.data['field_type'] ?? 'selection';
@@ -823,6 +1031,114 @@ class _AddToolScreenState extends State<AddToolScreen> {
           _selectedAttributeValue = null;
           _updateSubcategoryText();
         });
+      },
+    );
+  }
+
+  // NEW: Get previously used values for dynamic dropdown (subcategories without attribute lists)
+  Future<List<String>> _getUsedValuesForSubcategory(String subcategoryName) async {
+    try {
+      final pbService = PocketBaseService();
+      final tools = await pbService.getTools();
+      
+      // Extract unique values from subcategory field, filtering by category
+      final values = <String>{};
+      for (final tool in tools) {
+        // Only look at tools from the same category
+        if (tool.data['category'] != _category) continue;
+        
+        final subcatText = tool.data['subcategory']?.toString() ?? '';
+        // Parse the subcategory text (e.g., "Colors > Red")
+        final parts = subcatText.split(' > ').map((s) => s.trim()).toList();
+        
+        // Find values that come after our current subcategory level
+        // For example, if we're at "Colors" level and it's "Colors > Red", we want "Red"
+        if (parts.length >= _selectedSubcategoryIds.length + 1) {
+          // Get the value at the position we're looking for
+          final value = parts[_selectedSubcategoryIds.length];
+          if (value.isNotEmpty) {
+            values.add(value);
+          }
+        }
+      }
+      
+      return values.toList()..sort();
+    } catch (e) {
+      print('Error getting used values: $e');
+      return [];
+    }
+  }
+
+  // NEW: Build autocomplete with previously used values for subcategories without attribute lists
+  Widget _buildDynamicDropdownSelector(List<dynamic> options, int level, String label) {
+    // Get current value from map (no need to ensure size like with lists)
+    final currentValue = _subcategoryTextValues[level] ?? '';
+    
+    return FutureBuilder<List<String>>(
+      future: _getUsedValuesForSubcategory(label),
+      builder: (context, snapshot) {
+        final usedValues = snapshot.data ?? [];
+        
+        return Autocomplete<String>(
+          initialValue: currentValue.isNotEmpty
+              ? TextEditingValue(text: currentValue)
+              : const TextEditingValue(),
+          optionsBuilder: (TextEditingValue textEditingValue) {
+            if (textEditingValue.text.isEmpty) {
+              return usedValues;
+            }
+            return usedValues
+                .where((value) => value
+                    .toLowerCase()
+                    .contains(textEditingValue.text.toLowerCase()))
+                .toList();
+          },
+          onSelected: (String selectedValue) {
+            setState(() {
+              _subcategoryTextValues[level] = selectedValue;
+              _selectedSubcategoryIds = _selectedSubcategoryIds.sublist(0, level);
+              _selectedAttributeValue = null;
+              _updateSubcategoryText();
+              _updateToolName();
+            });
+          },
+          fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+            // If we have a current value and controller is empty, set it
+            if (currentValue.isNotEmpty && controller.text.isEmpty) {
+              controller.text = currentValue;
+            }
+            
+            return TextFormField(
+              controller: controller,
+              focusNode: focusNode,
+              decoration: InputDecoration(
+                labelText: label,
+                border: const OutlineInputBorder(),
+                hintText: 'Type or select',
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    controller.clear();
+                    setState(() {
+                      _subcategoryTextValues[level] = '';
+                      _updateSubcategoryText();
+                      _updateToolName();
+                    });
+                  },
+                ),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _subcategoryTextValues[level] = value;
+                  _selectedSubcategoryIds = _selectedSubcategoryIds.sublist(0, level);
+                  _selectedAttributeValue = null;
+                  _updateSubcategoryText();
+                  _updateToolName();
+                });
+              },
+            );
+          },
+        );
       },
     );
   }
@@ -1050,6 +1366,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
           'neck': double.tryParse(_neckController.text),
         };
         
+        print('DEBUG _saveTool: Saving with brand = $_selectedBrandId, supplier = $_selectedSupplierId');
+        print('DEBUG _saveTool: Body = $body');
+        
         dynamic toolRecord;
         
         if (_isEditMode) {
@@ -1067,10 +1386,12 @@ class _AddToolScreenState extends State<AddToolScreen> {
               ],
             );
           } else {
+            print('DEBUG _saveTool: Updating tool ${widget.tool!.id}');
             toolRecord = await pbService.pb.collection('inventory').update(
               widget.tool!.id,
               body: body,
             );
+            print('DEBUG _saveTool: Update result - brand = ${toolRecord.data['brand']}, supplier = ${toolRecord.data['supplier']}');
           }
         } else {
           // Create new tool
@@ -1344,66 +1665,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
             ),
             const SizedBox(height: 16),
             
-            // CATEGORY - Searchable Autocomplete
-            Autocomplete<String>(
-              initialValue: _selectedCategoryId != null && _categories.any((c) => c.id == _selectedCategoryId)
-                  ? TextEditingValue(
-                      text: _categories.firstWhere((c) => c.id == _selectedCategoryId).data['name'],
-                    )
-                  : const TextEditingValue(),
-              optionsBuilder: (TextEditingValue textEditingValue) {
-                if (textEditingValue.text.isEmpty) {
-                  return _categories.map((cat) => cat.data['name'] as String);
-                }
-                return _categories
-                    .where((cat) => (cat.data['name'] as String)
-                        .toLowerCase()
-                        .contains(textEditingValue.text.toLowerCase()))
-                    .map((cat) => cat.data['name'] as String);
-              },
-              onSelected: (String selectedName) {
-                final category = _categories.firstWhere((c) => c.data['name'] == selectedName);
-                setState(() {
-                  _selectedCategoryId = category.id;
-                  _category = category.data['name'];
-                  // Clear subcategory selections when category changes
-                  _selectedSubcategoryIds.clear();
-                  _selectedAttributeValue = null;
-                  _updateSubcategoryText();
-                });
-              },
-              fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                return TextFormField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  decoration: const InputDecoration(
-                    labelText: 'Category',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please select a category';
-                    }
-                    if (!_categories.any((c) => c.data['name'] == value)) {
-                      return 'Please select a valid category from the list';
-                    }
-                    return null;
-                  },
-                  onChanged: (value) {
-                    // Clear selection if text doesn't match any category
-                    if (!_categories.any((c) => c.data['name'] == value)) {
-                      setState(() {
-                        _selectedCategoryId = null;
-                        _category = '';
-                        _selectedSubcategoryIds.clear();
-                        _selectedAttributeValue = null;
-                        _updateSubcategoryText();
-                      });
-                    }
-                  },
-                );
-              },
-            ),
+            // CATEGORY - Dynamic (Dropdown or Buttons based on setting)
+            _buildCategorySelector(),
             const SizedBox(height: 16),
             
             // Dynamic Cascading Subcategories

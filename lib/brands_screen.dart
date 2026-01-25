@@ -11,12 +11,45 @@ class BrandsScreen extends StatefulWidget {
 
 class _BrandsScreenState extends State<BrandsScreen> {
   List<dynamic> _brands = [];
+  List<dynamic> _categories = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadBrands();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final pbService = PocketBaseService();
+      final results = await Future.wait([
+        pbService.getBrands(),
+        pbService.getCategories(),
+      ]);
+      
+      setState(() {
+        _brands = results[0] as List<dynamic>;
+        _categories = results[1] as List<dynamic>;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading data: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _loadBrands() async {
@@ -48,124 +81,237 @@ class _BrandsScreenState extends State<BrandsScreen> {
 
   void _showAddBrandDialog() {
     final nameController = TextEditingController();
+    final selectedCategoryIds = <String>{};
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Brand'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(
-            labelText: 'Brand Name',
-            border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add Brand'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Brand Name',
+                    border: OutlineInputBorder(),
+                  ),
+                  textCapitalization: TextCapitalization.words,
+                ),
+                if (_categories.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Used in Categories (leave unchecked to show for all):',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._categories.map((category) {
+                    final isSelected = selectedCategoryIds.contains(category.id);
+                    return CheckboxListTile(
+                      title: Text(category.data['name']),
+                      value: isSelected,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          if (value == true) {
+                            selectedCategoryIds.add(category.id);
+                          } else {
+                            selectedCategoryIds.remove(category.id);
+                          }
+                        });
+                      },
+                      contentPadding: EdgeInsets.zero,
+                    );
+                  }),
+                ],
+              ],
+            ),
           ),
-          textCapitalization: TextCapitalization.words,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a brand name')),
+                  );
+                  return;
+                }
+
+                try {
+                  final pbService = PocketBaseService();
+                  await pbService.createBrand(
+                    nameController.text,
+                    categoryIds: selectedCategoryIds.isEmpty ? null : selectedCategoryIds.toList(),
+                  );
+
+                  Navigator.pop(context);
+                  _loadData();
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Brand "${nameController.text}" added!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Add'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter a brand name')),
-                );
-                return;
-              }
-
-              try {
-                final pbService = PocketBaseService();
-                await pbService.createBrand(nameController.text);
-
-                Navigator.pop(context);
-                _loadBrands();
-
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Brand "${nameController.text}" added!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
       ),
     );
   }
 
   void _showEditBrandDialog(dynamic brand) {
     final nameController = TextEditingController(text: brand.data['name']);
+    // Get current categories (handle both List and single value, and expanded objects)
+    final currentCategories = brand.data['categories'];
+    print('DEBUG _showEditBrandDialog: Brand ${brand.id} categories = $currentCategories (type: ${currentCategories?.runtimeType})');
+    final selectedCategoryIds = <String>{};
+    if (currentCategories != null) {
+      if (currentCategories is List) {
+        // Handle both expanded objects and IDs
+        for (var c in currentCategories) {
+          if (c is String) {
+            selectedCategoryIds.add(c);
+          } else if (c is Map && c['id'] != null) {
+            selectedCategoryIds.add(c['id']);
+          } else {
+            selectedCategoryIds.add(c.toString());
+          }
+        }
+      } else {
+        // Single value - PocketBase might be storing as single string instead of array
+        if (currentCategories is Map && currentCategories['id'] != null) {
+          selectedCategoryIds.add(currentCategories['id']);
+        } else {
+          // It's a string, add it directly
+          selectedCategoryIds.add(currentCategories.toString());
+        }
+      }
+    }
+    print('DEBUG _showEditBrandDialog: Parsed category IDs = $selectedCategoryIds');
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Brand'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(
-            labelText: 'Brand Name',
-            border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Edit Brand'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Brand Name',
+                    border: OutlineInputBorder(),
+                  ),
+                  textCapitalization: TextCapitalization.words,
+                ),
+                if (_categories.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Used in Categories (leave unchecked to show for all):',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._categories.map((category) {
+                    final isSelected = selectedCategoryIds.contains(category.id);
+                    return CheckboxListTile(
+                      title: Text(category.data['name']),
+                      value: isSelected,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          if (value == true) {
+                            selectedCategoryIds.add(category.id);
+                          } else {
+                            selectedCategoryIds.remove(category.id);
+                          }
+                        });
+                      },
+                      contentPadding: EdgeInsets.zero,
+                    );
+                  }),
+                ],
+              ],
+            ),
           ),
-          textCapitalization: TextCapitalization.words,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a brand name')),
+                  );
+                  return;
+                }
+
+                try {
+                  final pbService = PocketBaseService();
+                  print('DEBUG: Updating brand ${brand.id} with categories: ${selectedCategoryIds.toList()}');
+                  await pbService.updateBrand(
+                    brand.id,
+                    nameController.text,
+                    categoryIds: selectedCategoryIds.toList(),
+                  );
+
+                  Navigator.pop(context);
+                  // Reload data to get fresh brand with updated categories
+                  await _loadData();
+                  
+                  // Debug: Check if categories were saved
+                  try {
+                    final updatedBrand = _brands.firstWhere((b) => b.id == brand.id);
+                    print('DEBUG after save: Brand ${updatedBrand.id} categories = ${updatedBrand.data['categories']}');
+                  } catch (e) {
+                    print('DEBUG after save: Could not find updated brand');
+                  }
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Brand updated to "${nameController.text}"!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter a brand name')),
-                );
-                return;
-              }
-
-              try {
-                final pbService = PocketBaseService();
-                await pbService.updateBrand(brand.id, nameController.text);
-
-                Navigator.pop(context);
-                _loadBrands();
-
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Brand updated to "${nameController.text}"!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
   }
@@ -194,7 +340,7 @@ class _BrandsScreenState extends State<BrandsScreen> {
       try {
         final pbService = PocketBaseService();
         await pbService.deleteBrand(brand.id);
-        _loadBrands();
+        _loadData();
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

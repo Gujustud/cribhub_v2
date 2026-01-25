@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'pocketbase_service.dart';
 import 'app_drawer.dart';
-import 'categories_screen.dart';
-import 'subcategories_management_screen.dart';
+import 'category_management_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,6 +14,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoading = true;
   bool _showAllInventoryInMenu = true;
   bool _showToolDetailsInList = true; // NEW
+  bool _useCategoryButtons = false; // NEW: Show category as buttons instead of dropdown
   String? _settingsId;
 
   @override
@@ -35,6 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _settingsId = settings.id;
         _showAllInventoryInMenu = settings.data['show_all_inventory_in_menu'] ?? true;
         _showToolDetailsInList = settings.data['show_tool_details_in_list'] ?? true; // NEW
+        _useCategoryButtons = settings.data['use_category_buttons'] ?? false; // NEW
         _isLoading = false;
       });
     } catch (e) {
@@ -125,6 +126,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _updateUseCategoryButtons(bool value) async {
+    if (_settingsId == null) return;
+
+    try {
+      final pbService = PocketBaseService();
+      await pbService.updateAppSettings(
+        settingsId: _settingsId!,
+        showAllInventoryInMenu: _showAllInventoryInMenu,
+        showToolDetailsInList: _showToolDetailsInList,
+        useCategoryButtons: value, // NEW
+      );
+
+      setState(() {
+        _useCategoryButtons = value;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(value 
+              ? 'Category selection will show as buttons' 
+              : 'Category selection will show as dropdown'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating setting: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -160,29 +199,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       ListTile(
                         leading: const Icon(Icons.category, color: Colors.blue),
-                        title: const Text('Manage Inventory Categories'),
-                        subtitle: const Text('Add, edit, or delete categories'),
+                        title: const Text('Manage Categories & Subcategories'),
+                        subtitle: const Text('Add, edit, or delete categories and subcategories'),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const CategoriesScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.account_tree, color: Colors.blue),
-                        title: const Text('Manage Subcategories & Attributes'),
-                        subtitle: const Text('Add, edit, or delete subcategories and attribute lists'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const SubcategoriesManagementScreen(),
+                              builder: (context) => const CategoryManagementScreen(),
                             ),
                           );
                         },
@@ -220,6 +244,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         subtitle: const Text('Display diameter, flutes, and length info'),
                         value: _showToolDetailsInList,
                         onChanged: _updateShowToolDetails,
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile(
+                        secondary: const Icon(Icons.apps, color: Colors.blue),
+                        title: const Text('Use buttons for category selection'),
+                        subtitle: const Text('Show categories as buttons instead of dropdown'),
+                        value: _useCategoryButtons,
+                        onChanged: _updateUseCategoryButtons,
                       ),
                       const Divider(height: 1),
                       ListTile(

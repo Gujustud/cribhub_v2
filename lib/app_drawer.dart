@@ -4,8 +4,8 @@ import 'inventory_screen.dart';
 import 'location_management_screen.dart';
 import 'brands_screen.dart';
 import 'suppliers_screen.dart';
-import 'categories_screen.dart';
 import 'settings_screen.dart';
+import 'about_screen.dart';
 import 'pocketbase_service.dart';
 import 'main.dart';
 
@@ -179,7 +179,10 @@ class _AppDrawerState extends State<AppDrawer> {
             title: const Text('About'),
             onTap: () {
               Navigator.pop(context);
-              // TODO: Navigate to about
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AboutScreen()),
+              );
             },
           ),
         ],

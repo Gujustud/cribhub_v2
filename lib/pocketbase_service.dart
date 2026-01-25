@@ -311,9 +311,59 @@ class PocketBaseService {
   }
 
   // Brand management
-  Future<List<dynamic>> getBrands() async {
+  Future<List<dynamic>> getBrands({String? categoryId}) async {
     try {
-      final records = await pb.collection('brands').getFullList(sort: 'name');
+      List<dynamic> records;
+      if (categoryId != null) {
+        print('DEBUG getBrands: Filtering by categoryId = $categoryId');
+        records = await pb.collection('brands').getFullList(sort: 'name');
+        print('DEBUG getBrands: Loaded ${records.length} total brands');
+        
+        // Filter: show brands with no categories OR brands that include this category
+        records = records.where((brand) {
+          final categories = brand.data['categories'];
+          final brandName = brand.data['name'];
+          print('DEBUG getBrands: Brand "$brandName" has categories = $categories (type: ${categories?.runtimeType})');
+          
+          // If no categories assigned, show for all (backward compatible)
+          if (categories == null || categories == '' || (categories is List && categories.isEmpty)) {
+            print('DEBUG getBrands: Brand "$brandName" has no categories - showing for all');
+            return true;
+          }
+          
+          // Check if this category is in the list
+          if (categories is List) {
+            final matches = categories.any((c) {
+              String? catId;
+              if (c is String) {
+                catId = c;
+              } else if (c is Map && c['id'] != null) {
+                catId = c['id'];
+              } else {
+                catId = c.toString();
+              }
+              return catId == categoryId;
+            });
+            print('DEBUG getBrands: Brand "$brandName" ${matches ? "MATCHES" : "does NOT match"} category $categoryId');
+            return matches;
+          }
+          
+          // Handle single value (shouldn't happen with multiple relation, but just in case)
+          if (categories is Map && categories['id'] != null) {
+            final matches = categories['id'] == categoryId;
+            print('DEBUG getBrands: Brand "$brandName" (single value) ${matches ? "MATCHES" : "does NOT match"}');
+            return matches;
+          }
+          
+          final matches = categories.toString() == categoryId;
+          print('DEBUG getBrands: Brand "$brandName" (string) ${matches ? "MATCHES" : "does NOT match"}');
+          return matches;
+        }).toList();
+        
+        print('DEBUG getBrands: After filtering, ${records.length} brands match category $categoryId');
+      } else {
+        records = await pb.collection('brands').getFullList(sort: 'name');
+      }
       return records;
     } catch (e) {
       print('Error getting brands: $e');
@@ -321,18 +371,34 @@ class PocketBaseService {
     }
   }
 
-  Future<void> createBrand(String name) async {
+  Future<void> createBrand(String name, {List<String>? categoryIds}) async {
     try {
-      await pb.collection('brands').create(body: {'name': name});
+      final body = <String, dynamic>{'name': name};
+      if (categoryIds != null && categoryIds.isNotEmpty) {
+        body['categories'] = categoryIds;
+      }
+      await pb.collection('brands').create(body: body);
     } catch (e) {
       print('Error creating brand: $e');
       rethrow;
     }
   }
 
-  Future<void> updateBrand(String id, String name) async {
+  Future<void> updateBrand(String id, String name, {List<String>? categoryIds}) async {
     try {
-      await pb.collection('brands').update(id, body: {'name': name});
+      final body = <String, dynamic>{'name': name};
+      // Always set categories, even if empty (to clear existing ones)
+      if (categoryIds != null) {
+        body['categories'] = categoryIds;
+      } else {
+        // If null, set to empty array to clear all categories
+        body['categories'] = [];
+      }
+      print('DEBUG updateBrand: Updating brand $id with categories: ${body['categories']} (type: ${body['categories'].runtimeType})');
+      print('DEBUG updateBrand: Body being sent: $body');
+      final result = await pb.collection('brands').update(id, body: body);
+      print('DEBUG updateBrand: Successfully updated brand $id');
+      print('DEBUG updateBrand: Result categories = ${result.data['categories']} (type: ${result.data['categories']?.runtimeType})');
     } catch (e) {
       print('Error updating brand: $e');
       rethrow;
@@ -349,9 +415,59 @@ class PocketBaseService {
   }
 
   // Supplier management
-  Future<List<dynamic>> getSuppliers() async {
+  Future<List<dynamic>> getSuppliers({String? categoryId}) async {
     try {
-      final records = await pb.collection('suppliers').getFullList(sort: 'company_name');
+      List<dynamic> records;
+      if (categoryId != null) {
+        print('DEBUG getSuppliers: Filtering by categoryId = $categoryId');
+        records = await pb.collection('suppliers').getFullList(sort: 'company_name');
+        print('DEBUG getSuppliers: Loaded ${records.length} total suppliers');
+        
+        // Filter: show suppliers with no categories OR suppliers that include this category
+        records = records.where((supplier) {
+          final categories = supplier.data['categories'];
+          final supplierName = supplier.data['company_name'];
+          print('DEBUG getSuppliers: Supplier "$supplierName" has categories = $categories (type: ${categories?.runtimeType})');
+          
+          // If no categories assigned, show for all (backward compatible)
+          if (categories == null || categories == '' || (categories is List && categories.isEmpty)) {
+            print('DEBUG getSuppliers: Supplier "$supplierName" has no categories - showing for all');
+            return true;
+          }
+          
+          // Check if this category is in the list
+          if (categories is List) {
+            final matches = categories.any((c) {
+              String? catId;
+              if (c is String) {
+                catId = c;
+              } else if (c is Map && c['id'] != null) {
+                catId = c['id'];
+              } else {
+                catId = c.toString();
+              }
+              return catId == categoryId;
+            });
+            print('DEBUG getSuppliers: Supplier "$supplierName" ${matches ? "MATCHES" : "does NOT match"} category $categoryId');
+            return matches;
+          }
+          
+          // Handle single value (shouldn't happen with multiple relation, but just in case)
+          if (categories is Map && categories['id'] != null) {
+            final matches = categories['id'] == categoryId;
+            print('DEBUG getSuppliers: Supplier "$supplierName" (single value) ${matches ? "MATCHES" : "does NOT match"}');
+            return matches;
+          }
+          
+          final matches = categories.toString() == categoryId;
+          print('DEBUG getSuppliers: Supplier "$supplierName" (string) ${matches ? "MATCHES" : "does NOT match"}');
+          return matches;
+        }).toList();
+        
+        print('DEBUG getSuppliers: After filtering, ${records.length} suppliers match category $categoryId');
+      } else {
+        records = await pb.collection('suppliers').getFullList(sort: 'company_name');
+      }
       return records;
     } catch (e) {
       print('Error getting suppliers: $e');
@@ -367,9 +483,10 @@ class PocketBaseService {
     String? contact,
     String? directTel,
     String? email,
+    List<String>? categoryIds,
   }) async {
     try {
-      await pb.collection('suppliers').create(body: {
+      final body = <String, dynamic>{
         'company_name': companyName,
         'address': address,
         'tel': tel,
@@ -377,7 +494,11 @@ class PocketBaseService {
         'contact': contact,
         'direct_tel': directTel,
         'email': email,
-      });
+      };
+      if (categoryIds != null && categoryIds.isNotEmpty) {
+        body['categories'] = categoryIds;
+      }
+      await pb.collection('suppliers').create(body: body);
     } catch (e) {
       print('Error creating supplier: $e');
       rethrow;
@@ -393,9 +514,10 @@ class PocketBaseService {
     String? contact,
     String? directTel,
     String? email,
+    List<String>? categoryIds,
   }) async {
     try {
-      await pb.collection('suppliers').update(id, body: {
+      final body = <String, dynamic>{
         'company_name': companyName,
         'address': address,
         'tel': tel,
@@ -403,7 +525,17 @@ class PocketBaseService {
         'contact': contact,
         'direct_tel': directTel,
         'email': email,
-      });
+      };
+      // Always set categories, even if empty (to clear existing ones)
+      if (categoryIds != null) {
+        body['categories'] = categoryIds;
+      } else {
+        // If null, set to empty array to clear all categories
+        body['categories'] = [];
+      }
+      print('DEBUG updateSupplier: Updating supplier $id with categories: ${body['categories']}');
+      await pb.collection('suppliers').update(id, body: body);
+      print('DEBUG updateSupplier: Successfully updated supplier $id');
     } catch (e) {
       print('Error updating supplier: $e');
       rethrow;
@@ -523,6 +655,7 @@ class PocketBaseService {
     required bool showAllInventoryInMenu,
     String? subcategoryDisplayMode,
     bool? showToolDetailsInList, // NEW
+    bool? useCategoryButtons, // NEW
   }) async {
     try {
       final Map<String, dynamic> body = {
@@ -535,6 +668,10 @@ class PocketBaseService {
       
       if (showToolDetailsInList != null) {
         body['show_tool_details_in_list'] = showToolDetailsInList;
+      }
+      
+      if (useCategoryButtons != null) {
+        body['use_category_buttons'] = useCategoryButtons;
       }
 
       await pb.collection('app_settings').update(settingsId, body: body);
@@ -783,7 +920,7 @@ class PocketBaseService {
     String? parentSubcategoryId,
     required int sortOrder,
     String? label, // NEW: Label for this subcategory itself
-    String? customLabel, // Label for children
+    String? customLabel,
     String? attributeListId,
     String? displayMode, // dropdown or buttons
     String? fieldType, // NEW: selection, text, number
@@ -840,7 +977,7 @@ class PocketBaseService {
     required String name,
     required int sortOrder,
     String? label, // NEW: Label for this subcategory itself
-    String? customLabel, // Label for children
+    String? customLabel,
     String? attributeListId,
     String? parentSubcategoryId,
     String? displayMode, // dropdown or buttons
@@ -850,10 +987,14 @@ class PocketBaseService {
       final body = <String, dynamic>{
         'name': name,
         'sort_order': sortOrder,
-        if (label != null) 'label': label,
-        if (customLabel != null) 'custom_label': customLabel,
-        if (attributeListId != null) 'attribute_list': attributeListId,
       };
+      
+      // Always set label and custom_label (can be null to clear)
+      body['label'] = label;
+      body['custom_label'] = customLabel;
+      
+      // Always set attribute_list (can be null to clear)
+      body['attribute_list'] = attributeListId;
       
       // If setting parent_subcategory, clear category
       if (parentSubcategoryId != null) {
