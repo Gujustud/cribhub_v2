@@ -53,6 +53,26 @@ class Tool {
   factory Tool.fromRecord(dynamic record) {
     // RecordModel has .id and .data properties
     final data = record.data;
+    
+    // Helper function to safely extract expanded relation data
+    String? getExpandedName(String fieldName, String nameField) {
+      try {
+        if (record.expand == null) return null;
+        final expandedData = record.expand[fieldName];
+        if (expandedData == null) return null;
+        
+        // Handle both single object and array (Flutter web sometimes returns arrays)
+        if (expandedData is List && expandedData.isNotEmpty) {
+          return expandedData[0].data?[nameField];
+        } else {
+          return expandedData.data?[nameField];
+        }
+      } catch (e) {
+        print('Error extracting $fieldName: $e');
+        return null;
+      }
+    }
+    
     return Tool(
       id: record.id,
       toolName: data['tool_name'] ?? '',
@@ -73,8 +93,8 @@ class Tool {
       size: data['size'],
       serialNumber: data['serial_number'],
       photo: data['photo'],  // NEW
-      brand: record.expand?['brand']?.data?['name'],  // UPDATED - from expand
-      supplier: record.expand?['supplier']?.data?['company_name'],  // UPDATED - from expand
+      brand: getExpandedName('brand', 'name'),  // FIXED - handles both array and object
+      supplier: getExpandedName('supplier', 'company_name'),  // FIXED - handles both array and object
       record: record,  // NEW - store the original record
     );
   }

@@ -51,7 +51,9 @@ class PocketBaseService {
   // Get all tools
   Future<List<dynamic>> getTools() async {
     try {
-      final records = await pb.collection('inventory').getFullList();
+      final records = await pb.collection('inventory').getFullList(
+        expand: 'brand,supplier',
+      );
       return records;
     } catch (e) {
       print('Error getting tools: $e');
@@ -152,7 +154,10 @@ class PocketBaseService {
   // Get tool by ID
   Future<dynamic> getToolById(String toolId) async {
     try {
-      final record = await pb.collection('inventory').getOne(toolId);
+      final record = await pb.collection('inventory').getOne(
+        toolId,
+        expand: 'brand,supplier',
+      );
       return record;
     } catch (e) {
       print('Error getting tool: $e');
@@ -634,15 +639,17 @@ class PocketBaseService {
   // Get app settings (creates default if doesn't exist)
   Future<dynamic> getAppSettings() async {
     try {
-      final records = await pb.collection('app_settings').getFullList();
-      if (records.isEmpty) {
-        // Create default settings if none exist
+      // Try to get the first settings record
+      try {
+        final settings = await pb.collection('app_settings').getFirstListItem('');
+        return settings;
+      } catch (e) {
+        // No settings found, create default
         final defaultSettings = await pb.collection('app_settings').create(body: {
           'show_all_inventory_in_menu': true,
         });
         return defaultSettings;
       }
-      return records.first;
     } catch (e) {
       print('Error getting app settings: $e');
       rethrow;

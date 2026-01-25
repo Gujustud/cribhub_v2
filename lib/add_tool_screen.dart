@@ -97,37 +97,69 @@ class _AddToolScreenState extends State<AddToolScreen> {
   List<InventoryHistory> _recentHistory = [];
   bool _loadingHistory = false;
   
+  // Initialization state
+  bool _isInitialized = false;
+  
   bool get _isEditMode => widget.tool != null && !widget.isDuplicate;
   
   @override
   void initState() {
     super.initState();
-    _loadSettings(); // NEW: Load display settings
-    _loadLocations();
-    _loadBrandsAndSuppliers();
-    _loadCategories(); // Load categories dynamically
-    _loadSubcategories();
-    
-    // If initialCategory is provided, use it
-    if (widget.initialCategory != null && widget.tool == null) {
-      _category = widget.initialCategory!;
-    }
-    
-    // If editing or duplicating, pre-fill fields
-    if (widget.tool != null) {
-      _prefillFields();
-    }
+    _initializeScreen();
     
     _diameterInController.addListener(_scheduleToolNameUpdate);
     _flutesController.addListener(_scheduleToolNameUpdate);
     _fluteLengthController.addListener(_scheduleToolNameUpdate);
     _cornerRadController.addListener(_scheduleToolNameUpdate);
     _neckController.addListener(_scheduleToolNameUpdate);
+  }
+  
+  Future<void> _initializeScreen() async {
+    // Load in proper sequence to ensure data is available when needed
+    await _loadSettings(); // Load display settings first
+    _loadLocations(); // Can be async in background
+    await _loadCategories(); // Load categories and determine _selectedCategoryId
+    await _loadSubcategories(); // FIXED: Await so subcategories are loaded before matching
+    
+    // If initialCategory is provided, use it (for new tools only)
+    if (widget.initialCategory != null && widget.tool == null) {
+      _category = widget.initialCategory!;
+      // Find the category ID for the initial category
+      if (_categories.isNotEmpty) {
+        final matchingCategory = _categories.where(
+          (c) => c.data['name'] == widget.initialCategory,
+        );
+        if (matchingCategory.isNotEmpty) {
+          _selectedCategoryId = matchingCategory.first.id;
+        }
+      }
+    }
+    
+    // If editing/duplicating, pre-fill fields FIRST to set the brand/supplier IDs
+    if (widget.tool != null) {
+      _prefillFields();
+      // Now that subcategories are loaded, match them
+      if (_allSubcategories.isNotEmpty) {
+        _matchSubcategoryNamesToIds();
+      }
+    }
+    
+    // Now load brands/suppliers with the correct category filter
+    // This will match the Brand/Supplier objects from the IDs we just set
+    await _loadBrandsAndSuppliers(
+      categoryId: _selectedCategoryId,
+      preserveSelections: widget.tool != null
+    );
     
     if (_isEditMode) {
       _loadToolLocations();
-      _loadRecentHistory(); // NEW: Load history for edit mode
+      _loadRecentHistory();
     }
+    
+    // Mark initialization as complete and trigger UI update
+    setState(() {
+      _isInitialized = true;
+    });
   }
   
   Future<void> _loadSettings() async {
@@ -368,11 +400,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
       final subcategories = await pbService.getSubcategories();
       setState(() {
         _allSubcategories = subcategories;
-        
-        // If editing/duplicating, try to match existing subcategory names to IDs
-        if (widget.tool != null && _subcategory != null && _subcategory!.isNotEmpty) {
-          _matchSubcategoryNamesToIds();
-        }
+        // Note: _matchSubcategoryNamesToIds() is now called explicitly in _initializeScreen()
       });
     } catch (e) {
       print('Error loading subcategories: $e');
@@ -387,55 +415,124 @@ class _AddToolScreenState extends State<AddToolScreen> {
     
     if (_selectedCategoryId == null) return;
     
-    // Parse the full subcategory text (e.g., "Colors > Red")
+    // Parse the full subcategory text (e.g., "PLA > Black" for independent attributes)
     final subcategoryText = widget.tool?.record?.data['subcategory'] ?? '';
     if (subcategoryText.isEmpty) return;
     
+    print('DEBUG _matchSubcategoryNamesToIds: Parsing subcategoryText = "$subcategoryText"');
     final parts = subcategoryText.split(' > ');
+    print('DEBUG _matchSubcategoryNamesToIds: Split into ${parts.length} parts: $parts');
     
-    // Find first level subcategory
-    final firstLevel = _allSubcategories.where((s) =>
+    // Get top-level subcategories
+    final topLevel = _allSubcategories.where((s) =>
       s.data['category'] == _selectedCategoryId &&
-      s.data['name'] == _subcategory &&
       (s.data['parent_subcategory'] == null || s.data['parent_subcategory'] == '')
     ).toList();
     
+    if (topLevel.isEmpty) return;
+    
+    // Sort by sort_order to ensure consistent ordering
+    topLevel.sort((a, b) => (a.data['sort_order'] ?? 0).compareTo(b.data['sort_order'] ?? 0));
+    
+    // Check if we have multiple independent subcategories (all with attribute lists)
+    final allHaveAttributeLists = topLevel.every((sub) {
+      final attrList = sub.data['attribute_list'];
+      return attrList != null && attrList.toString().isNotEmpty;
+    });
+    
+    if (allHaveAttributeLists && topLevel.length > 1 && parts.length >= topLevel.length) {
+      // Multiple independent subcategories - map each part to corresponding subcategory
+      print('DEBUG _matchSubcategoryNamesToIds: Multiple independent subcategories detected');
+      for (int i = 0; i < topLevel.length; i++) {
+        if (i < parts.length) {
+          // Store the attribute value at this level
+          _selectedSubcategoryIds.add(parts[i]);
+          _selectedAttributeValue = parts[i]; // Store last value
+          print('DEBUG _matchSubcategoryNamesToIds: Set attribute value at level $i: "${parts[i]}"');
+        }
+      }
+    } else {
+      // Single or hierarchical subcategories - use original logic
+      _matchSubcategoryHierarchical(topLevel, parts);
+    }
+    
+    _updateSubcategoryText();
+  }
+  
+  void _matchSubcategoryHierarchical(List<dynamic> topLevel, List<String> parts) {
+    // Original hierarchical matching logic
+    // Find first level subcategory using parts[0]
+    final firstLevel = topLevel.where((s) => s.data['name'] == parts[0]).toList();
+    
     if (firstLevel.isNotEmpty) {
-      _selectedSubcategoryIds.add(firstLevel.first.id);
-      
-      // Check if this subcategory has children or attribute list
       final firstLevelSub = firstLevel.first;
       final hasChildren = _allSubcategories.any((s) => s.data['parent_subcategory'] == firstLevelSub.id);
       final hasAttributeList = firstLevelSub.data['attribute_list'] != null && 
                                firstLevelSub.data['attribute_list'].toString().isNotEmpty;
       
-      if (!hasChildren && !hasAttributeList && parts.length > 1) {
-        // This is a dynamic value (like "Red" in "Colors > Red")
+      print('DEBUG _matchSubcategoryNamesToIds: Found first level subcategory "${firstLevelSub.data['name']}" with ID ${firstLevelSub.id}');
+      print('DEBUG _matchSubcategoryNamesToIds: hasChildren = $hasChildren, hasAttributeList = $hasAttributeList, parts.length = ${parts.length}');
+      
+      // IMPORTANT: If this subcategory has an attribute_list, store the VALUE, not the ID
+      if (hasAttributeList && parts.length > 1) {
+        // Store the attribute value (e.g., "PLA" from "Filament Type > PLA")
+        _selectedSubcategoryIds.add(parts[1]);
+        _selectedAttributeValue = parts[1];
+        print('DEBUG _matchSubcategoryNamesToIds: Set attribute value at level 0: "${parts[1]}"');
+      } else if (hasAttributeList && parts.length == 1) {
+        // Subcategory has attribute_list but no value was saved (old data format)
+        // Add null placeholder so the dropdown appears but nothing is selected
+        _selectedSubcategoryIds.add(null);
+        print('DEBUG _matchSubcategoryNamesToIds: Subcategory has attribute_list but no value saved - adding null placeholder');
+      } else if (!hasChildren && !hasAttributeList && parts.length > 1) {
+        // This is a dynamic text value (like "Black" in "Color > Black" when Color has no attribute list)
+        _selectedSubcategoryIds.add(firstLevelSub.id);
         _subcategoryTextValues[1] = parts[1];
-      } else if (_subSubcategory != null && _subSubcategory!.isNotEmpty) {
-        // If there's a sub-subcategory, try to find it
-        final secondLevel = _allSubcategories.where((s) =>
-          s.data['parent_subcategory'] == firstLevel.first.id &&
-          s.data['name'] == _subSubcategory
-        ).toList();
+        print('DEBUG _matchSubcategoryNamesToIds: Set dynamic text value at level 1: "${parts[1]}"');
+      } else {
+        // Regular subcategory selection (has children or no value specified)
+        _selectedSubcategoryIds.add(firstLevelSub.id);
+        print('DEBUG _matchSubcategoryNamesToIds: Set subcategory ID at level 0: ${firstLevelSub.id}');
         
-        if (secondLevel.isNotEmpty) {
-          _selectedSubcategoryIds.add(secondLevel.first.id);
+        // If there's a second part, process child subcategories
+        if (parts.length > 1) {
+          final secondLevel = _allSubcategories.where((s) =>
+            s.data['parent_subcategory'] == firstLevelSub.id &&
+            s.data['name'] == parts[1]
+          ).toList();
           
-          // Check if second level has dynamic values
-          final secondLevelSub = secondLevel.first;
-          final hasChildren2 = _allSubcategories.any((s) => s.data['parent_subcategory'] == secondLevelSub.id);
-          final hasAttributeList2 = secondLevelSub.data['attribute_list'] != null && 
-                                   secondLevelSub.data['attribute_list'].toString().isNotEmpty;
-          
-          if (!hasChildren2 && !hasAttributeList2 && parts.length > 2) {
-            // This is a dynamic value at level 2
-            _subcategoryTextValues[2] = parts[2];
+          if (secondLevel.isNotEmpty) {
+            final secondLevelSub = secondLevel.first;
+            final hasChildren2 = _allSubcategories.any((s) => s.data['parent_subcategory'] == secondLevelSub.id);
+            final hasAttributeList2 = secondLevelSub.data['attribute_list'] != null && 
+                                     secondLevelSub.data['attribute_list'].toString().isNotEmpty;
+            
+            print('DEBUG _matchSubcategoryNamesToIds: Found second level subcategory "${secondLevelSub.data['name']}" with ID ${secondLevelSub.id}');
+            
+            // If child has attribute_list and there's a value, store the VALUE
+            if (hasAttributeList2 && parts.length > 2) {
+              _selectedSubcategoryIds.add(parts[2]);
+              _selectedAttributeValue = parts[2];
+              print('DEBUG _matchSubcategoryNamesToIds: Set attribute value at level 1: "${parts[2]}"');
+            } else if (hasAttributeList2 && parts.length == 2) {
+              // Child has attribute_list but no value saved (old data format)
+              _selectedSubcategoryIds.add(null);
+              print('DEBUG _matchSubcategoryNamesToIds: Child subcategory has attribute_list but no value saved - adding null placeholder');
+            } else if (!hasChildren2 && !hasAttributeList2 && parts.length > 2) {
+              // Dynamic text value at level 2
+              _selectedSubcategoryIds.add(secondLevelSub.id);
+              _subcategoryTextValues[2] = parts[2];
+              print('DEBUG _matchSubcategoryNamesToIds: Set dynamic text value at level 2: "${parts[2]}"');
+            } else {
+              // Regular child subcategory
+              _selectedSubcategoryIds.add(secondLevelSub.id);
+              print('DEBUG _matchSubcategoryNamesToIds: Set subcategory ID at level 1: ${secondLevelSub.id}');
+            }
           }
         }
       }
-      
-      _updateSubcategoryText();
+    } else {
+      print('DEBUG _matchSubcategoryNamesToIds: Could not find first level subcategory "${parts[0]}"');
     }
   }
 
@@ -459,33 +556,31 @@ class _AddToolScreenState extends State<AddToolScreen> {
         _brands = brands;
         _suppliers = suppliers;
         
-        // Validate selected IDs after loading
-        if (widget.tool != null) {
-          // Check if selected brand exists
-          if (_selectedBrandId != null) {
-            final brandExists = brands.any((b) => b.id == _selectedBrandId);
-            if (!brandExists) {
-              // If preserving and brand was set, keep it even if not in filtered list
-              if (preserveSelections && preservedBrandId != null) {
-                print('DEBUG _loadBrandsAndSuppliers: Preserving brand $preservedBrandId even though not in filtered list');
-                _selectedBrandId = preservedBrandId;
-              } else {
-                _selectedBrandId = null;
-              }
+        // Validate that selected IDs exist in the filtered lists
+        if (_selectedBrandId != null && _selectedBrandId!.isNotEmpty) {
+          final brandExists = brands.any((b) => b.id == _selectedBrandId);
+          if (brandExists) {
+            final brand = brands.firstWhere((b) => b.id == _selectedBrandId);
+            print('DEBUG _loadBrandsAndSuppliers: Found brand ${brand.data['name']} for ID $_selectedBrandId');
+          } else {
+            print('DEBUG _loadBrandsAndSuppliers: Brand with ID $_selectedBrandId not found in filtered list');
+            // If not preserving selections, clear the ID
+            if (!preserveSelections || preservedBrandId == null) {
+              _selectedBrandId = null;
             }
           }
-          
-          // Check if selected supplier exists
-          if (_selectedSupplierId != null) {
-            final supplierExists = suppliers.any((s) => s.id == _selectedSupplierId);
-            if (!supplierExists) {
-              // If preserving and supplier was set, keep it even if not in filtered list
-              if (preserveSelections && preservedSupplierId != null) {
-                print('DEBUG _loadBrandsAndSuppliers: Preserving supplier $preservedSupplierId even though not in filtered list');
-                _selectedSupplierId = preservedSupplierId;
-              } else {
-                _selectedSupplierId = null;
-              }
+        }
+        
+        if (_selectedSupplierId != null && _selectedSupplierId!.isNotEmpty) {
+          final supplierExists = suppliers.any((s) => s.id == _selectedSupplierId);
+          if (supplierExists) {
+            final supplier = suppliers.firstWhere((s) => s.id == _selectedSupplierId);
+            print('DEBUG _loadBrandsAndSuppliers: Found supplier ${supplier.data['company_name']} for ID $_selectedSupplierId');
+          } else {
+            print('DEBUG _loadBrandsAndSuppliers: Supplier with ID $_selectedSupplierId not found in filtered list');
+            // If not preserving selections, clear the ID
+            if (!preserveSelections || preservedSupplierId == null) {
+              _selectedSupplierId = null;
             }
           }
         }
@@ -599,6 +694,11 @@ class _AddToolScreenState extends State<AddToolScreen> {
   }
   
   String _generateToolName() {
+    // Only auto-generate names for Cutting Tools category
+    if (_category != 'Cutting Tools') {
+      return '';
+    }
+    
     final diaIn = double.tryParse(_diameterInController.text);
     final flutes = int.tryParse(_flutesController.text);
     final fluteLen = double.tryParse(_fluteLengthController.text);
@@ -850,15 +950,41 @@ class _AddToolScreenState extends State<AddToolScreen> {
       s.data['category'] == _selectedCategoryId &&
       (s.data['parent_subcategory'] == null || s.data['parent_subcategory'] == '')
     ).toList();
+    
+    // Sort by sort_order to ensure consistent ordering
+    topLevel.sort((a, b) => (a.data['sort_order'] ?? 0).compareTo(b.data['sort_order'] ?? 0));
 
     if (topLevel.isEmpty) return widgets;
 
-    // Build selector for level 0
-    widgets.add(_buildSubcategorySelector(topLevel, 0));
+    // Check if we have multiple independent subcategories (all with attribute lists, no hierarchy)
+    final allHaveAttributeLists = topLevel.every((sub) {
+      final attrList = sub.data['attribute_list'];
+      return attrList != null && attrList.toString().isNotEmpty;
+    });
+    
+    if (allHaveAttributeLists && topLevel.length > 1) {
+      // Multiple independent subcategories with attribute lists
+      // Build a separate selector for each one (e.g., Filament Type + Filament Color)
+      for (int i = 0; i < topLevel.length; i++) {
+        if (i > 0) widgets.add(const SizedBox(height: 16));
+        // Each gets its own level in _selectedSubcategoryIds
+        widgets.add(_buildSubcategorySelector([topLevel[i]], i));
+      }
+    } else {
+      // Single subcategory OR hierarchical subcategories (choose one from multiple)
+      // Build selector for level 0
+      widgets.add(_buildSubcategorySelector(topLevel, 0));
+    }
 
-    // Build selectors for nested levels
+    // Build selectors for nested levels (children of hierarchical subcategories)
+    // Skip levels used by independent top-level subcategories
+    final startLevel = (allHaveAttributeLists && topLevel.length > 1) ? topLevel.length : 1;
+    
     for (int i = 0; i < _selectedSubcategoryIds.length; i++) {
       if (_selectedSubcategoryIds[i] == null) break;
+      
+      // Skip if this is an independent top-level subcategory
+      if (i < startLevel) continue;
 
       final children = _allSubcategories.where((s) =>
         s.data['parent_subcategory'] == _selectedSubcategoryIds[i]
@@ -871,27 +997,34 @@ class _AddToolScreenState extends State<AddToolScreen> {
     }
 
     // Check if deepest selected subcategory has attribute list OR needs dynamic dropdown
+    // Note: At this point, if a subcategory had an attribute_list, we already showed those values
+    // and the "selected ID" might actually be an attribute value string, not a subcategory ID
     if (_selectedSubcategoryIds.isNotEmpty) {
-      final deepestId = _selectedSubcategoryIds.last;
-      if (deepestId != null) {
+      final deepestValue = _selectedSubcategoryIds.last;
+      if (deepestValue != null) {
+        // Try to find if this is a subcategory ID
         try {
-          final deepest = _allSubcategories.firstWhere((s) => s.id == deepestId);
+          final deepest = _allSubcategories.firstWhere((s) => s.id == deepestValue);
           final attrListId = deepest.data['attribute_list'];
-          final hasChildren = _allSubcategories.any((s) => s.data['parent_subcategory'] == deepestId);
+          final hasChildren = _allSubcategories.any((s) => s.data['parent_subcategory'] == deepestValue);
           
-          if (attrListId != null && attrListId.toString().isNotEmpty) {
-            // Has attribute list - show attribute selector
+          // Only show additional attribute selector if:
+          // 1. The subcategory has an attribute_list AND no children (leaf node)
+          if (attrListId != null && attrListId.toString().isNotEmpty && !hasChildren) {
+            // Has attribute list and no children - show attribute selector
             widgets.add(const SizedBox(height: 16));
             widgets.add(_buildAttributeSelector(attrListId));
-          } else if (!hasChildren) {
+          } else if (!hasChildren && attrListId == null) {
             // No attribute list and no children - show dynamic dropdown for VALUES
             final label = deepest.data['custom_label'] ?? deepest.data['label'] ?? 'Value';
             widgets.add(const SizedBox(height: 16));
             widgets.add(_buildDynamicDropdownSelector([], _selectedSubcategoryIds.length, label));
           }
+          // If it has an attribute_list but no children, we already showed those values in the selector
         } catch (e) {
-          // Deepest subcategory not found, skip attribute list
-          print('Deepest subcategory not found: $e');
+          // deepestValue is not a subcategory ID - it's probably an attribute value string
+          // This means we already showed the attribute values in the selector, so don't add another one
+          print('DEBUG: Selected value "$deepestValue" is not a subcategory ID (this is expected when attribute values are shown)');
         }
       }
     }
@@ -905,7 +1038,14 @@ class _AddToolScreenState extends State<AddToolScreen> {
     String displayMode = 'dropdown'; // Default
     String fieldType = 'selection'; // Default
     
-    if (level > 0 && _selectedSubcategoryIds.length >= level) {
+    // For independent subcategories (single option in array), always use the subcategory's own settings
+    if (options.length == 1) {
+      final sub = options.first;
+      label = sub.data['label'] ?? 'Subcategory';
+      displayMode = sub.data['display_mode'] ?? 'dropdown';
+      fieldType = sub.data['field_type'] ?? 'selection';
+      print('DEBUG _buildSubcategorySelector: level=$level, using own settings: displayMode=$displayMode');
+    } else if (level > 0 && _selectedSubcategoryIds.length >= level) {
       final parentId = _selectedSubcategoryIds[level - 1];
       if (parentId != null) {
         try {
@@ -950,7 +1090,77 @@ class _AddToolScreenState extends State<AddToolScreen> {
     while (_selectedSubcategoryIds.length <= level) {
       _selectedSubcategoryIds.add(null);
     }
+    
+    // Check if ANY of the options have an attribute_list
+    // If so, we should show attribute values, not subcategory names
+    // BUT ONLY if the subcategory has no children
+    String? attributeListId;
+    if (options.isNotEmpty) {
+      final firstOption = options.first;
+      attributeListId = firstOption.data['attribute_list'];
+      
+      // Check if this subcategory has children
+      final hasChildren = _allSubcategories.any((s) => s.data['parent_subcategory'] == firstOption.id);
+      
+      // If this subcategory level has an attribute list AND no children, show attribute values
+      if (attributeListId != null && attributeListId.toString().isNotEmpty && !hasChildren) {
+        return FutureBuilder<Map<String, dynamic>>(
+          future: _loadAttributeListAndValues(attributeListId),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  labelText: label,
+                  border: const OutlineInputBorder(),
+                ),
+                items: const [],
+                onChanged: null,
+              );
+            }
+            
+            final attrData = snapshot.data!;
+            final values = attrData['values'] as List<dynamic>;
+            final displayMode = attrData['display_mode'] as String;
+            
+            // If display mode is buttons, use button selector instead
+            if (displayMode == 'buttons') {
+              return _buildButtonSelectorForAttributeValues(values, level, label);
+            }
+            
+            return DropdownButtonFormField<String>(
+              value: _selectedSubcategoryIds[level],
+              decoration: InputDecoration(
+                labelText: label,
+                border: const OutlineInputBorder(),
+              ),
+              items: values.map<DropdownMenuItem<String>>((valueRecord) {
+                return DropdownMenuItem<String>(
+                  value: valueRecord.data['value'],
+                  child: Text(valueRecord.data['value']),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedSubcategoryIds[level] = value;
+                  // When a value is selected, store it (it's the actual value, not an ID)
+                  _selectedAttributeValue = value;
+                  
+                  // Clear selections beyond this level
+                  if (level < _selectedSubcategoryIds.length - 1) {
+                    _selectedSubcategoryIds.removeRange(level + 1, _selectedSubcategoryIds.length);
+                  }
+                  
+                  _updateSubcategoryText();
+                  _updateToolName();
+                });
+              },
+            );
+          },
+        );
+      }
+    }
 
+    // Original behavior: show subcategory options
     return DropdownButtonFormField<String>(
       value: _selectedSubcategoryIds[level],
       decoration: InputDecoration(
@@ -981,7 +1191,44 @@ class _AddToolScreenState extends State<AddToolScreen> {
     while (_selectedSubcategoryIds.length <= level) {
       _selectedSubcategoryIds.add(null);
     }
+    
+    // Check if ANY of the options have an attribute_list
+    // If so, we should show attribute values, not subcategory names
+    // BUT ONLY if the subcategory has no children
+    String? attributeListId;
+    if (options.isNotEmpty) {
+      final firstOption = options.first;
+      attributeListId = firstOption.data['attribute_list'];
+      
+      // Check if this subcategory has children
+      final hasChildren = _allSubcategories.any((s) => s.data['parent_subcategory'] == firstOption.id);
+      
+      // If this subcategory level has an attribute list AND no children, show attribute values as buttons
+      if (attributeListId != null && attributeListId.toString().isNotEmpty && !hasChildren) {
+        return FutureBuilder<Map<String, dynamic>>(
+          future: _loadAttributeListAndValues(attributeListId),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
+                  const CircularProgressIndicator(),
+                ],
+              );
+            }
+            
+            final attrData = snapshot.data!;
+            final values = attrData['values'] as List<dynamic>;
+            
+            return _buildButtonSelectorForAttributeValues(values, level, label);
+          },
+        );
+      }
+    }
 
+    // Original behavior: show subcategory options as buttons
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1008,6 +1255,52 @@ class _AddToolScreenState extends State<AddToolScreen> {
                 foregroundColor: isSelected ? Colors.white : Colors.black,
               ),
               child: Text(sub.data['name']),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // NEW: Build button selector for attribute values (when subcategory has attribute_list)
+  Widget _buildButtonSelectorForAttributeValues(List<dynamic> values, int level, String label) {
+    // Ensure _selectedSubcategoryIds has enough slots
+    while (_selectedSubcategoryIds.length <= level) {
+      _selectedSubcategoryIds.add(null);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: values.map((valueRecord) {
+            final value = valueRecord.data['value'];
+            final isSelected = _selectedSubcategoryIds[level] == value;
+            return ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _selectedSubcategoryIds[level] = value;
+                  // When a value is selected, store it (it's the actual value, not an ID)
+                  _selectedAttributeValue = value;
+                  
+                  // Clear selections beyond this level
+                  if (level < _selectedSubcategoryIds.length - 1) {
+                    _selectedSubcategoryIds.removeRange(level + 1, _selectedSubcategoryIds.length);
+                  }
+                  
+                  _updateSubcategoryText();
+                  _updateToolName();
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isSelected ? Colors.blue : Colors.grey[300],
+                foregroundColor: isSelected ? Colors.white : Colors.black,
+              ),
+              child: Text(value),
             );
           }).toList(),
         ),
@@ -1263,14 +1556,17 @@ class _AddToolScreenState extends State<AddToolScreen> {
     final subcategoryNames = <String>[];
     
     for (int i = 0; i < _selectedSubcategoryIds.length; i++) {
-      final id = _selectedSubcategoryIds[i];
-      if (id != null) {
+      final idOrValue = _selectedSubcategoryIds[i];
+      if (idOrValue != null) {
         try {
-          final sub = _allSubcategories.firstWhere((s) => s.id == id);
+          // Try to find it as a subcategory ID
+          final sub = _allSubcategories.firstWhere((s) => s.id == idOrValue);
           subcategoryNames.add(sub.data['name']);
         } catch (e) {
-          // Subcategory not found, skip it
-          print('Subcategory with id $id not found: $e');
+          // Not a subcategory ID - it's an attribute value (like "PLA" or "Black")
+          // Just add it directly as a string
+          subcategoryNames.add(idOrValue);
+          print('DEBUG _updateSubcategoryText: "$idOrValue" is an attribute value, not a subcategory ID');
         }
       }
     }
@@ -1292,6 +1588,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
     _subcategory = subcategoryNames.isNotEmpty ? subcategoryNames[0] : null;
     _subSubcategory = subcategoryNames.length > 1 ? subcategoryNames[1] : null;
     _subcategoryText = subcategoryNames.join(' > ');
+    
+    print('DEBUG _updateSubcategoryText: Built subcategoryText = "$_subcategoryText"');
     
     // Clear corner radius field if not CR type (prevents stale CR values in tool name)
     if (_subSubcategory != 'CR' && _cornerRadController.text.isNotEmpty) {
@@ -1317,38 +1615,24 @@ class _AddToolScreenState extends State<AddToolScreen> {
 
         final pbService = PocketBaseService();
         
-        // Build subcategory strings from selected IDs
-        String subcategoryStr = '';
+        // Use the subcategory text that was already built by _updateSubcategoryText()
+        // This handles both hierarchical subcategories and independent subcategories with attribute lists
+        String subcategoryStr = _subcategoryText;
         String subSubcategoryStr = '';
-        if (_selectedSubcategoryIds.isNotEmpty) {
-          try {
-            final firstSub = _allSubcategories.firstWhere(
-              (s) => s.id == _selectedSubcategoryIds[0],
-            );
-            subcategoryStr = firstSub.data['name'];
-            
-            if (_selectedSubcategoryIds.length > 1) {
-              try {
-                final secondSub = _allSubcategories.firstWhere(
-                  (s) => s.id == _selectedSubcategoryIds[1],
-                );
-                subSubcategoryStr = secondSub.data['name'];
-              } catch (e) {
-                // Second subcategory not found
-                print('Second subcategory not found: $e');
-              }
-            }
-          } catch (e) {
-            // First subcategory not found
-            print('First subcategory not found: $e');
-          }
+        
+        // For backward compatibility with hierarchical subcategories, set subSubcategoryStr
+        if (_subSubcategory != null && _subSubcategory!.isNotEmpty) {
+          subSubcategoryStr = _subSubcategory!;
         }
+        
+        print('DEBUG _saveTool: subcategoryStr = "$subcategoryStr"');
+        print('DEBUG _saveTool: subSubcategoryStr = "$subSubcategoryStr"');
         
         final body = {
           'tool_name': _toolNameController.text,
           'category': _category,
-          'subcategory': subcategoryStr.isNotEmpty ? subcategoryStr : (_subcategory ?? ''),
-          'sub_subcategory': subSubcategoryStr.isNotEmpty ? subSubcategoryStr : (_subSubcategory ?? ''),
+          'subcategory': subcategoryStr,
+          'sub_subcategory': subSubcategoryStr,
           'attribute_value': _selectedAttributeValue,
           'model_number': _modelNumberController.text.isEmpty 
               ? null 
@@ -1462,6 +1746,19 @@ class _AddToolScreenState extends State<AddToolScreen> {
   
   @override
   Widget build(BuildContext context) {
+    // Show loading indicator while initializing
+    if (!_isInitialized) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(_isEditMode ? 'Edit Tool' : widget.isDuplicate ? 'Duplicate Tool' : 'Add Tool'),
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+    
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditMode ? 'Edit Tool' : widget.isDuplicate ? 'Duplicate Tool' : 'Add Tool'),
