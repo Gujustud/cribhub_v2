@@ -7,6 +7,7 @@ import 'pocketbase_service.dart';
 import 'models.dart';
 import 'add_inventory_dialog.dart';
 import 'app_drawer.dart';
+import 'inventory_screen.dart';
 import 'package:intl/intl.dart'; // For date formatting in history
 
 class AddToolScreen extends StatefulWidget {
@@ -383,7 +384,6 @@ class _AddToolScreenState extends State<AddToolScreen> {
               ),
               const SizedBox(height: 12),
               _buildPreviewField('Diameter (in)', data['diameter_in']),
-              _buildPreviewField('Diameter (mm)', data['diameter_mm']),
               _buildPreviewField('Flutes', data['flutes']),
               _buildPreviewField('Flute Length', data['flute_length']),
               _buildPreviewField('Overall Length', data['overall_length']),
@@ -411,6 +411,11 @@ class _AddToolScreenState extends State<AddToolScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
             child: const Text('Import'),
           ),
         ],
@@ -452,10 +457,10 @@ class _AddToolScreenState extends State<AddToolScreen> {
     setState(() {
       // Update numeric fields
       if (data['diameter_in'] != null) {
-        _diameterInController.text = data['diameter_in'].toString();
-      }
-      if (data['diameter_mm'] != null) {
-        _diameterMmController.text = data['diameter_mm'].toString();
+        final diaIn = data['diameter_in'];
+        _diameterInController.text = diaIn.toString();
+        // Calculate mm from inches (don't trust extracted mm values)
+        _diameterMmController.text = (diaIn * 25.4).toStringAsFixed(2);
       }
       if (data['flutes'] != null) {
         _flutesController.text = data['flutes'].toString();
@@ -566,6 +571,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: isSelected ? Colors.blue : Colors.grey[300],
                 foregroundColor: isSelected ? Colors.white : Colors.black,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ),
               child: Text(category.data['name']),
             );
@@ -1018,30 +1026,24 @@ class _AddToolScreenState extends State<AddToolScreen> {
       return '';
     }
     
-    String diaStr = diaIn.toString();
+    String diaStr = diaIn.toStringAsFixed(3);  // Max 3 decimals
     if (diaIn < 1 && diaStr.startsWith('0.')) {
       diaStr = diaStr.substring(1);
     }
     
-    String flStr;
-    if (fluteLen < 1) {
-      flStr = fluteLen.toString();
-      if (flStr.startsWith('0.')) {
-        flStr = flStr.substring(1);
-      }
-    } else {
-      if (fluteLen % 1 == 0) {
-        flStr = fluteLen.toStringAsFixed(1);
-      } else {
-        flStr = fluteLen.toString();
-      }
+    // Truncate flute length to 3 decimals (don't round)
+    double truncated = (fluteLen * 1000).floorToDouble() / 1000;
+    String flStr = truncated.toStringAsFixed(3);
+    // Remove leading zero if less than 1
+    if (flStr.startsWith('0.')) {
+      flStr = flStr.substring(1);
     }
     
     String name = '${diaStr}_${flutes}F_${flStr}FL';
     
     // Only include corner radius if the subcategory is CR
     if (cornerRad != null && cornerRad > 0 && _subSubcategory == 'CR') {
-      String crStr = cornerRad.toString();
+      String crStr = cornerRad.toStringAsFixed(3);  // Max 3 decimals
       if (cornerRad < 1 && crStr.startsWith('0.')) {
         crStr = crStr.substring(1);
       }
@@ -1050,7 +1052,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
     
     // Only include neck radius if there's a value (independent of type)
     if (neck != null && neck > 0) {
-      String neckStr = neck.toString();
+      String neckStr = neck.toStringAsFixed(3);  // Max 3 decimals
       if (neck < 1 && neckStr.startsWith('0.')) {
         neckStr = neckStr.substring(1);
       }
@@ -1562,6 +1564,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: isSelected ? Colors.blue : Colors.grey[300],
                 foregroundColor: isSelected ? Colors.white : Colors.black,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ),
               child: Text(sub.data['name']),
             );
@@ -1608,6 +1613,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: isSelected ? Colors.blue : Colors.grey[300],
                 foregroundColor: isSelected ? Colors.white : Colors.black,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ),
               child: Text(value),
             );
@@ -1804,6 +1812,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isSelected ? Colors.blue : Colors.grey[300],
                       foregroundColor: isSelected ? Colors.white : Colors.black,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
                     child: Text(value.data['value']),
                   );
@@ -2035,8 +2046,15 @@ class _AddToolScreenState extends State<AddToolScreen> {
             ),
           );
           
-          // Pop back to tool list with refresh indicator
-          Navigator.pop(context, true);
+          // Navigate back to inventory screen with the selected category filter
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => InventoryScreen(
+                categoryFilter: _category,
+              ),
+            ),
+          );
         }
       } catch (e) {
         if (context.mounted) Navigator.pop(context);
@@ -2091,6 +2109,15 @@ class _AddToolScreenState extends State<AddToolScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // CATEGORY - Dynamic (Dropdown or Buttons based on setting)
+            _buildCategorySelector(),
+            const SizedBox(height: 16),
+            
+            // Dynamic Cascading Subcategories
+            ..._buildSubcategorySelectors(),
+            
+            if (_selectedCategoryId != null) const SizedBox(height: 16),
+            
                   // Tool Name
               TextFormField(
                 controller: _toolNameController,
@@ -2150,22 +2177,23 @@ class _AddToolScreenState extends State<AddToolScreen> {
                 ),
                 if (_enableToolImport) ...[
                   const SizedBox(width: 8),
-                  SizedBox(
-                    height: 56,
-                    child: ElevatedButton.icon(
-                      onPressed: _isImporting ? null : _importToolSpecs,
-                      icon: _isImporting
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.cloud_download),
-                      label: const Text('Import'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
+                  ElevatedButton.icon(
+                    onPressed: _isImporting ? null : _importToolSpecs,
+                    icon: _isImporting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.cloud_download, size: 18),
+                    label: const Text('Import'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
                       ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
                   ),
                 ],
@@ -2298,15 +2326,6 @@ class _AddToolScreenState extends State<AddToolScreen> {
             ),
             const SizedBox(height: 16),
             
-            // CATEGORY - Dynamic (Dropdown or Buttons based on setting)
-            _buildCategorySelector(),
-            const SizedBox(height: 16),
-            
-            // Dynamic Cascading Subcategories
-            ..._buildSubcategorySelectors(),
-            
-            const SizedBox(height: 16),
-            
             // Hardcoded Fields - Only show for Cutting Tools category
             if (_selectedCategoryId == CUTTING_TOOLS_CATEGORY_ID) ...[
               // Diameter row
@@ -2426,6 +2445,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
                         padding: const EdgeInsets.all(16),
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
                       child: Text(
                         _isEditMode ? 'UPDATE TOOL' : 'SAVE TOOL',
@@ -2471,6 +2493,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
                       label: const Text('Upload Photo'),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.all(12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -2482,6 +2507,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
                       label: const Text('Extract from URL'),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.all(12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -3257,7 +3285,12 @@ class InventoryLocationTag extends StatelessWidget {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
             child: const Text('Remove'),
           ),
         ],
@@ -3460,6 +3493,11 @@ class InventoryLocationTag extends StatelessWidget {
                   );
                 }
               },
+              style: ElevatedButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
               child: const Text('Transfer'),
             ),
           ],

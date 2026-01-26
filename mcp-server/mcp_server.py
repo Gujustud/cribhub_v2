@@ -49,6 +49,86 @@ async def fetch_webpage(url: str) -> str:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch webpage: {str(e)}")
 
+async def extract_deboer_specs(model_number: str) -> Dict[str, Any]:
+    """Extract specs from DeBoer Tool API (direct JSON, no AI needed!)"""
+    try:
+        api_url = f"https://deboertool.com/api/products/{model_number}"
+        print(f"🔍 Fetching DeBoer API: {api_url}")
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(api_url)
+            response.raise_for_status()
+            data = response.json()
+        
+        print(f"✅ Got DeBoer API response")
+        
+        # The response has structure: { "data": { "spec": {...} }, "user": {...} }
+        # We need to get the product data from inside "data"
+        product_data = data.get('data', {})
+        
+        # DEBUG: Print the structure
+        print(f"🔍 DEBUG - Product data keys: {list(product_data.keys())[:10]}")
+        
+        # Extract spec object from product data
+        spec = product_data.get('spec', {})
+        
+        # Map DeBoer fields to our standard fields
+        specs = {
+            'diameter_in': None,
+            'diameter_mm': None,
+            'flutes': None,
+            'flute_length': None,
+            'overall_length': None,
+            'corner_rad': None,
+            'shank_diameter': None,
+            'neck': None,
+            'coating': None,
+            'material': None,
+        }
+        
+        # Cutting diameter
+        if 'linear:cutting-diameter' in spec:
+            specs['diameter_in'] = spec['linear:cutting-diameter'].get('value')
+            specs['diameter_mm'] = spec['linear:cutting-diameter'].get('valueMm')
+        
+        # Flutes
+        if 'integer:flutes' in spec:
+            specs['flutes'] = spec['integer:flutes'].get('value')
+        
+        # Flute length (cutting length)
+        if 'linear:cutting-length' in spec:
+            specs['flute_length'] = spec['linear:cutting-length'].get('value')
+        
+        # Overall length
+        if 'linear:overall-length' in spec:
+            specs['overall_length'] = spec['linear:overall-length'].get('value')
+        
+        # Shank diameter
+        if 'linear:shank-diameter' in spec:
+            specs['shank_diameter'] = spec['linear:shank-diameter'].get('value')
+        
+        # Corner radius (DeBoer calls it "radius-size")
+        if 'linear:radius-size' in spec:
+            specs['corner_rad'] = spec['linear:radius-size'].get('value')
+        elif 'linear:corner-radius' in spec:
+            specs['corner_rad'] = spec['linear:corner-radius'].get('value')
+        
+        # Coating (if they have it)
+        if 'string:coating' in spec:
+            specs['coating'] = spec['string:coating'].get('value')
+        
+        # Material (if they have it)
+        if 'string:material' in spec:
+            specs['material'] = spec['string:material'].get('value')
+        
+        print(f"✅ Extracted {sum(1 for v in specs.values() if v is not None)} fields from DeBoer API")
+        return specs
+        
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=500, detail=f"DeBoer API error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error parsing DeBoer data: {str(e)}")
+
 async def extract_specs_with_ollama(html_content: str, brand: str) -> Dict[str, Any]:
     """Use Ollama (Qwen2.5) to extract tool specifications from HTML"""
     
@@ -82,40 +162,52 @@ async def extract_specs_with_ollama(html_content: str, brand: str) -> Dict[str, 
     prompt = f"""You are extracting cutting tool specifications from a {brand} webpage.
 
 CRITICAL LABEL MAPPINGS (extract the NUMBER after these labels):
-- "Cutter Diameter" → diameter_in (this is the main cutting diameter)
-- "Diameter" → diameter_in (if no "Cutter Diameter" found)
-- "Length of Cut" → flute_length (this is the cutting length)
-- "Flute Length" → flute_length (alternate label)
+- "Cutter Diameter" or "Flute Diameter" → diameter_in (this is the main cutting diameter, often VERY SMALL like 0.0080" or 0.0620")
+- "Diameter" → diameter_in (if no "Cutter Diameter" or "Flute Diameter" found)
+- "Length of Cut" or "Flute Length" or "Flutes Length" → flute_length (this is the cutting length, often small like 0.0240" or 0.0930")
 - "Number of Flutes" or "Flutes" → flutes
 - "Overall Length" or "OAL" → overall_length
 - "Corner Radius" or "Corner Rad" → corner_rad
 - "Shank Diameter" → shank_diameter
-- "Neck Diameter" or "Neck" → neck
+- "Neck Diameter" or "Neck" or "Overall Reach" → neck (the reach or neck dimension)
 - "Coating" → coating
 - "Material" → material
 
-CONVERSION EXAMPLES (including very small decimals):
-Input: "Cutter Diameter: 0.0080" (.2 mm)"  → diameter_in: 0.0080, diameter_mm: 0.2
-Input: "Cutter Diameter: 1.5 inch"         → diameter_in: 1.5
-Input: "Diameter: 1/2""                    → diameter_in: 0.5
-Input: "Diameter: 3/4 in"                  → diameter_in: 0.75
-Input: "Length of Cut: 0.0240""            → flute_length: 0.0240
-Input: "Length of Cut: 0.75"               → flute_length: 0.75
-Input: "Number of Flutes: 8"               → flutes: 8
-Input: "Flutes: 4"                         → flutes: 4
-Input: "Overall Length: 1.5000" (1-1/2)"   → overall_length: 1.5
-Input: "Overall Length: 24 in"             → overall_length: 24.0
-Input: "Shank Diameter: 0.1250" (1/8)"     → shank_diameter: 0.125
-Input: "Corner Radius: 0.5""               → corner_rad: 0.5
-Input: "Coating: UN"                       → coating: "UN"
-Input: "Material: HSS"                     → material: "HSS"
+CONVERSION EXAMPLES (PAY SPECIAL ATTENTION TO SMALL DECIMALS):
+Input: "Cutter Diameter: 0.0080" (.2 mm)"       → diameter_in: 0.0080, diameter_mm: 0.2
+Input: "Flute Diameter: 0.1875"                → diameter_in: 0.1875
+Input: "Cutter Diameter: 0.0620" (1/16)"       → diameter_in: 0.0620
+Input: "Cutter Diameter 0.0620" (1/16)"        → diameter_in: 0.0620
+Input: "Cutter Diameter: 1.5 inch"             → diameter_in: 1.5
+Input: "Diameter: 1/2""                        → diameter_in: 0.5
+Input: "Diameter: 1/16 in"                     → diameter_in: 0.0625
+Input: "Diameter: 3/32""                       → diameter_in: 0.09375
+Input: "Length of Cut: 0.0240""                → flute_length: 0.0240
+Input: "Length of Cut: 0.0930" (3/32)"         → flute_length: 0.0930
+Input: "Length of Cut 0.0930" (3/32)"          → flute_length: 0.0930
+Input: "Flutes Length: 0.5625"                 → flute_length: 0.5625
+Input: "Length of Cut: 0.75"                   → flute_length: 0.75
+Input: "Number of Flutes: 8"                   → flutes: 8
+Input: "Flutes: 3"                             → flutes: 3
+Input: "Overall Length: 1.5000" (1-1/2)"       → overall_length: 1.5
+Input: "Overall Length: 2.5000" (2-1/2)"       → overall_length: 2.5
+Input: "Overall Length: 24 in"                 → overall_length: 24.0
+Input: "Shank Diameter: 0.1250" (1/8)"         → shank_diameter: 0.125
+Input: "Overall Reach: 0.1400" (9/64)"        → neck: 0.1400
+Input: "Neck Diameter: 0.25"                  → neck: 0.25
+Input: "Corner Radius: 0.5""                   → corner_rad: 0.5
+Input: "Coating: UN"                           → coating: "UN"
+Input: "Coating: MAYURA"                       → coating: "MAYURA"
+Input: "Material: Carbide"                     → material: "Carbide"
 
 IMPORTANT RULES:
-1. Extract EXACT decimal values including very small ones like 0.0080 or 0.0240
-2. Convert fractions to decimals: 1/2=0.5, 1/4=0.25, 3/4=0.75, 1/8=0.125, 3/8=0.375, 5/8=0.625, 7/8=0.875
-3. Remove all units (", in, mm, inch) from numbers but keep the number itself
-4. Use null if value not found (not "Not found" or empty string)
-5. Return ONLY valid JSON, no explanation
+1. EXTRACT EXACT DECIMAL VALUES including very small ones like 0.0080, 0.0240, 0.0620, 0.0930
+2. The number comes RIGHT AFTER the label, before any parentheses or units
+3. Example: "Cutter Diameter: 0.0620" (1/16)" → extract 0.0620, ignore (1/16)
+4. Convert standalone fractions to decimals: 1/2=0.5, 1/4=0.25, 3/4=0.75, 1/8=0.125, 1/16=0.0625, 3/32=0.09375
+5. Remove all units (", in, mm, inch) from numbers but keep the number itself
+6. Use null if value not found (not "Not found" or empty string)
+7. Return ONLY valid JSON, no explanation
 
 Return JSON with these exact fields:
 {{
@@ -241,7 +333,33 @@ async def extract_tool_specs(request: ToolImportRequest):
         )
     
     try:
-        # Fetch the webpage
+        # Check if this is DeBoer Tool - use their API directly!
+        if 'deboertool.com' in url.lower():
+            print(f"🎯 Detected DeBoer Tool - using API extraction")
+            
+            # Extract model number from URL
+            # URL format: https://deboertool.com/app/products/110-0156-4AR10
+            import re
+            match = re.search(r'/products/([^/]+)$', url)
+            if not match:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Could not extract model number from DeBoer URL"
+                )
+            
+            model_number = match.group(1)
+            print(f"📦 Model number: {model_number}")
+            
+            # Use DeBoer API (no AI needed!)
+            specs = await extract_deboer_specs(model_number)
+            
+            return ToolSpecsResponse(
+                success=True,
+                data=specs,
+                source_url=url
+            )
+        
+        # For other brands (Harvey Tool, etc) - use HTML + AI extraction
         print(f"🔍 Fetching URL: {url}")
         html_content = await fetch_webpage(url)
         print(f"✅ Fetched {len(html_content)} characters of HTML")

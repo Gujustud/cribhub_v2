@@ -480,13 +480,18 @@ class ToolCard extends StatelessWidget {
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      tool.category,
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500),
-                    ),
                     if (tool.subcategory != null && tool.subcategory!.isNotEmpty) ...[
+                      Text(
+                        tool.subcategory!,
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                    if (tool.modelNumber != null && tool.modelNumber!.isNotEmpty) ...[
                       const SizedBox(height: 2),
-                      Text(tool.subcategory!, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                      Text(
+                        'Model: ${tool.modelNumber}',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                      ),
                     ],
                     if (showToolDetails && tool.displaySpecs.isNotEmpty) ...[
                       const SizedBox(height: 8),
