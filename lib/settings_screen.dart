@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'pocketbase_service.dart';
 import 'app_drawer.dart';
 import 'category_management_screen.dart';
+import 'tool_import_config_screen.dart'; // NEW
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,8 +14,9 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoading = true;
   bool _showAllInventoryInMenu = true;
-  bool _showToolDetailsInList = true; // NEW
-  bool _useCategoryButtons = false; // NEW: Show category as buttons instead of dropdown
+  bool _showToolDetailsInList = true;
+  bool _useCategoryButtons = false;
+  bool _enableToolImport = false; // NEW
   String? _settingsId;
 
   @override
@@ -34,8 +36,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {
         _settingsId = settings.id;
         _showAllInventoryInMenu = settings.data['show_all_inventory_in_menu'] ?? true;
-        _showToolDetailsInList = settings.data['show_tool_details_in_list'] ?? true; // NEW
-        _useCategoryButtons = settings.data['use_category_buttons'] ?? false; // NEW
+        _showToolDetailsInList = settings.data['show_tool_details_in_list'] ?? true;
+        _useCategoryButtons = settings.data['use_category_buttons'] ?? false;
+        _enableToolImport = settings.data['enable_tool_import'] ?? false; // NEW
         _isLoading = false;
       });
     } catch (e) {
@@ -97,7 +100,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await pbService.updateAppSettings(
         settingsId: _settingsId!,
         showAllInventoryInMenu: _showAllInventoryInMenu,
-        showToolDetailsInList: value, // NEW
+        showToolDetailsInList: value,
       );
 
       setState(() {
@@ -135,7 +138,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         settingsId: _settingsId!,
         showAllInventoryInMenu: _showAllInventoryInMenu,
         showToolDetailsInList: _showToolDetailsInList,
-        useCategoryButtons: value, // NEW
+        useCategoryButtons: value,
       );
 
       setState(() {
@@ -148,6 +151,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
             content: Text(value 
               ? 'Category selection will show as buttons' 
               : 'Category selection will show as dropdown'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating setting: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // NEW: Update tool import setting
+  Future<void> _updateEnableToolImport(bool value) async {
+    if (_settingsId == null) return;
+
+    try {
+      final pbService = PocketBaseService();
+      await pbService.updateAppSettings(
+        settingsId: _settingsId!,
+        showAllInventoryInMenu: _showAllInventoryInMenu,
+        showToolDetailsInList: _showToolDetailsInList,
+        useCategoryButtons: _useCategoryButtons,
+        enableToolImport: value,
+      );
+
+      setState(() {
+        _enableToolImport = value;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(value 
+              ? 'Auto tool import enabled' 
+              : 'Auto tool import disabled'),
             backgroundColor: Colors.green,
           ),
         );
@@ -224,7 +267,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 24),
                 
-                // Future sections can go here
+                // Display Preferences Section
                 const Text(
                   'DISPLAY PREFERENCES',
                   style: TextStyle(
@@ -266,6 +309,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 24),
                 
+                // Data Management Section
                 const Text(
                   'DATA MANAGEMENT',
                   style: TextStyle(
@@ -279,6 +323,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Card(
                   child: Column(
                     children: [
+                      // NEW: Auto Tool Import
+                      SwitchListTile(
+                        secondary: const Icon(Icons.cloud_download, color: Colors.blue),
+                        title: const Text('Enable Auto Tool Import'),
+                        subtitle: const Text('Import tool specs from vendor websites'),
+                        value: _enableToolImport,
+                        onChanged: _updateEnableToolImport,
+                      ),
+                      // NEW: Show config option only when enabled
+                      if (_enableToolImport) ...[
+                        const Divider(height: 1),
+                        ListTile(
+                          leading: const Icon(Icons.settings, color: Colors.blue),
+                          title: const Text('Configure Tool Import'),
+                          subtitle: const Text('Manage vendors and import settings'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const ToolImportConfigScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                      const Divider(height: 1),
                       ListTile(
                         leading: const Icon(Icons.backup, color: Colors.grey),
                         title: const Text('Backup & Restore'),

@@ -84,6 +84,10 @@ class _AddToolScreenState extends State<AddToolScreen> {
   // Display preferences
   bool _useCategoryButtons = false; // Load from settings
   
+  // Tool Import feature
+  bool _enableToolImport = false; // Load from settings
+  bool _isImporting = false; // Track import state
+  
   // Photo
   String? _photoUrl;
   Uint8List? _photoBytes;
@@ -168,15 +172,320 @@ class _AddToolScreenState extends State<AddToolScreen> {
       final settings = await pbService.getAppSettings();
       setState(() {
         _useCategoryButtons = settings.data['use_category_buttons'] ?? false;
+        _enableToolImport = settings.data['enable_tool_import'] ?? false; // NEW
       });
     } catch (e) {
       print('Error loading settings: $e');
       // Default to dropdown if can't load
       setState(() {
         _useCategoryButtons = false;
+        _enableToolImport = false; // NEW
       });
     }
   }
+  
+  // ============================================================================
+  // TOOL IMPORT METHODS
+  // ============================================================================
+  
+  Future<void> _importToolSpecs() async {
+    // Validate that we have the necessary info
+    if (_selectedBrandId == null || _selectedBrandId!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a brand first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final modelNumber = _modelNumberController.text.trim();
+    final url = _urlController.text.trim();
+
+    if (modelNumber.isEmpty && url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a model number or URL first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isImporting = true;
+    });
+
+    try {
+      final pbService = PocketBaseService();
+      
+      // Get brand info including scraping config
+      String? brandName;
+      String? urlPattern;
+      bool scraperEnabled = false;
+      
+      try {
+        final brand = _brands.firstWhere((b) => b.id == _selectedBrandId);
+        brandName = brand.data['name'];
+        urlPattern = brand.data['url_pattern'];
+        scraperEnabled = brand.data['scraper_enabled'] ?? false;
+      } catch (e) {
+        throw Exception('Could not find selected brand');
+      }
+      
+      // Ensure brandName is not null
+      if (brandName == null || brandName.isEmpty) {
+        throw Exception('Brand name is empty');
+      }
+      
+      // Check if scraping is enabled for this brand
+      if (!scraperEnabled && url.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Auto-import is not configured for $brandName.\n'
+                'Please enter a direct URL or configure scraping in Brand settings.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Check if URL pattern exists when using model number
+      if (url.isEmpty && (urlPattern == null || urlPattern.isEmpty)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'No URL pattern configured for $brandName.\n'
+                'Please enter a direct URL.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Call the import service
+      final result = await pbService.importToolSpecs(
+        brand: brandName,
+        urlPattern: urlPattern,
+        modelNumber: modelNumber.isNotEmpty ? modelNumber : null,
+        url: url.isNotEmpty ? url : null,
+      );
+
+      if (!mounted) return;
+
+      if (result?['success'] == true) {
+        final data = result!['data'] as Map<String, dynamic>;
+        final sourceUrl = result['source_url'] as String?;
+
+        // Show preview dialog
+        final confirmed = await _showImportPreviewDialog(data, sourceUrl);
+
+        if (confirmed == true) {
+          // Populate fields with imported data
+          _applyImportedData(data, sourceUrl);
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Tool specs imported successfully!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      } else {
+        final error = result?['error'] ?? 'Unknown error occurred';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Import failed: $error'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+        });
+      }
+    }
+  }
+
+  Future<bool?> _showImportPreviewDialog(
+    Map<String, dynamic> data,
+    String? sourceUrl,
+  ) async {
+    // Check if any existing fields would be overwritten
+    final hasExistingData = _diameterInController.text.isNotEmpty ||
+        _diameterMmController.text.isNotEmpty ||
+        _flutesController.text.isNotEmpty ||
+        _fluteLengthController.text.isNotEmpty ||
+        _cornerRadController.text.isNotEmpty ||
+        _neckController.text.isNotEmpty;
+
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Import Tool Specifications'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (hasExistingData) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.warning, color: Colors.orange),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'This will overwrite existing data',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              const Text(
+                'Imported Data:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 12),
+              _buildPreviewField('Diameter (in)', data['diameter_in']),
+              _buildPreviewField('Diameter (mm)', data['diameter_mm']),
+              _buildPreviewField('Flutes', data['flutes']),
+              _buildPreviewField('Flute Length', data['flute_length']),
+              _buildPreviewField('Overall Length', data['overall_length']),
+              _buildPreviewField('Corner Radius', data['corner_rad']),
+              _buildPreviewField('Shank Diameter', data['shank_diameter']),
+              _buildPreviewField('Neck', data['neck']),
+              _buildPreviewField('Coating', data['coating']),
+              _buildPreviewField('Material', data['material']),
+              if (sourceUrl != null) ...[
+                const SizedBox(height: 12),
+                const Divider(),
+                const SizedBox(height: 8),
+                Text(
+                  'Source: $sourceUrl',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreviewField(String label, dynamic value) {
+    final displayValue = value?.toString() ?? 'Not found';
+    final isEmpty = value == null;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              displayValue,
+              style: TextStyle(
+                color: isEmpty ? Colors.grey : Colors.black,
+                fontStyle: isEmpty ? FontStyle.italic : FontStyle.normal,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _applyImportedData(Map<String, dynamic> data, String? sourceUrl) {
+    setState(() {
+      // Update numeric fields
+      if (data['diameter_in'] != null) {
+        _diameterInController.text = data['diameter_in'].toString();
+      }
+      if (data['diameter_mm'] != null) {
+        _diameterMmController.text = data['diameter_mm'].toString();
+      }
+      if (data['flutes'] != null) {
+        _flutesController.text = data['flutes'].toString();
+      }
+      if (data['flute_length'] != null) {
+        _fluteLengthController.text = data['flute_length'].toString();
+      }
+      if (data['corner_rad'] != null) {
+        _cornerRadController.text = data['corner_rad'].toString();
+      }
+      if (data['neck'] != null) {
+        _neckController.text = data['neck'].toString();
+      }
+
+      // Update URL if source was provided and URL field is empty
+      if (sourceUrl != null && _urlController.text.isEmpty) {
+        _urlController.text = sourceUrl;
+      }
+
+      // Note: coating and material fields would need to be added to your form
+      // or stored in attribute_values if you want to capture them
+
+      // Trigger tool name update
+      _updateToolName();
+    });
+  }
+  
+  // ============================================================================
+  // END TOOL IMPORT METHODS
+  // ============================================================================
   
   Widget _buildCategorySelector() {
     if (_useCategoryButtons) {
@@ -978,7 +1287,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
 
     // Build selectors for nested levels (children of hierarchical subcategories)
     // Skip levels used by independent top-level subcategories
-    final startLevel = (allHaveAttributeLists && topLevel.length > 1) ? topLevel.length : 1;
+    final startLevel = (allHaveAttributeLists && topLevel.length > 1) ? topLevel.length : 0;
     
     for (int i = 0; i < _selectedSubcategoryIds.length; i++) {
       if (_selectedSubcategoryIds[i] == null) break;
@@ -1827,13 +2136,40 @@ class _AddToolScreenState extends State<AddToolScreen> {
                   ),
                   const SizedBox(height: 16),
             
-            // Model Number
-            TextFormField(
-              controller: _modelNumberController,
-              decoration: const InputDecoration(
-                labelText: 'Model Number (optional)',
-                border: OutlineInputBorder(),
-              ),
+            // Model Number with Import button
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _modelNumberController,
+                    decoration: const InputDecoration(
+                      labelText: 'Model Number (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                if (_enableToolImport) ...[
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 56,
+                    child: ElevatedButton.icon(
+                      onPressed: _isImporting ? null : _importToolSpecs,
+                      icon: _isImporting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.cloud_download),
+                      label: const Text('Import'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
             const SizedBox(height: 16),
             

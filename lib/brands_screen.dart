@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'pocketbase_service.dart';
-import 'app_drawer.dart';
 
 class BrandsScreen extends StatefulWidget {
   const BrandsScreen({super.key});
@@ -27,41 +26,12 @@ class _BrandsScreenState extends State<BrandsScreen> {
 
     try {
       final pbService = PocketBaseService();
-      final results = await Future.wait([
-        pbService.getBrands(),
-        pbService.getCategories(),
-      ]);
+      final brands = await pbService.getBrands();
+      final categories = await pbService.getCategories();
       
       setState(() {
-        _brands = results[0] as List<dynamic>;
-        _categories = results[1] as List<dynamic>;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading data: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _loadBrands() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final pbService = PocketBaseService();
-      final brands = await pbService.getBrands();
-      setState(() {
         _brands = brands;
+        _categories = categories;
         _isLoading = false;
       });
     } catch (e) {
@@ -79,249 +49,212 @@ class _BrandsScreenState extends State<BrandsScreen> {
     }
   }
 
-  void _showAddBrandDialog() {
-    final nameController = TextEditingController();
-    final selectedCategoryIds = <String>{};
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Add Brand'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Brand Name',
-                    border: OutlineInputBorder(),
-                  ),
-                  textCapitalization: TextCapitalization.words,
-                ),
-                if (_categories.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Used in Categories (leave unchecked to show for all):',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  ..._categories.map((category) {
-                    final isSelected = selectedCategoryIds.contains(category.id);
-                    return CheckboxListTile(
-                      title: Text(category.data['name']),
-                      value: isSelected,
-                      onChanged: (value) {
-                        setDialogState(() {
-                          if (value == true) {
-                            selectedCategoryIds.add(category.id);
-                          } else {
-                            selectedCategoryIds.remove(category.id);
-                          }
-                        });
-                      },
-                      contentPadding: EdgeInsets.zero,
-                    );
-                  }),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (nameController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter a brand name')),
-                  );
-                  return;
-                }
-
-                try {
-                  final pbService = PocketBaseService();
-                  await pbService.createBrand(
-                    nameController.text,
-                    categoryIds: selectedCategoryIds.isEmpty ? null : selectedCategoryIds.toList(),
-                  );
-
-                  Navigator.pop(context);
-                  _loadData();
-
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Brand "${nameController.text}" added!'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
-              },
-              child: const Text('Add'),
-            ),
-          ],
-        ),
-      ),
+  Future<void> _showAddEditBrandDialog({dynamic brand}) async {
+    final isEdit = brand != null;
+    final nameController = TextEditingController(
+      text: brand?.data['name'] ?? '',
     );
-  }
-
-  void _showEditBrandDialog(dynamic brand) {
-    final nameController = TextEditingController(text: brand.data['name']);
-    // Get current categories (handle both List and single value, and expanded objects)
-    final currentCategories = brand.data['categories'];
-    print('DEBUG _showEditBrandDialog: Brand ${brand.id} categories = $currentCategories (type: ${currentCategories?.runtimeType})');
-    final selectedCategoryIds = <String>{};
-    if (currentCategories != null) {
-      if (currentCategories is List) {
-        // Handle both expanded objects and IDs
-        for (var c in currentCategories) {
-          if (c is String) {
-            selectedCategoryIds.add(c);
-          } else if (c is Map && c['id'] != null) {
-            selectedCategoryIds.add(c['id']);
-          } else {
-            selectedCategoryIds.add(c.toString());
-          }
-        }
-      } else {
-        // Single value - PocketBase might be storing as single string instead of array
-        if (currentCategories is Map && currentCategories['id'] != null) {
-          selectedCategoryIds.add(currentCategories['id']);
-        } else {
-          // It's a string, add it directly
-          selectedCategoryIds.add(currentCategories.toString());
-        }
+    final urlPatternController = TextEditingController(
+      text: brand?.data['url_pattern'] ?? '',
+    );
+    final scraperNotesController = TextEditingController(
+      text: brand?.data['scraper_notes'] ?? '',
+    );
+    
+    bool scraperEnabled = brand?.data['scraper_enabled'] ?? false;
+    List<String> selectedCategoryIds = [];
+    
+    // Parse existing categories
+    if (brand != null) {
+      final existingCategories = brand.data['categories'];
+      if (existingCategories is List) {
+        selectedCategoryIds = existingCategories.map((c) => c.toString()).toList();
       }
     }
-    print('DEBUG _showEditBrandDialog: Parsed category IDs = $selectedCategoryIds');
 
-    showDialog(
+    final result = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Edit Brand'),
+          title: Text(isEdit ? 'Edit Brand' : 'Add Brand'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Brand Name
                 TextField(
                   controller: nameController,
                   decoration: const InputDecoration(
-                    labelText: 'Brand Name',
+                    labelText: 'Brand Name *',
+                    hintText: 'e.g., Harvey Tool',
                     border: OutlineInputBorder(),
                   ),
-                  textCapitalization: TextCapitalization.words,
+                  autofocus: !isEdit,
                 ),
-                if (_categories.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Used in Categories (leave unchecked to show for all):',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  ..._categories.map((category) {
-                    final isSelected = selectedCategoryIds.contains(category.id);
-                    return CheckboxListTile(
-                      title: Text(category.data['name']),
-                      value: isSelected,
-                      onChanged: (value) {
+                const SizedBox(height: 16),
+                
+                // Categories
+                const Text(
+                  'Categories (optional)',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _categories.map((category) {
+                    final categoryId = category.id;
+                    final categoryName = category.data['name'];
+                    final isSelected = selectedCategoryIds.contains(categoryId);
+                    
+                    return FilterChip(
+                      label: Text(categoryName),
+                      selected: isSelected,
+                      onSelected: (selected) {
                         setDialogState(() {
-                          if (value == true) {
-                            selectedCategoryIds.add(category.id);
+                          if (selected) {
+                            selectedCategoryIds.add(categoryId);
                           } else {
-                            selectedCategoryIds.remove(category.id);
+                            selectedCategoryIds.remove(categoryId);
                           }
                         });
                       },
-                      contentPadding: EdgeInsets.zero,
                     );
-                  }),
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                
+                // Scraper Configuration Section
+                const Divider(),
+                const SizedBox(height: 8),
+                const Text(
+                  'Auto-Import Configuration',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                
+                // Enable Auto-Import Toggle
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Enable Auto-Import'),
+                  subtitle: const Text('Allow importing tool specs from this brand'),
+                  value: scraperEnabled,
+                  onChanged: (value) {
+                    setDialogState(() {
+                      scraperEnabled = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 8),
+                
+                // URL Pattern (only show if enabled)
+                if (scraperEnabled) ...[
+                  TextField(
+                    controller: urlPatternController,
+                    decoration: const InputDecoration(
+                      labelText: 'URL Pattern *',
+                      hintText: 'https://example.com/tool/{model}',
+                      helperText: 'Use {model} where model number goes',
+                      helperMaxLines: 2,
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  TextField(
+                    controller: scraperNotesController,
+                    decoration: const InputDecoration(
+                      labelText: 'Notes (optional)',
+                      hintText: 'e.g., Model numbers must be numeric only',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                  ),
                 ],
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
               onPressed: () async {
-                if (nameController.text.isEmpty) {
+                if (nameController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter a brand name')),
+                    const SnackBar(content: Text('Brand name is required')),
                   );
                   return;
+                }
+                
+                if (scraperEnabled) {
+                  if (urlPatternController.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('URL pattern is required when auto-import is enabled')),
+                    );
+                    return;
+                  }
+                  if (!urlPatternController.text.contains('{model}')) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('URL pattern must contain {model} placeholder')),
+                    );
+                    return;
+                  }
                 }
 
                 try {
                   final pbService = PocketBaseService();
-                  print('DEBUG: Updating brand ${brand.id} with categories: ${selectedCategoryIds.toList()}');
-                  await pbService.updateBrand(
-                    brand.id,
-                    nameController.text,
-                    categoryIds: selectedCategoryIds.toList(),
-                  );
 
-                  Navigator.pop(context);
-                  // Reload data to get fresh brand with updated categories
-                  await _loadData();
-                  
-                  // Debug: Check if categories were saved
-                  try {
-                    final updatedBrand = _brands.firstWhere((b) => b.id == brand.id);
-                    print('DEBUG after save: Brand ${updatedBrand.id} categories = ${updatedBrand.data['categories']}');
-                  } catch (e) {
-                    print('DEBUG after save: Could not find updated brand');
-                  }
-
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Brand updated to "${nameController.text}"!'),
-                        backgroundColor: Colors.green,
-                      ),
+                  if (isEdit) {
+                    await pbService.updateBrand(
+                      brand.id,
+                      nameController.text.trim(),
+                      categoryIds: selectedCategoryIds.isEmpty ? [] : selectedCategoryIds,
+                      urlPattern: scraperEnabled ? urlPatternController.text.trim() : '',
+                      scraperEnabled: scraperEnabled,
+                      scraperNotes: scraperEnabled ? scraperNotesController.text.trim() : '',
+                    );
+                  } else {
+                    await pbService.createBrand(
+                      nameController.text.trim(),
+                      categoryIds: selectedCategoryIds.isEmpty ? [] : selectedCategoryIds,
+                      urlPattern: scraperEnabled ? urlPatternController.text.trim() : null,
+                      scraperEnabled: scraperEnabled,
+                      scraperNotes: scraperEnabled ? scraperNotesController.text.trim() : null,
                     );
                   }
+
+                  Navigator.pop(context, true);
                 } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
                 }
               },
-              child: const Text('Save'),
+              child: Text(isEdit ? 'Update' : 'Create'),
             ),
           ],
         ),
       ),
     );
+
+    if (result == true) {
+      _loadData();
+    }
   }
 
-  void _deleteBrand(dynamic brand) async {
+  Future<void> _deleteBrand(dynamic brand) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Brand'),
-        content: Text('Are you sure you want to delete "${brand.data['name']}"?'),
+        content: Text('Delete "${brand.data['name']}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -341,11 +274,10 @@ class _BrandsScreenState extends State<BrandsScreen> {
         final pbService = PocketBaseService();
         await pbService.deleteBrand(brand.id);
         _loadData();
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Brand "${brand.data['name']}" deleted'),
+            const SnackBar(
+              content: Text('Brand deleted'),
               backgroundColor: Colors.green,
             ),
           );
@@ -367,70 +299,129 @@ class _BrandsScreenState extends State<BrandsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Brands'),
+        title: const Text('Brand Management'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
       ),
-      drawer: const AppDrawer(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showAddEditBrandDialog(),
+        child: const Icon(Icons.add),
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: ElevatedButton.icon(
-                    onPressed: _showAddBrandDialog,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add Brand'),
+          : _brands.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.factory, size: 64, color: Colors.grey.shade400),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No brands yet',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Tap + to add a brand',
+                        style: TextStyle(color: Colors.grey.shade500),
+                      ),
+                    ],
                   ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: _brands.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No brands yet.\nClick "Add Brand" above to get started.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 16, color: Colors.grey),
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(8),
-                          itemCount: _brands.length,
-                          itemBuilder: (context, index) {
-                            final brand = _brands[index];
-                            return Card(
-                              child: ListTile(
-                                leading: const Icon(Icons.label, color: Colors.blue),
-                                title: Text(
-                                  brand.data['name'],
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _brands.length,
+                  itemBuilder: (context, index) {
+                    final brand = _brands[index];
+                    final name = brand.data['name'] ?? 'Unknown';
+                    final scraperEnabled = brand.data['scraper_enabled'] == true;
+                    final urlPattern = brand.data['url_pattern'] ?? '';
+                    
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.factory,
+                          color: scraperEnabled ? Colors.green : Colors.grey,
+                        ),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                name,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            if (scraperEnabled)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade100,
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit, color: Colors.blue),
-                                      onPressed: () => _showEditBrandDialog(brand),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete, color: Colors.red),
-                                      onPressed: () => _deleteBrand(brand),
-                                    ),
-                                  ],
+                                child: const Text(
+                                  'Auto-Import',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.green,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
-                            );
+                          ],
+                        ),
+                        subtitle: scraperEnabled && urlPattern.isNotEmpty
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  urlPattern,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontFamily: 'monospace',
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              )
+                            : null,
+                        trailing: PopupMenuButton(
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit, size: 20),
+                                  SizedBox(width: 8),
+                                  Text('Edit'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete, size: 20, color: Colors.red),
+                                  SizedBox(width: 8),
+                                  Text('Delete', style: TextStyle(color: Colors.red)),
+                                ],
+                              ),
+                            ),
+                          ],
+                          onSelected: (value) {
+                            if (value == 'edit') {
+                              _showAddEditBrandDialog(brand: brand);
+                            } else if (value == 'delete') {
+                              _deleteBrand(brand);
+                            }
                           },
                         ),
+                        onTap: () => _showAddEditBrandDialog(brand: brand),
+                      ),
+                    );
+                  },
                 ),
-              ],
-            ),
     );
   }
 }

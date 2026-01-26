@@ -1,4 +1,7 @@
 import 'package:pocketbase/pocketbase.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:async';
 
 class PocketBaseService {
   static final PocketBaseService _instance = PocketBaseService._internal();
@@ -376,11 +379,27 @@ class PocketBaseService {
     }
   }
 
-  Future<void> createBrand(String name, {List<String>? categoryIds}) async {
+  Future<void> createBrand(
+    String name, {
+    List<String>? categoryIds,
+    String? urlPattern,
+    bool? scraperEnabled,
+    String? scraperNotes,
+  }) async {
     try {
       final body = <String, dynamic>{'name': name};
       if (categoryIds != null && categoryIds.isNotEmpty) {
         body['categories'] = categoryIds;
+      }
+      // Add scraping fields if provided
+      if (urlPattern != null && urlPattern.isNotEmpty) {
+        body['url_pattern'] = urlPattern;
+      }
+      if (scraperEnabled != null) {
+        body['scraper_enabled'] = scraperEnabled;
+      }
+      if (scraperNotes != null && scraperNotes.isNotEmpty) {
+        body['scraper_notes'] = scraperNotes;
       }
       await pb.collection('brands').create(body: body);
     } catch (e) {
@@ -389,7 +408,14 @@ class PocketBaseService {
     }
   }
 
-  Future<void> updateBrand(String id, String name, {List<String>? categoryIds}) async {
+  Future<void> updateBrand(
+    String id,
+    String name, {
+    List<String>? categoryIds,
+    String? urlPattern,
+    bool? scraperEnabled,
+    String? scraperNotes,
+  }) async {
     try {
       final body = <String, dynamic>{'name': name};
       // Always set categories, even if empty (to clear existing ones)
@@ -398,6 +424,16 @@ class PocketBaseService {
       } else {
         // If null, set to empty array to clear all categories
         body['categories'] = [];
+      }
+      // Add scraping fields if provided
+      if (urlPattern != null) {
+        body['url_pattern'] = urlPattern;
+      }
+      if (scraperEnabled != null) {
+        body['scraper_enabled'] = scraperEnabled;
+      }
+      if (scraperNotes != null) {
+        body['scraper_notes'] = scraperNotes;
       }
       print('DEBUG updateBrand: Updating brand $id with categories: ${body['categories']} (type: ${body['categories'].runtimeType})');
       print('DEBUG updateBrand: Body being sent: $body');
@@ -663,6 +699,7 @@ class PocketBaseService {
     String? subcategoryDisplayMode,
     bool? showToolDetailsInList, // NEW
     bool? useCategoryButtons, // NEW
+    bool? enableToolImport, // NEW - for tool import feature
   }) async {
     try {
       final Map<String, dynamic> body = {
@@ -679,6 +716,11 @@ class PocketBaseService {
       
       if (useCategoryButtons != null) {
         body['use_category_buttons'] = useCategoryButtons;
+      }
+      
+      // NEW: Add tool import setting
+      if (enableToolImport != null) {
+        body['enable_tool_import'] = enableToolImport;
       }
 
       await pb.collection('app_settings').update(settingsId, body: body);
@@ -1186,6 +1228,111 @@ class PocketBaseService {
     } catch (e) {
       print('Error deleting attribute value: $e');
       rethrow;
+    }
+  }
+
+  // ============================================================================
+  // TOOL IMPORT FROM WEB (MCP Server Integration)
+  // ============================================================================
+
+  /// Import tool specifications from vendor website using MCP server
+  /// 
+  /// This calls the MCP server which uses Ollama/Qwen2.5 to extract tool specs
+  /// from vendor websites intelligently.
+  /// 
+  /// Parameters:
+  /// - [brand]: Brand name (for logging/display)
+  /// - [urlPattern]: URL pattern with {model} placeholder (e.g., "https://example.com/{model}")
+  /// - [modelNumber]: Tool model number (required if urlPattern is provided)
+  /// - [url]: Direct URL to tool page (optional, overrides urlPattern)
+  /// 
+  /// Returns a Map with:
+  /// - 'success': bool - whether the import succeeded
+  /// - 'data': Map - extracted tool specs if successful
+  /// - 'source_url': String - the URL that was scraped
+  /// - 'error': String - error message if failed
+  Future<Map<String, dynamic>?> importToolSpecs({
+    required String brand,
+    String? urlPattern,
+    String? modelNumber,
+    String? url,
+  }) async {
+    try {
+      // MCP Server URL - change this to match your setup
+      // For production, this could be loaded from app_settings
+      const mcpServerUrl = 'http://localhost:8001';
+      
+      // Build URL from pattern if provided
+      String? finalUrl = url;
+      if (finalUrl == null && urlPattern != null && modelNumber != null) {
+        finalUrl = urlPattern.replaceAll('{model}', modelNumber);
+      }
+      
+      if (finalUrl == null) {
+        return {
+          'success': false,
+          'error': 'No URL or URL pattern provided for import',
+        };
+      }
+      
+      final requestBody = {
+        'brand': brand,
+        'url': finalUrl,
+      };
+      
+      print('🔍 Importing tool specs from MCP server...');
+      print('   Brand: $brand');
+      print('   URL: $finalUrl');
+      
+      final response = await http.post(
+        Uri.parse('$mcpServerUrl/api/extract-tool-specs'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(requestBody),
+      ).timeout(const Duration(seconds: 60)); // LLM extraction can take time
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        
+        if (data['success'] == true) {
+          print('✅ Tool specs imported successfully');
+          print('   Source: ${data['source_url']}');
+          return {
+            'success': true,
+            'data': data['data'],
+            'source_url': data['source_url'],
+          };
+        } else {
+          print('❌ Import failed: ${data['error']}');
+          return {
+            'success': false,
+            'error': data['error'] ?? 'Unknown error',
+          };
+        }
+      } else {
+        print('❌ MCP Server returned status ${response.statusCode}');
+        return {
+          'success': false,
+          'error': 'Server returned status ${response.statusCode}',
+        };
+      }
+    } on http.ClientException catch (e) {
+      print('❌ Network error connecting to MCP server: $e');
+      return {
+        'success': false,
+        'error': 'Cannot connect to import server. Make sure it is running.',
+      };
+    } on TimeoutException catch (e) {
+      print('❌ Import timed out: $e');
+      return {
+        'success': false,
+        'error': 'Import timed out. This can happen on first run while the model loads. Try again.',
+      };
+    } catch (e) {
+      print('❌ Unexpected error during import: $e');
+      return {
+        'success': false,
+        'error': 'Unexpected error: $e',
+      };
     }
   }
 
