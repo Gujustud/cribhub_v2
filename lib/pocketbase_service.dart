@@ -13,7 +13,7 @@ class PocketBaseService {
 
   PocketBaseService._internal() {
     // Connect to your local PocketBase instance
-    pb = PocketBase('http://127.0.0.1:8090');
+    pb = PocketBase('http://192.168.1.192:8090');
   }
 
   // Save a new tool
@@ -1260,7 +1260,7 @@ class PocketBaseService {
     try {
       // MCP Server URL - change this to match your setup
       // For production, this could be loaded from app_settings
-      const mcpServerUrl = 'http://localhost:8001';
+      const mcpServerUrl = 'http://192.168.1.192:8001';
       
       // Build URL from pattern if provided
       String? finalUrl = url;
