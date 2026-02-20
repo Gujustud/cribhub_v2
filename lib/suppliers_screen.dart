@@ -526,7 +526,6 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                             final supplier = _suppliers[index];
                             return Card(
                               child: ListTile(
-                                leading: const Icon(Icons.store, color: Colors.green),
                                 title: Text(
                                   supplier.data['company_name'] ?? 'Unknown',
                                   style: const TextStyle(fontWeight: FontWeight.bold),
@@ -540,6 +539,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                                       Text('Tel: ${supplier.data['tel']}'),
                                   ],
                                 ),
+                                onTap: () => _showEditSupplierDialog(supplier),
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [

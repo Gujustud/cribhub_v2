@@ -17,7 +17,7 @@ class _ToolImportConfigScreenState extends State<ToolImportConfigScreen> {
   List<dynamic> _brandsWithScrapers = [];
   
   // MCP Server URL - change this to match your setup
-  final String _mcpServerUrl = 'http://192.168.1.192:8001';
+  final String _mcpServerUrl = 'http://localhost:8001';
 
   @override
   void initState() {

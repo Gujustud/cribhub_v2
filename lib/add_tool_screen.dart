@@ -1005,8 +1005,11 @@ class _AddToolScreenState extends State<AddToolScreen> {
   }
   
   void _updateToolName() {
+    if (!_autoGenerateName) return;
+    
     setState(() {
       _toolName = _generateToolName();
+      _toolNameController.text = _toolName;
     });
   }
   
@@ -2131,8 +2134,10 @@ class _AddToolScreenState extends State<AddToolScreen> {
                                 Checkbox(
                                   value: _autoGenerateName,
                                   onChanged: (value) {
+                                    print('DEBUG: Checkbox clicked, current: $_autoGenerateName, new value: $value');
                                     setState(() {
-                                      _autoGenerateName = value ?? true;
+                                      _autoGenerateName = value == true;
+                                      print('DEBUG: After setState, _autoGenerateName = $_autoGenerateName');
                                       if (_autoGenerateName) {
                                         _toolName = _generateToolName();
                                         _toolNameController.text = _toolName;
@@ -2140,7 +2145,20 @@ class _AddToolScreenState extends State<AddToolScreen> {
                                     });
                                   },
                                 ),
-                                const Text('Auto'),
+                                GestureDetector(
+                                  onTap: () {
+                                    print('DEBUG: Text clicked, toggling from $_autoGenerateName');
+                                    setState(() {
+                                      _autoGenerateName = !_autoGenerateName;
+                                      print('DEBUG: After text click, _autoGenerateName = $_autoGenerateName');
+                                      if (_autoGenerateName) {
+                                        _toolName = _generateToolName();
+                                        _toolNameController.text = _toolName;
+                                      }
+                                    });
+                                  },
+                                  child: const Text('Auto'),
+                                ),
                                 const SizedBox(width: 8),
                               ],
                             )
@@ -2642,8 +2660,10 @@ class _AddToolScreenState extends State<AddToolScreen> {
                         )
                       else
                         ..._buildHistoryItems(_recentHistory),
-                      
-                      // NEW: Performance Stats placeholder
+                    ],
+                    
+                    // Performance Stats: show whenever category is Cutting Tools (add or edit)
+                    if (_category.toLowerCase() == 'cutting tools') ...[
                       const SizedBox(height: 32),
                       const Divider(),
                       const SizedBox(height: 16),
@@ -2653,8 +2673,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
                         children: [
                           const Text(
                             'Performance Stats',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
                           Tooltip(
                             message: 'Performance tracking coming soon',
                             child: Icon(Icons.info_outline, color: Colors.grey[600], size: 20),
@@ -2689,8 +2709,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
                                   color: Colors.orange,
                                 ),
                               ],
-            ),
-            const SizedBox(height: 16),
+                            ),
+                            const SizedBox(height: 16),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
                               children: [
@@ -2848,24 +2868,6 @@ class _AddToolScreenState extends State<AddToolScreen> {
       ),
       child: Row(
         children: [
-          // Icon
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Center(
-              child: Text(
-                '↔️',
-                style: TextStyle(fontSize: 14),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          
-          // Content
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2968,24 +2970,6 @@ class _AddToolScreenState extends State<AddToolScreen> {
       ),
       child: Row(
         children: [
-          // Icon
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Center(
-              child: Text(
-                history.getActionIcon(),
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          
-          // Content
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

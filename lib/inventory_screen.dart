@@ -184,10 +184,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
       final toolRecords = await _pbService.getTools();
       List<Tool> tools = toolRecords.map((r) => Tool.fromRecord(r)).toList();
 
-      // NEW: Filter by category if specified
+      // NEW: Filter by category if specified (case-insensitive, trim)
       if (widget.categoryFilter != null) {
+        final filterName = widget.categoryFilter!.trim().toLowerCase();
         tools = tools.where((tool) {
-          return tool.category == widget.categoryFilter;
+          final toolCategory = (tool.category).trim().toLowerCase();
+          return toolCategory == filterName;
         }).toList();
       }
 
@@ -319,28 +321,48 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     ),
                     const SizedBox(width: 12),
 
-                    // Add Tool button (matching main screen colors)
-                    ElevatedButton.icon(
+                    // Add Tool button (height and radius match search field)
+                    ElevatedButton(
                       onPressed: _navigateToAddTool,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add Tool'),
                       style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
                         backgroundColor: Colors.grey[700],
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        minimumSize: const Size(0, 52),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add, size: 24),
+                          SizedBox(width: 8),
+                          Text('Add Tool', style: TextStyle(fontSize: 16)),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
 
-                    // Return Tool button (matching main screen colors)
-                    ElevatedButton.icon(
+                    // Return Tool button (height and radius match search field)
+                    ElevatedButton(
                       onPressed: _navigateToReturnTool,
-                      icon: const Icon(Icons.keyboard_return),
-                      label: const Text('Return Tool'),
                       style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
                         backgroundColor: Colors.grey[700],
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        minimumSize: const Size(0, 52),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.keyboard_return, size: 24),
+                          SizedBox(width: 8),
+                          Text('Return Tool', style: TextStyle(fontSize: 16)),
+                        ],
                       ),
                     ),
                   ],
@@ -477,7 +499,7 @@ class ToolCard extends StatelessWidget {
                   children: [
                     Text(
                       tool.toolName,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     if (tool.subcategory != null && tool.subcategory!.isNotEmpty) ...[
@@ -517,7 +539,7 @@ class ToolCard extends StatelessWidget {
                           icon: const Icon(Icons.edit, size: 18),
                           onPressed: onEdit,
                           tooltip: 'Edit',
-                          color: Colors.blue,
+                          color: Colors.grey[700],
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
@@ -526,7 +548,7 @@ class ToolCard extends StatelessWidget {
                           icon: const Icon(Icons.copy, size: 18),
                           onPressed: onDuplicate,
                           tooltip: 'Duplicate',
-                          color: Colors.green,
+                          color: Colors.grey[700],
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
@@ -535,7 +557,7 @@ class ToolCard extends StatelessWidget {
                           icon: const Icon(Icons.delete, size: 18),
                           onPressed: onDelete,
                           tooltip: 'Delete',
-                          color: Colors.red,
+                          color: Colors.grey[700],
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
@@ -551,12 +573,7 @@ class ToolCard extends StatelessWidget {
                       ).toList();
                       
                       if (visibleLocations.isEmpty) {
-                        return Center(
-                          child: Text(
-                            'No locations',
-                            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                          ),
-                        );
+                        return const SizedBox.shrink();
                       }
                       
                       return Column(

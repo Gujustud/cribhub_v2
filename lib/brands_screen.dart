@@ -302,126 +302,113 @@ class _BrandsScreenState extends State<BrandsScreen> {
         title: const Text('Brand Management'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddEditBrandDialog(),
-        child: const Icon(Icons.add),
-      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _brands.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.factory, size: 64, color: Colors.grey.shade400),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No brands yet',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Tap + to add a brand',
-                        style: TextStyle(color: Colors.grey.shade500),
-                      ),
-                    ],
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Center(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _showAddEditBrandDialog(),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Brand'),
+                    ),
                   ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _brands.length,
-                  itemBuilder: (context, index) {
-                    final brand = _brands[index];
-                    final name = brand.data['name'] ?? 'Unknown';
-                    final scraperEnabled = brand.data['scraper_enabled'] == true;
-                    final urlPattern = brand.data['url_pattern'] ?? '';
-                    
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: Icon(
-                          Icons.factory,
-                          color: scraperEnabled ? Colors.green : Colors.grey,
-                        ),
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                name,
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            if (scraperEnabled)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.shade100,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Text(
-                                  'Auto-Import',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.green,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: _brands.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.factory, size: 64, color: Colors.grey.shade400),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No brands yet',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.grey.shade600,
                                 ),
                               ),
-                          ],
-                        ),
-                        subtitle: scraperEnabled && urlPattern.isNotEmpty
-                            ? Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  urlPattern,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontFamily: 'monospace',
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                              const SizedBox(height: 8),
+                              Text(
+                                'Click "Add Brand" above to get started.',
+                                style: TextStyle(color: Colors.grey.shade500),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _brands.length,
+                          itemBuilder: (context, index) {
+                            final brand = _brands[index];
+                            final name = brand.data['name'] ?? 'Unknown';
+                            final scraperEnabled = brand.data['scraper_enabled'] == true;
+                            final urlPattern = brand.data['url_pattern'] ?? '';
+                            
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              child: ListTile(
+                                title: Text(
+                                  name,
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
                                 ),
-                              )
-                            : null,
-                        trailing: PopupMenuButton(
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'edit',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.edit, size: 20),
-                                  SizedBox(width: 8),
-                                  Text('Edit'),
-                                ],
+                                subtitle: scraperEnabled && urlPattern.isNotEmpty
+                                    ? Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          urlPattern,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontFamily: 'monospace',
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      )
+                                    : null,
+                                trailing: PopupMenuButton(
+                                      itemBuilder: (context) => [
+                                        const PopupMenuItem(
+                                          value: 'edit',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.edit, size: 20),
+                                              SizedBox(width: 8),
+                                              Text('Edit'),
+                                            ],
+                                          ),
+                                        ),
+                                        const PopupMenuItem(
+                                          value: 'delete',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.delete, size: 20, color: Colors.red),
+                                              SizedBox(width: 8),
+                                              Text('Delete', style: TextStyle(color: Colors.red)),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                      onSelected: (value) {
+                                        if (value == 'edit') {
+                                          _showAddEditBrandDialog(brand: brand);
+                                        } else if (value == 'delete') {
+                                          _deleteBrand(brand);
+                                        }
+                                      },
+                                    ),
+                                onTap: () => _showAddEditBrandDialog(brand: brand),
                               ),
-                            ),
-                            const PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete, size: 20, color: Colors.red),
-                                  SizedBox(width: 8),
-                                  Text('Delete', style: TextStyle(color: Colors.red)),
-                                ],
-                              ),
-                            ),
-                          ],
-                          onSelected: (value) {
-                            if (value == 'edit') {
-                              _showAddEditBrandDialog(brand: brand);
-                            } else if (value == 'delete') {
-                              _deleteBrand(brand);
-                            }
+                            );
                           },
                         ),
-                        onTap: () => _showAddEditBrandDialog(brand: brand),
-                      ),
-                    );
-                  },
                 ),
+              ],
+            ),
     );
   }
 }
