@@ -1012,7 +1012,30 @@ class _AddToolScreenState extends State<AddToolScreen> {
       _toolNameController.text = _toolName;
     });
   }
-  
+
+  String _formatThreeDecimal(double value) {
+    // Truncate to 3 decimals (no rounding)
+    double truncated = (value * 1000).floorToDouble() / 1000;
+    String s = truncated.toStringAsFixed(3); // e.g. "0.010", "0.140", "0.105"
+
+    // If there are more than 2 decimal places and the last digit is 0,
+    // drop the last digit so we show 2 decimals instead of 3.
+    final dotIndex = s.indexOf('.');
+    if (dotIndex != -1) {
+      final decimals = s.length - dotIndex - 1;
+      if (decimals > 2 && s.endsWith('0')) {
+        s = s.substring(0, s.length - 1); // "0.010" -> "0.01"
+      }
+    }
+
+    // Remove leading zero for values < 1: "0.01" -> ".01"
+    if (s.startsWith('0.')) {
+      s = s.substring(1);
+    }
+
+    return s;
+  }
+
   String _generateToolName() {
     // Only auto-generate names for Cutting Tools category
     if (_category != 'Cutting Tools') {
@@ -1034,13 +1057,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
       diaStr = diaStr.substring(1);
     }
     
-    // Truncate flute length to 3 decimals (don't round)
-    double truncated = (fluteLen * 1000).floorToDouble() / 1000;
-    String flStr = truncated.toStringAsFixed(3);
-    // Remove leading zero if less than 1
-    if (flStr.startsWith('0.')) {
-      flStr = flStr.substring(1);
-    }
+    // Format flute length: up to 3 decimals, but drop trailing zero
+    // so .010 => .01, .140 => .14, .105 stays .105.
+    String flStr = _formatThreeDecimal(fluteLen);
     
     String name = '${diaStr}_${flutes}F_${flStr}FL';
     
@@ -1055,10 +1074,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
     
     // Only include neck radius if there's a value (independent of type)
     if (neck != null && neck > 0) {
-      String neckStr = neck.toStringAsFixed(3);  // Max 3 decimals
-      if (neck < 1 && neckStr.startsWith('0.')) {
-        neckStr = neckStr.substring(1);
-      }
+      String neckStr = _formatThreeDecimal(neck);
       name += '_${neckStr}NR';
     }
     
@@ -2164,9 +2180,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
                             )
                           : null,
                     ),
-                    enabled: _selectedCategoryId == CUTTING_TOOLS_CATEGORY_ID 
-                        ? !_autoGenerateName 
-                        : true,
+                    readOnly: _selectedCategoryId == CUTTING_TOOLS_CATEGORY_ID
+                        ? _autoGenerateName
+                        : false,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
@@ -2188,7 +2204,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
                   child: TextFormField(
                     controller: _modelNumberController,
                     decoration: const InputDecoration(
-                      labelText: 'Model Number (optional)',
+                      labelText: 'Model Number',
+                      floatingLabelBehavior: FloatingLabelBehavior.always,
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -2251,7 +2268,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
                         controller: controller,
                         focusNode: focusNode,
                         decoration: InputDecoration(
-                          labelText: 'Brand (optional)',
+                          labelText: 'Brand',
+                          floatingLabelBehavior: FloatingLabelBehavior.always,
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
                             icon: const Icon(Icons.clear),
@@ -2305,7 +2323,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
                         controller: controller,
                         focusNode: focusNode,
                         decoration: InputDecoration(
-                          labelText: 'Supplier (optional)',
+                          labelText: 'Supplier',
+                          floatingLabelBehavior: FloatingLabelBehavior.always,
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
                             icon: const Icon(Icons.clear),
@@ -2332,16 +2351,16 @@ class _AddToolScreenState extends State<AddToolScreen> {
               ],
             ),
                   const SizedBox(height: 16),
-                  
+
                   // URL
                   TextFormField(
                     controller: _urlController,
                     decoration: const InputDecoration(
-                      labelText: 'URL (optional)',
+                      labelText: 'URL',
+                      floatingLabelBehavior: FloatingLabelBehavior.always,
                       border: OutlineInputBorder(),
-                      hintText: 'Product URL',
                     ),
-            ),
+                  ),
             const SizedBox(height: 16),
             
             // Hardcoded Fields - Only show for Cutting Tools category
@@ -2384,44 +2403,63 @@ class _AddToolScreenState extends State<AddToolScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            
-            // Flutes
-            TextFormField(
-              controller: _flutesController,
-              decoration: const InputDecoration(
-                labelText: 'Number of Flutes',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Required';
-                }
-                if (int.tryParse(value) == null) {
-                  return 'Must be a whole number';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            
-            // Flute Length
-            TextFormField(
-              controller: _fluteLengthController,
-              decoration: const InputDecoration(
-                labelText: 'Flute Length',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Required';
-                }
-                if (double.tryParse(value) == null) {
-                  return 'Invalid number';
-                }
-                return null;
-              },
+
+            // Flutes, Flute Length, Neck
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _flutesController,
+                    decoration: const InputDecoration(
+                      labelText: 'Number of Flutes',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Required';
+                      }
+                      if (int.tryParse(value) == null) {
+                        return 'Must be a whole number';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _fluteLengthController,
+                    decoration: const InputDecoration(
+                      labelText: 'Flute Length',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Required';
+                      }
+                      if (double.tryParse(value) == null) {
+                        return 'Invalid number';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _neckController,
+                    decoration: const InputDecoration(
+                      labelText: 'Neck',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             
@@ -2440,16 +2478,6 @@ class _AddToolScreenState extends State<AddToolScreen> {
                   const SizedBox(height: 16),
                 ],
               ),
-            
-            // Neck
-            TextFormField(
-              controller: _neckController,
-              decoration: const InputDecoration(
-                labelText: 'Neck (optional)',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
             ], // End of hardcoded Cutting Tools fields
                   
             const SizedBox(height: 24),
@@ -2482,7 +2510,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
             Expanded(
               flex: 2,
               child: Container(
-                color: Colors.grey[100],
+                color: Theme.of(context).colorScheme.surface,
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
@@ -2490,8 +2518,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
                     Container(
                       height: 200,
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: Colors.grey[300]!),
+                        color: Theme.of(context).colorScheme.surfaceVariant,
+                        border: Border.all(color: Theme.of(context).dividerColor),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: _photoBytes != null
@@ -2686,9 +2714,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.grey[100],
+                          color: Theme.of(context).colorScheme.surfaceVariant,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey[300]!),
+                          border: Border.all(color: Theme.of(context).dividerColor),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,

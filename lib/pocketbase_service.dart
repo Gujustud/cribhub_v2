@@ -2,6 +2,7 @@ import 'package:pocketbase/pocketbase.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
+import 'app_config.dart';
 
 class PocketBaseService {
   static final PocketBaseService _instance = PocketBaseService._internal();
@@ -12,8 +13,7 @@ class PocketBaseService {
   }
 
   PocketBaseService._internal() {
-    // Connect to your local PocketBase instance
-    pb = PocketBase('http://localhost:8090');
+    pb = PocketBase(AppConfig.pocketBaseUrl);
   }
 
   // Save a new tool
@@ -1260,7 +1260,7 @@ class PocketBaseService {
     try {
       // MCP Server URL - change this to match your setup
       // For production, this could be loaded from app_settings
-      const mcpServerUrl = 'http://localhost:8001';
+      const mcpServerUrl = AppConfig.mcpUrl;
       
       // Build URL from pattern if provided
       String? finalUrl = url;

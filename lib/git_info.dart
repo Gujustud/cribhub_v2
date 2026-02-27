@@ -1,10 +1,10 @@
 // Git information - updated manually or via script
-// Latest commit info as of: 2025-01-24
+// Latest commit info as of: 2025-02-23
 
 class GitInfo {
-  static const String commitHash = 'ec5286e25731785701afad24d38dd1c2db98ffdf';
-  static const String shortHash = 'ec5286e2';
-  static const String commitMessage = 'feat: UI improvements, searchable dropdowns, location redesign, and subcategory labeling system';
+  static const String commitHash = '938229a3e9c5ca81d73bb797a9c6fbaa75e2cb7e';
+  static const String shortHash = '938229a';
+  static const String commitMessage = 'UI and local dev: inventory list tweaks, brands/suppliers cleanup, localhost config';
   static const String branch = 'main';
   static const String repositoryUrl = 'https://github.com/gujustud/cribhub_v2';
   

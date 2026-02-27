@@ -130,16 +130,23 @@ cribhub/
 
 ### Building for Production
 
+**Local dev (default)**  
+The app uses `http://localhost:8090` (PocketBase) and `http://localhost:8001` (MCP) when no defines are set. Just run `flutter run -d chrome` or `flutter build web` for local testing.
+
+**Production web build (deploy to server)**  
+Set the server URLs at build time so the deployed app talks to your live backend:
+
 ```bash
-# Web build
-flutter build web
+flutter build web --dart-define=POCKETBASE_URL=https://cribhub.sscadcam.com/ --dart-define=MCP_URL=https://cribhub.sscadcam.com/mcp
+```
 
-# Windows build
+Then zip the contents of `build/web/` (not the `web` folder) as `dist.zip`, serve it from your laptop, and on the server download and unzip into the web root (e.g. `/opt/pocketbase/pb_public`). See deploy notes or run scripts if available.
+
+```bash
+# Other platforms
 flutter build windows
-
-# Mobile builds
-flutter build apk  # Android
-flutter build ios  # iOS
+flutter build apk   # Android
+flutter build ios   # iOS
 ```
 
 ## 🤝 Contributing

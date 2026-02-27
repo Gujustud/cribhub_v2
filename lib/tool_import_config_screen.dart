@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'pocketbase_service.dart';
+import 'app_config.dart';
 
 class ToolImportConfigScreen extends StatefulWidget {
   const ToolImportConfigScreen({super.key});
@@ -16,8 +17,7 @@ class _ToolImportConfigScreenState extends State<ToolImportConfigScreen> {
   String? _error;
   List<dynamic> _brandsWithScrapers = [];
   
-  // MCP Server URL - change this to match your setup
-  final String _mcpServerUrl = 'http://localhost:8001';
+  final String _mcpServerUrl = AppConfig.mcpUrl;
 
   @override
   void initState() {

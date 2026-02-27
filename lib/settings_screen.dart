@@ -3,6 +3,7 @@ import 'pocketbase_service.dart';
 import 'app_drawer.dart';
 import 'category_management_screen.dart';
 import 'tool_import_config_screen.dart'; // NEW
+import 'theme_controller.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -17,12 +18,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _showToolDetailsInList = true;
   bool _useCategoryButtons = false;
   bool _enableToolImport = false; // NEW
+  bool _darkMode = false;
   String? _settingsId;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    _darkMode = ThemeController.instance.themeMode.value == ThemeMode.dark;
   }
 
   Future<void> _loadSettings() async {
@@ -261,6 +264,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         subtitle: const Text('Display all items menu option in drawer'),
                         value: _showAllInventoryInMenu,
                         onChanged: _updateShowAllInventory,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Appearance Section
+                const Text(
+                  'APPEARANCE',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: Column(
+                    children: [
+                      SwitchListTile(
+                        secondary: const Icon(Icons.dark_mode, color: Colors.blue),
+                        title: const Text('Dark mode'),
+                        value: _darkMode,
+                        onChanged: (value) async {
+                          setState(() {
+                            _darkMode = value;
+                          });
+                          await ThemeController.instance.setDarkMode(value);
+                        },
                       ),
                     ],
                   ),
