@@ -650,32 +650,57 @@ class LocationTag extends StatelessWidget {
 
     final locationPath = _buildLocationPath(location);
     final type = location.type.toLowerCase();
-    
-    // Define colors based on type
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Theme-aware colors: use container colors in dark mode so tags aren't overly bright
     Color backgroundColor;
     Color borderColor;
     Color textColor;
-    
-    switch (type) {
-      case 'toolbox':
-        backgroundColor = Colors.red[50]!;
-        borderColor = Colors.red[300]!;
-        textColor = Colors.red[900]!;
-        break;
-      case 'shelf':
-        backgroundColor = Colors.orange[50]!;
-        borderColor = Colors.orange[300]!;
-        textColor = Colors.orange[900]!;
-        break;
-      case 'machine':
-        backgroundColor = Colors.blue[50]!;
-        borderColor = Colors.blue[300]!;
-        textColor = Colors.blue[900]!;
-        break;
-      default:
-        backgroundColor = Colors.grey[50]!;
-        borderColor = Colors.grey[300]!;
-        textColor = Colors.grey[900]!;
+    if (isDark) {
+      switch (type) {
+        case 'toolbox':
+          backgroundColor = colorScheme.errorContainer;
+          borderColor = colorScheme.error;
+          textColor = colorScheme.onErrorContainer;
+          break;
+        case 'shelf':
+          backgroundColor = colorScheme.tertiaryContainer;
+          borderColor = colorScheme.tertiary;
+          textColor = colorScheme.onTertiaryContainer;
+          break;
+        case 'machine':
+          backgroundColor = colorScheme.primaryContainer;
+          borderColor = colorScheme.primary;
+          textColor = colorScheme.onPrimaryContainer;
+          break;
+        default:
+          backgroundColor = colorScheme.surfaceContainerHigh;
+          borderColor = colorScheme.outline;
+          textColor = colorScheme.onSurfaceVariant;
+      }
+    } else {
+      switch (type) {
+        case 'toolbox':
+          backgroundColor = Colors.red[50]!;
+          borderColor = Colors.red[300]!;
+          textColor = Colors.red[900]!;
+          break;
+        case 'shelf':
+          backgroundColor = Colors.orange[50]!;
+          borderColor = Colors.orange[300]!;
+          textColor = Colors.orange[900]!;
+          break;
+        case 'machine':
+          backgroundColor = Colors.blue[50]!;
+          borderColor = Colors.blue[300]!;
+          textColor = Colors.blue[900]!;
+          break;
+        default:
+          backgroundColor = Colors.grey[50]!;
+          borderColor = Colors.grey[300]!;
+          textColor = Colors.grey[900]!;
+      }
     }
 
     return GestureDetector(
@@ -686,7 +711,7 @@ class LocationTag extends StatelessWidget {
           color: backgroundColor,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(color: borderColor, width: 1.5),
-          ),
+        ),
         child: Text(
           'Qty: $quantity • $locationPath',
           style: TextStyle(

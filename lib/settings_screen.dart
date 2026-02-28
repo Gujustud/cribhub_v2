@@ -270,9 +270,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Appearance Section
+                // Display Preferences Section
                 const Text(
-                  'APPEARANCE',
+                  'DISPLAY PREFERENCES',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -295,25 +295,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           await ThemeController.instance.setDarkMode(value);
                         },
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                // Display Preferences Section
-                const Text(
-                  'DISPLAY PREFERENCES',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Card(
-                  child: Column(
-                    children: [
+                      const Divider(height: 1),
                       SwitchListTile(
                         secondary: const Icon(Icons.info_outline, color: Colors.blue),
                         title: const Text('Show tool details in inventory lists'),

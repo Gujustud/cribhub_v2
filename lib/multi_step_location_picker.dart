@@ -27,6 +27,9 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
   List<dynamic> _locationHierarchy = []; // Current locations to choose from
   bool _creatingNew = false;
   final _newNameController = TextEditingController();
+  // When at a leaf location, cache which tools are there (for inline warning)
+  String? _toolsAtLocationId;
+  List<String> _toolsAtLocationNames = [];
   
   @override
   void initState() {
@@ -86,9 +89,43 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
     
     setState(() {
       _locationHierarchy = children;
+      _toolsAtLocationId = null;
+      _toolsAtLocationNames = [];
       // Don't automatically select if there are no children
       // This allows user to create new sub-locations
     });
+    if (children.isEmpty) _loadToolsAtLocation(parentId);
+  }
+
+  Future<void> _loadToolsAtLocation(String locationId) async {
+    try {
+      final records = await _pbService.getToolLocationsAtLocation(locationId);
+      final names = <String>{};
+      for (final rec in records) {
+        final toolId = rec.data['tool'] as String?;
+        if (toolId == null || toolId.isEmpty) continue;
+        try {
+          final toolRecord = await _pbService.getToolById(toolId);
+          final name = toolRecord.data['tool_name'] as String?;
+          if (name != null && name.trim().isNotEmpty) names.add(name.trim());
+        } catch (_) {
+          continue;
+        }
+      }
+      if (mounted && _selectedParentId == locationId) {
+        setState(() {
+          _toolsAtLocationId = locationId;
+          _toolsAtLocationNames = names.toList()..sort();
+        });
+      }
+    } catch (_) {
+      if (mounted && _selectedParentId == locationId) {
+        setState(() {
+          _toolsAtLocationId = locationId;
+          _toolsAtLocationNames = [];
+        });
+      }
+    }
   }
   
   void _goBack() {
@@ -98,6 +135,8 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
       _selectedPath.removeLast();
       _creatingNew = false;
       _newNameController.clear();
+      _toolsAtLocationId = null;
+      _toolsAtLocationNames = [];
       
       if (_selectedPath.isEmpty) {
         // Back to type selection
@@ -239,6 +278,43 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
                   style: TextStyle(color: Colors.grey),
                 ),
               ),
+              if (_toolsAtLocationId == _selectedParentId && _toolsAtLocationNames.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.error,
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 20,
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _toolsAtLocationNames.length <= 5
+                                ? 'This location already has: ${_toolsAtLocationNames.join(', ')}. You can still select it.'
+                                : 'This location already has: ${_toolsAtLocationNames.take(5).join(', ')} and ${_toolsAtLocationNames.length - 5} more. You can still select it.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Theme.of(context).colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               if (_selectedParentId != null)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),

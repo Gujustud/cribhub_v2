@@ -6,64 +6,34 @@ import 'brands_screen.dart';
 import 'suppliers_screen.dart';
 import 'settings_screen.dart';
 import 'about_screen.dart';
-import 'pocketbase_service.dart';
 import 'main.dart';
+import 'drawer_data_cache.dart';
 
-class AppDrawer extends StatefulWidget {
+class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
 
   @override
-  State<AppDrawer> createState() => _AppDrawerState();
-}
-
-class _AppDrawerState extends State<AppDrawer> {
-  List<dynamic> _categories = [];
-  bool _showAllInventory = true;
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    try {
-      final pbService = PocketBaseService();
-      final categories = await pbService.getCategories();
-      final settings = await pbService.getAppSettings();
-      
-      setState(() {
-        _categories = categories;
-        _showAllInventory = settings.data['show_all_inventory_in_menu'] ?? true;
-        _isLoading = false;
-      });
-    } catch (e) {
-      print('Error loading drawer data: $e');
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final categories = DrawerDataCache.categories;
+    final showAllInventory = DrawerDataCache.showAllInventory;
+    final colorScheme = Theme.of(context).colorScheme;
+    final appBarTheme = Theme.of(context).appBarTheme;
+    // Use same background as app bar so drawer header matches top bar
+    final headerBg = colorScheme.inversePrimary;
+    final headerFg = appBarTheme.foregroundColor ?? colorScheme.onPrimary;
     return SizedBox(
       width: 240, // Constrain drawer width
       child: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            // FIXED: Using Container instead of DrawerHeader for precise control
             Container(
-              decoration: const BoxDecoration(
-                color: Colors.blue,
-              ),
+              decoration: BoxDecoration(color: headerBg),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              child: const Text(
+              child: Text(
                 'Cribhub',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: headerFg,
                   fontSize: 24,
                   fontWeight: FontWeight.w500,
                 ),
@@ -82,9 +52,8 @@ class _AppDrawerState extends State<AppDrawer> {
             },
           ),
           const Divider(),
-          
           // All Inventory (if enabled)
-          if (_showAllInventory)
+          if (showAllInventory)
             ListTile(
               leading: const Icon(Icons.inventory),
               title: const Text('All Inventory'),
@@ -98,27 +67,24 @@ class _AppDrawerState extends State<AppDrawer> {
                 );
               },
             ),
-          
           // Dynamic categories from database (sorted by sort_order, excluding 0)
-          if (!_isLoading)
-            ..._categories
-                .where((cat) => (cat.data['sort_order'] ?? 0) > 0)
-                .map((category) => ListTile(
-                      leading: const Icon(Icons.build),
-                      title: Text(category.data['name']),
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => InventoryScreen(
-                              categoryFilter: category.data['name'],
-                            ),
+          ...categories
+              .where((cat) => (cat.data['sort_order'] ?? 0) > 0)
+              .map((category) => ListTile(
+                    leading: const Icon(Icons.build),
+                    title: Text(category.data['name']),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => InventoryScreen(
+                            categoryFilter: category.data['name'],
                           ),
-                        );
-                      },
-                    )),
-          
+                        ),
+                      );
+                    },
+                  )),
           const Divider(),
           const Padding(
             padding: EdgeInsets.all(16.0),

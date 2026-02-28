@@ -779,10 +779,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final dividerColor = theme.dividerColor;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Locations'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: colorScheme.inversePrimary,
         leading: Builder(
           builder: (context) => IconButton(
             icon: const Icon(Icons.menu),
@@ -800,8 +804,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 Container(
                   width: 250,
                   decoration: BoxDecoration(
-                    border: Border(right: BorderSide(color: Colors.grey[300]!)),
-                    color: Colors.grey[50],
+                    border: Border(right: BorderSide(color: dividerColor)),
+                    color: colorScheme.surfaceContainerLowest,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -809,14 +813,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+                          border: Border(bottom: BorderSide(color: dividerColor)),
                         ),
-                        child: const Text(
+                        child: Text(
                           'LOCATION TYPES',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: Colors.grey,
+                            color: colorScheme.onSurfaceVariant,
                             letterSpacing: 1.2,
                           ),
                         ),
@@ -830,7 +834,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                             
                             return ListTile(
                               selected: isSelected,
-                              selectedTileColor: Colors.blue[50],
+                              selectedTileColor: colorScheme.primaryContainer,
                               leading: Icon(
                                 _getIconForType(type),
                                 color: _getColorForType(type),
@@ -854,7 +858,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          border: Border(top: BorderSide(color: Colors.grey[300]!)),
+                          border: Border(top: BorderSide(color: dividerColor)),
                         ),
                         child: Column(
                           children: [
@@ -902,7 +906,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+                          border: Border(bottom: BorderSide(color: dividerColor)),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -935,7 +939,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                                     child: Text(
                                       'No ${_selectedType!} locations yet.\nClick "Add Location" to create one.',
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                                      style: TextStyle(fontSize: 16, color: colorScheme.onSurfaceVariant),
                                     ),
                                   )
                                 : ListView(

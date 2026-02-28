@@ -1128,10 +1128,14 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final dividerColor = theme.dividerColor;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Category Management'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: colorScheme.inversePrimary,
         leading: Builder(
           builder: (context) => IconButton(
             icon: const Icon(Icons.menu),
@@ -1149,8 +1153,8 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                 Container(
                   width: 250,
                   decoration: BoxDecoration(
-                    border: Border(right: BorderSide(color: Colors.grey[300]!)),
-                    color: Colors.grey[50],
+                    border: Border(right: BorderSide(color: dividerColor)),
+                    color: colorScheme.surfaceContainerLowest,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1158,14 +1162,14 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+                          border: Border(bottom: BorderSide(color: dividerColor)),
                         ),
-                        child: const Text(
+                        child: Text(
                           'CATEGORIES',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: Colors.grey,
+                            color: colorScheme.onSurfaceVariant,
                             letterSpacing: 1.2,
                           ),
                         ),
@@ -1182,10 +1186,10 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                             return ListTile(
                               key: Key(category.id), // Required for ReorderableListView
                               selected: isSelected,
-                              selectedTileColor: Colors.blue[50],
+                              selectedTileColor: colorScheme.primaryContainer,
                               leading: ReorderableDragStartListener(
                                 index: index,
-                                child: const Icon(Icons.drag_handle, size: 20, color: Colors.grey),
+                                child: Icon(Icons.drag_handle, size: 20, color: colorScheme.onSurfaceVariant),
                               ),
                               title: Text(
                                 category.data['name'],
@@ -1228,7 +1232,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          border: Border(top: BorderSide(color: Colors.grey[300]!)),
+                          border: Border(top: BorderSide(color: dividerColor)),
                         ),
                         child: Column(
                           children: [
@@ -1287,7 +1291,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+                          border: Border(bottom: BorderSide(color: dividerColor)),
                         ),
                         child: Text(
                           _selectedCategoryId != null
@@ -1307,7 +1311,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                                     child: Text(
                                       'No subcategories yet.\nClick "Add Subcategory" to create one.',
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                                      style: TextStyle(fontSize: 16, color: colorScheme.onSurfaceVariant),
                                     ),
                                   )
                                 : ListView(
@@ -1322,7 +1326,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            border: Border(top: BorderSide(color: Colors.grey[300]!)),
+                            border: Border(top: BorderSide(color: dividerColor)),
                           ),
                           child: Center(
                             child: ElevatedButton.icon(

@@ -7,10 +7,12 @@ import 'suppliers_screen.dart';
 import 'return_dialog.dart';
 import 'app_drawer.dart';
 import 'theme_controller.dart';
+import 'drawer_data_cache.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ThemeController.instance.load();
+  await DrawerDataCache.preload();
   runApp(const CribhubApp());
 }
 

@@ -500,14 +500,21 @@ class _AddToolScreenState extends State<AddToolScreen> {
     }
   }
   
+  static const _selectorLabelStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w500);
+
   Widget _buildCategoryDropdown() {
-    return DropdownButtonFormField<String>(
-      value: _selectedCategoryId,
-      decoration: const InputDecoration(
-        labelText: 'Category',
-        border: OutlineInputBorder(),
-      ),
-      items: _categories.map((category) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text('Category', style: _selectorLabelStyle),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _selectedCategoryId,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+          ),
+          items: _categories.map((category) {
         return DropdownMenuItem<String>(
           value: category.id,
           child: Text(category.data['name']),
@@ -536,17 +543,17 @@ class _AddToolScreenState extends State<AddToolScreen> {
         }
         return null;
       },
+        ),
+      ],
     );
   }
   
   Widget _buildCategoryButtons() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
-          'Category',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
+        const Text('Category', style: _selectorLabelStyle),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -1269,6 +1276,13 @@ class _AddToolScreenState extends State<AddToolScreen> {
     return names.join(' → ');
   }
 
+  /// Returns subcategory selector widgets plus a trailing gap before Tool Name only when there are any.
+  List<Widget> _subcategorySelectorWidgets() {
+    final list = _buildSubcategorySelectors();
+    if (list.isEmpty) return list;
+    return [...list, const SizedBox(height: 16)];
+  }
+
   // Build dynamic cascading subcategory selectors
   List<Widget> _buildSubcategorySelectors() {
     if (_selectedCategoryId == null) return [];
@@ -1438,14 +1452,11 @@ class _AddToolScreenState extends State<AddToolScreen> {
           future: _loadAttributeListAndValues(attributeListId),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
-              return DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: label,
-                  border: const OutlineInputBorder(),
-                ),
+              return _wrapSelectorWithLabel(label, DropdownButtonFormField<String>(
+                decoration: const InputDecoration(border: OutlineInputBorder()),
                 items: const [],
                 onChanged: null,
-              );
+              ));
             }
             
             final attrData = snapshot.data!;
@@ -1457,12 +1468,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
               return _buildButtonSelectorForAttributeValues(values, level, label);
             }
             
-            return DropdownButtonFormField<String>(
+            return _wrapSelectorWithLabel(label, DropdownButtonFormField<String>(
               value: _selectedSubcategoryIds[level],
-              decoration: InputDecoration(
-                labelText: label,
-                border: const OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(border: OutlineInputBorder()),
               items: values.map<DropdownMenuItem<String>>((valueRecord) {
                 return DropdownMenuItem<String>(
                   value: valueRecord.data['value'],
@@ -1472,31 +1480,24 @@ class _AddToolScreenState extends State<AddToolScreen> {
               onChanged: (value) {
                 setState(() {
                   _selectedSubcategoryIds[level] = value;
-                  // When a value is selected, store it (it's the actual value, not an ID)
                   _selectedAttributeValue = value;
-                  
-                  // Clear selections beyond this level
                   if (level < _selectedSubcategoryIds.length - 1) {
                     _selectedSubcategoryIds.removeRange(level + 1, _selectedSubcategoryIds.length);
                   }
-                  
                   _updateSubcategoryText();
                   _updateToolName();
                 });
               },
-            );
+            ));
           },
         );
       }
     }
 
     // Original behavior: show subcategory options
-    return DropdownButtonFormField<String>(
+    return _wrapSelectorWithLabel(label, DropdownButtonFormField<String>(
       value: _selectedSubcategoryIds[level],
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
+      decoration: const InputDecoration(border: OutlineInputBorder()),
       items: options.map<DropdownMenuItem<String>>((sub) {
         return DropdownMenuItem<String>(
           value: sub.id,
@@ -1506,13 +1507,24 @@ class _AddToolScreenState extends State<AddToolScreen> {
       onChanged: (value) {
         setState(() {
           _selectedSubcategoryIds[level] = value;
-          // Clear selections beyond this level
           _selectedSubcategoryIds = _selectedSubcategoryIds.sublist(0, level + 1);
           _selectedAttributeValue = null;
           _updateSubcategoryText();
           _updateToolName();
         });
       },
+    ));
+  }
+
+  Widget _wrapSelectorWithLabel(String label, Widget child) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: _selectorLabelStyle),
+        const SizedBox(height: 8),
+        child,
+      ],
     );
   }
 
@@ -1541,8 +1553,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
             if (!snapshot.hasData) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  Text(label, style: _selectorLabelStyle),
                   const SizedBox(height: 8),
                   const CircularProgressIndicator(),
                 ],
@@ -1561,8 +1574,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
     // Original behavior: show subcategory options as buttons
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        Text(label, style: _selectorLabelStyle),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -1604,8 +1618,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        Text(label, style: _selectorLabelStyle),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -1646,12 +1661,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
 
   // NEW: Build text input selector for text field type
   Widget _buildTextInputSelector(int level, String label) {
-    return TextFormField(
+    return _wrapSelectorWithLabel(label, TextFormField(
       initialValue: _subcategoryTextValues[level] ?? '',
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
+      decoration: const InputDecoration(border: OutlineInputBorder()),
       onChanged: (value) {
         setState(() {
           _subcategoryTextValues[level] = value;
@@ -1661,7 +1673,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
           _updateSubcategoryText();
         });
       },
-    );
+    ));
   }
 
   // NEW: Get previously used values for dynamic dropdown (subcategories without attribute lists)
@@ -1700,10 +1712,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
 
   // NEW: Build autocomplete with previously used values for subcategories without attribute lists
   Widget _buildDynamicDropdownSelector(List<dynamic> options, int level, String label) {
-    // Get current value from map (no need to ensure size like with lists)
     final currentValue = _subcategoryTextValues[level] ?? '';
     
-    return FutureBuilder<List<String>>(
+    return _wrapSelectorWithLabel(label, FutureBuilder<List<String>>(
       future: _getUsedValuesForSubcategory(label),
       builder: (context, snapshot) {
         final usedValues = snapshot.data ?? [];
@@ -1713,9 +1724,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
               ? TextEditingValue(text: currentValue)
               : const TextEditingValue(),
           optionsBuilder: (TextEditingValue textEditingValue) {
-            if (textEditingValue.text.isEmpty) {
-              return usedValues;
-            }
+            if (textEditingValue.text.isEmpty) return usedValues;
             return usedValues
                 .where((value) => value
                     .toLowerCase()
@@ -1732,16 +1741,13 @@ class _AddToolScreenState extends State<AddToolScreen> {
             });
           },
           fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-            // If we have a current value and controller is empty, set it
             if (currentValue.isNotEmpty && controller.text.isEmpty) {
               controller.text = currentValue;
             }
-            
             return TextFormField(
               controller: controller,
               focusNode: focusNode,
               decoration: InputDecoration(
-                labelText: label,
                 border: const OutlineInputBorder(),
                 hintText: 'Type or select',
                 suffixIcon: IconButton(
@@ -1769,28 +1775,24 @@ class _AddToolScreenState extends State<AddToolScreen> {
           },
         );
       },
-    );
+    ));
   }
 
   // NEW: Build number input selector for number field type
   Widget _buildNumberInputSelector(int level, String label) {
-    return TextFormField(
+    return _wrapSelectorWithLabel(label, TextFormField(
       initialValue: _subcategoryNumberValues[level]?.toString() ?? '',
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
+      decoration: const InputDecoration(border: OutlineInputBorder()),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       onChanged: (value) {
         setState(() {
           _subcategoryNumberValues[level] = double.tryParse(value);
-          // Number inputs don't have children, so clear beyond this level
           _selectedSubcategoryIds = _selectedSubcategoryIds.sublist(0, level);
           _selectedAttributeValue = null;
           _updateSubcategoryText();
         });
       },
-    );
+    ));
   }
 
   Widget _buildAttributeSelector(String attrListId) {
@@ -1813,8 +1815,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
         if (displayMode == 'buttons') {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              Text(label, style: _selectorLabelStyle),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -1842,12 +1845,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
             ],
           );
         } else {
-          return DropdownButtonFormField<String>(
+          return _wrapSelectorWithLabel(label, DropdownButtonFormField<String>(
             value: _selectedAttributeValue,
-            decoration: InputDecoration(
-              labelText: label,
-              border: const OutlineInputBorder(),
-            ),
+            decoration: const InputDecoration(border: OutlineInputBorder()),
             items: values.map<DropdownMenuItem<String>>((val) {
               return DropdownMenuItem<String>(
                 value: val.data['value'],
@@ -1860,7 +1860,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
                 _updateToolName();
               });
             },
-          );
+          ));
         }
       },
     );
@@ -2131,13 +2131,9 @@ class _AddToolScreenState extends State<AddToolScreen> {
             // CATEGORY - Dynamic (Dropdown or Buttons based on setting)
             _buildCategorySelector(),
             const SizedBox(height: 16),
-            
-            // Dynamic Cascading Subcategories
-            ..._buildSubcategorySelectors(),
-            
-            if (_selectedCategoryId != null) const SizedBox(height: 16),
-            
-                  // Tool Name
+            // Dynamic Cascading Subcategories (spacing before Tool Name only when we have subcategory widgets)
+            ..._subcategorySelectorWidgets(),
+            // Tool Name
               TextFormField(
                 controller: _toolNameController,
                     decoration: InputDecoration(
@@ -2183,10 +2179,10 @@ class _AddToolScreenState extends State<AddToolScreen> {
                     readOnly: _selectedCategoryId == CUTTING_TOOLS_CATEGORY_ID
                         ? _autoGenerateName
                         : false,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                  color: Colors.black,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
@@ -2885,13 +2881,15 @@ class _AddToolScreenState extends State<AddToolScreen> {
     }
     
     final locationDisplay = '$sourceLocationName → $destLocationName';
-    
+    final colorScheme = Theme.of(context).colorScheme;
+    final dividerColor = Theme.of(context).dividerColor;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        border: Border.all(color: Colors.grey[300]!),
+        color: colorScheme.surfaceContainerLowest,
+        border: Border.all(color: dividerColor),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
@@ -2903,10 +2901,10 @@ class _AddToolScreenState extends State<AddToolScreen> {
                 // Action description
                 Text(
                   'Transferred ${transferOut.quantity}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
-                    color: Colors.black87,
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -2914,7 +2912,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
                 // Location with arrow
                 Text(
                   locationDisplay,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                  style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -2928,12 +2926,12 @@ class _AddToolScreenState extends State<AddToolScreen> {
             children: [
               Text(
                 dateFormat.format(transferOut.created),
-                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 2),
               Text(
                 '${transferOut.quantityBefore} → ${transferOut.quantityAfter}',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
               ),
             ],
           ),
@@ -2988,12 +2986,15 @@ class _AddToolScreenState extends State<AddToolScreen> {
       locationDisplay = locationName;
     }
     
+    final colorScheme = Theme.of(context).colorScheme;
+    final dividerColor = Theme.of(context).dividerColor;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        border: Border.all(color: Colors.grey[300]!),
+        color: colorScheme.surfaceContainerLowest,
+        border: Border.all(color: dividerColor),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
@@ -3005,10 +3006,10 @@ class _AddToolScreenState extends State<AddToolScreen> {
                 // Action description
                 Text(
                   history.getActionDescription(),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
-                    color: Colors.black87,
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -3016,7 +3017,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
                 // Location with arrow
                 Text(
                   locationDisplay,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                  style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -3030,12 +3031,12 @@ class _AddToolScreenState extends State<AddToolScreen> {
             children: [
               Text(
                 dateFormat.format(history.created),
-                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 2),
               Text(
                 '${history.quantityBefore} → ${history.quantityAfter}',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
               ),
             ],
           ),
@@ -3202,36 +3203,77 @@ class InventoryLocationTag extends StatelessWidget {
 
     final locationPath = _buildLocationPath(location);
     final type = location.type.toLowerCase();
-    
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     Color backgroundColor;
     Color borderColor;
     Color textColor;
-    
-    switch (type) {
-      case 'toolbox':
-        backgroundColor = Colors.red[50]!;
-        borderColor = Colors.red[300]!;
-        textColor = Colors.red[900]!;
-        break;
-      case 'shelf':
-        backgroundColor = Colors.orange[50]!;
-        borderColor = Colors.orange[300]!;
-        textColor = Colors.orange[900]!;
-        break;
-      case 'machine':
-        backgroundColor = Colors.blue[50]!;
-        borderColor = Colors.blue[300]!;
-        textColor = Colors.blue[900]!;
-        break;
-      case 'recycle':
-        backgroundColor = Colors.grey[200]!;
-        borderColor = Colors.grey[400]!;
-        textColor = Colors.grey[800]!;
-        break;
-      default:
-        backgroundColor = Colors.grey[50]!;
-        borderColor = Colors.grey[300]!;
-        textColor = Colors.grey[900]!;
+    Color iconColor;
+    if (isDark) {
+      switch (type) {
+        case 'toolbox':
+          backgroundColor = colorScheme.errorContainer;
+          borderColor = colorScheme.error;
+          textColor = colorScheme.onErrorContainer;
+          iconColor = colorScheme.onErrorContainer;
+          break;
+        case 'shelf':
+          backgroundColor = colorScheme.tertiaryContainer;
+          borderColor = colorScheme.tertiary;
+          textColor = colorScheme.onTertiaryContainer;
+          iconColor = colorScheme.onTertiaryContainer;
+          break;
+        case 'machine':
+          backgroundColor = colorScheme.primaryContainer;
+          borderColor = colorScheme.primary;
+          textColor = colorScheme.onPrimaryContainer;
+          iconColor = colorScheme.onPrimaryContainer;
+          break;
+        case 'recycle':
+          backgroundColor = colorScheme.surfaceContainerHigh;
+          borderColor = colorScheme.outline;
+          textColor = colorScheme.onSurfaceVariant;
+          iconColor = colorScheme.onSurfaceVariant;
+          break;
+        default:
+          backgroundColor = colorScheme.surfaceContainerHigh;
+          borderColor = colorScheme.outline;
+          textColor = colorScheme.onSurfaceVariant;
+          iconColor = colorScheme.onSurfaceVariant;
+      }
+    } else {
+      switch (type) {
+        case 'toolbox':
+          backgroundColor = Colors.red[50]!;
+          borderColor = Colors.red[300]!;
+          textColor = Colors.red[900]!;
+          iconColor = Colors.orange[700]!;
+          break;
+        case 'shelf':
+          backgroundColor = Colors.orange[50]!;
+          borderColor = Colors.orange[300]!;
+          textColor = Colors.orange[900]!;
+          iconColor = Colors.orange[700]!;
+          break;
+        case 'machine':
+          backgroundColor = Colors.blue[50]!;
+          borderColor = Colors.blue[300]!;
+          textColor = Colors.blue[900]!;
+          iconColor = Colors.orange[700]!;
+          break;
+        case 'recycle':
+          backgroundColor = Colors.grey[200]!;
+          borderColor = Colors.grey[400]!;
+          textColor = Colors.grey[800]!;
+          iconColor = Colors.orange[700]!;
+          break;
+        default:
+          backgroundColor = Colors.grey[50]!;
+          borderColor = Colors.grey[300]!;
+          textColor = Colors.grey[900]!;
+          iconColor = Colors.orange[700]!;
+      }
     }
 
     return Container(
@@ -3256,7 +3298,7 @@ class InventoryLocationTag extends StatelessWidget {
           // Transfer icon
           IconButton(
             icon: const Icon(Icons.swap_horiz, size: 18),
-            color: Colors.orange[700],
+            color: iconColor,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             tooltip: 'Transfer',
@@ -3266,7 +3308,7 @@ class InventoryLocationTag extends StatelessWidget {
           // Delete icon
           IconButton(
             icon: const Icon(Icons.delete_outline, size: 18),
-            color: Colors.red[700],
+            color: isDark ? colorScheme.error : Colors.red[700],
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             tooltip: 'Remove from location',

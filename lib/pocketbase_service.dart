@@ -154,6 +154,20 @@ class PocketBaseService {
     }
   }
 
+  /// Tool locations at [locationId] with tool expanded (for checking tool_name).
+  Future<List<dynamic>> getToolLocationsAtLocationWithTool(String locationId) async {
+    try {
+      final records = await pb.collection('tool_locations').getFullList(
+        filter: 'location = "$locationId" && quantity > 0',
+        expand: 'tool',
+      );
+      return records;
+    } catch (e) {
+      print('Error getting tool locations at location: $e');
+      rethrow;
+    }
+  }
+
   // Get tool by ID
   Future<dynamic> getToolById(String toolId) async {
     try {
