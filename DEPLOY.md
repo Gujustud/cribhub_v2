@@ -44,10 +44,16 @@ These values are set at **build time** via `--dart-define`:
 
 ## 2. Production web build (on laptop)
 
-Always build with explicit server URLs so the deployed app talks to the server, not localhost.
+Run the build script from the repo root. It updates the About-page git info from the current commit, then builds with production URLs (so you don’t have to remember a separate step):
 
 ```powershell
 cd c:\cribhub
+.\scripts\build_web.ps1
+```
+
+This refreshes `lib/git_info.dart` from git and runs:
+
+```powershell
 flutter build web `
   --dart-define=POCKETBASE_URL=https://cribhub.sscadcam.com/ `
   --dart-define=MCP_URL=https://cribhub.sscadcam.com/mcp
@@ -205,17 +211,7 @@ Restart PocketBase if needed, then it will apply new migrations on startup.
 
 ## 6. Verify deployment
 
-### 6.1 Check the bundle for the expected commit (optional)
-
-On the server:
-
-```bash
-grep -o "938229a" /opt/pocketbase/pb_public/main.dart.js | head -1
-```
-
-Replace `938229a` with the short hash you expect (e.g. from `lib/git_info.dart`). Seeing it here confirms the new build is on disk.
-
-### 6.2 Browser cache and service worker
+### 6.1 Browser cache and service worker
 
 Flutter web registers a service worker (`flutter_service_worker.js`) that can cache old bundles. If the site still looks old after deploy:
 
@@ -237,10 +233,8 @@ When everything is correct, the About screen should show the new short hash from
 ```powershell
 cd c:\cribhub
 
-# Production build (talks to live server)
-flutter build web `
-  --dart-define=POCKETBASE_URL=https://cribhub.sscadcam.com/ `
-  --dart-define=MCP_URL=https://cribhub.sscadcam.com/mcp
+# Production build (updates git info, then builds for live server)
+.\scripts\build_web.ps1
 
 # Create dist.zip from build/web contents
 mkdir deploy -ErrorAction SilentlyContinue

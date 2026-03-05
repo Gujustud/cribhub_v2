@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'pocketbase_service.dart';
 import 'app_drawer.dart';
 import 'settings_screen.dart'; // NEW: For back button navigation
+import 'drawer_behavior.dart';
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -10,9 +11,14 @@ class CategoriesScreen extends StatefulWidget {
   State<CategoriesScreen> createState() => _CategoriesScreenState();
 }
 
-class _CategoriesScreenState extends State<CategoriesScreen> {
+class _CategoriesScreenState extends State<CategoriesScreen> with AutoOpenDrawerMixin {
   List<dynamic> _categories = [];
   bool _isLoading = true;
+
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
 
   @override
   void initState() {
@@ -575,7 +581,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    maybeAutoOpenDrawer();
+
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Categories'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,

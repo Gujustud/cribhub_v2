@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'pocketbase_service.dart';
 import 'app_drawer.dart';
 import 'settings_screen.dart'; // NEW: For back button
+import 'drawer_behavior.dart';
+import 'drawer_data_cache.dart';
 
 class LocationManagementScreen extends StatefulWidget {
   const LocationManagementScreen({super.key});
@@ -12,7 +14,7 @@ class LocationManagementScreen extends StatefulWidget {
   State<LocationManagementScreen> createState() => _LocationManagementScreenState();
 }
 
-class _LocationManagementScreenState extends State<LocationManagementScreen> {
+class _LocationManagementScreenState extends State<LocationManagementScreen> with AutoOpenDrawerMixin {
   List<dynamic> _locations = [];
   Map<String, int> _locationTypeOrder = {
     'toolbox': 1,
@@ -23,6 +25,11 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   bool _isLoading = true;
   Set<String> _expandedLocations = {};
   String? _selectedType; // NEW: Currently selected type
+
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
 
   @override
   void initState() {
@@ -599,8 +606,19 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     );
   }
 
-  void _showDeleteLocationDialog(dynamic location) {
+  void _showDeleteLocationDialog(dynamic location, {List<dynamic>? toolLocations}) {
     final hasChildren = _getChildLocations(location.id).isNotEmpty;
+    final hasTools = toolLocations != null && toolLocations.isNotEmpty;
+    final toolNames = hasTools
+        ? (toolLocations!
+            .map<String>((r) {
+              final tool = r.expand?['tool'];
+              if (tool == null) return 'Tool';
+              final t = tool is List ? (tool.isNotEmpty ? tool[0] : null) : tool;
+              return t?.data['tool_name'] ?? 'Tool';
+            })
+            .toList())
+        : <String>[];
 
     showDialog(
       context: context,
@@ -619,6 +637,20 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                 ),
               ),
+            if (hasTools) ...[
+              const SizedBox(height: 8),
+              Text(
+                '⚠️ This location has ${toolNames.length} tool(s): ${toolNames.take(5).join(", ")}${toolNames.length > 5 ? "…" : ""}',
+                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text(
+                  'Deleting will remove tool placements here. Past history is kept but may show "Unknown location" for moves to/from this location.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             const Text(
               'This action cannot be undone.',
@@ -635,6 +667,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             onPressed: () async {
               try {
                 final pbService = PocketBaseService();
+                await pbService.deleteToolLocationsAtLocation(location.id);
                 await pbService.deleteLocation(location.id);
 
                 Navigator.pop(context);
@@ -681,6 +714,32 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     return _locations.where((loc) => loc.data['parent'] == parentId).toList();
   }
 
+  /// Build full hierarchical path for a location record, e.g. "Toolbox A > Drawer A > Row 2".
+  String _buildLocationPathFromRecord(dynamic location) {
+    final names = <String>[];
+    var current = location;
+
+    while (true) {
+      final name = current.data['name']?.toString() ?? '';
+      if (name.isNotEmpty) {
+        names.insert(0, name);
+      }
+
+      final parentId = current.data['parent'];
+      if (parentId == null || parentId.toString().isEmpty) {
+        break;
+      }
+
+      try {
+        current = _locations.firstWhere((loc) => loc.id == parentId);
+      } catch (_) {
+        break;
+      }
+    }
+
+    return names.join(' > ');
+  }
+
   Widget _buildLocationTree(dynamic location, int depth) {
     final children = _getChildLocations(location.id);
     final hasChildren = children.isNotEmpty;
@@ -724,7 +783,12 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete, size: 20, color: Colors.red),
-                  onPressed: () => _showDeleteLocationDialog(location),
+                  onPressed: () async {
+                    final pbService = PocketBaseService();
+                    final toolLocs = await pbService.getToolLocationsAtLocationWithTool(location.id);
+                    if (!mounted) return;
+                    _showDeleteLocationDialog(location, toolLocations: toolLocs);
+                  },
                   tooltip: 'Delete location',
                 ),
                 IconButton(
@@ -732,7 +796,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   onPressed: () {
                     _showAddLocationDialog(
                       parentId: location.id,
-                      parentName: location.data['name'],
+                      parentName: _buildLocationPathFromRecord(location),
                     );
                   },
                   tooltip: 'Add sub-location',
@@ -783,25 +847,18 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     final colorScheme = theme.colorScheme;
     final dividerColor = theme.dividerColor;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Locations'),
-        backgroundColor: colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
-      ),
-      drawer: const AppDrawer(),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // LEFT PANEL - Location Types
-                Container(
+    maybeAutoOpenDrawer();
+
+    final isWide = MediaQuery.of(context).size.width >= 900;
+    final usePermanentDrawer = isWide && DrawerDataCache.keepDrawerOpen;
+
+    final bodyContent = _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // LEFT PANEL - Location Types
+              Container(
                   width: 250,
                   decoration: BoxDecoration(
                     border: Border(right: BorderSide(color: dividerColor)),
@@ -948,12 +1005,37 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                                       ..._getRootLocationsByType().map((loc) => _buildLocationTree(loc, 0)),
                                     ],
                                   ),
-                      ),
+                        ),
                     ],
                   ),
                 ),
               ],
-            ),
+            );
+
+    return Scaffold(
+      key: _scaffoldKey,
+      appBar: AppBar(
+        title: const Text('Locations'),
+        backgroundColor: colorScheme.inversePrimary,
+        leading: usePermanentDrawer
+            ? null
+            : Builder(
+                builder: (context) => IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed: () => Scaffold.of(context).openDrawer(),
+                ),
+              ),
+      ),
+      drawer: usePermanentDrawer ? null : const AppDrawer(),
+      body: usePermanentDrawer
+          ? Row(
+              children: [
+                const AppDrawer(asDrawer: false, closeOnTap: false),
+                const VerticalDivider(width: 1),
+                Expanded(child: bodyContent),
+              ],
+            )
+          : bodyContent,
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'pocketbase_service.dart';
 import 'app_drawer.dart';
+import 'drawer_behavior.dart';
 
 class SuppliersScreen extends StatefulWidget {
   const SuppliersScreen({super.key});
@@ -9,10 +10,15 @@ class SuppliersScreen extends StatefulWidget {
   State<SuppliersScreen> createState() => _SuppliersScreenState();
 }
 
-class _SuppliersScreenState extends State<SuppliersScreen> {
+class _SuppliersScreenState extends State<SuppliersScreen> with AutoOpenDrawerMixin {
   List<dynamic> _suppliers = [];
   List<dynamic> _categories = [];
   bool _isLoading = true;
+
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
 
   @override
   void initState() {
@@ -485,7 +491,10 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    maybeAutoOpenDrawer();
+
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Suppliers'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,

@@ -6,6 +6,8 @@ import 'transfer_dialog.dart';
 import 'add_tool_screen.dart';
 import 'return_dialog.dart';
 import 'app_drawer.dart';
+import 'drawer_behavior.dart';
+import 'drawer_data_cache.dart';
 
 class InventoryScreen extends StatefulWidget {
   final String? categoryFilter; // NEW: Optional category filter
@@ -19,7 +21,7 @@ class InventoryScreen extends StatefulWidget {
   State<InventoryScreen> createState() => _InventoryScreenState();
 }
 
-class _InventoryScreenState extends State<InventoryScreen> {
+class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMixin {
   final _pbService = PocketBaseService();
   List<ToolWithLocations> _toolsWithLocations = [];
   List<ToolWithLocations> _filteredTools = [];
@@ -28,6 +30,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
   bool _showToolDetails = true; // NEW: Default to true
   String? _errorMessage;
   final TextEditingController _searchController = TextEditingController();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
 
   @override
   void initState() {
@@ -265,16 +271,191 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    maybeAutoOpenDrawer();
+
+    final isWide = MediaQuery.of(context).size.width >= 900;
+    final usePermanentDrawer = isWide && DrawerDataCache.keepDrawerOpen;
+
+    final bodyContent = Column(
+      children: [
+        // Top action bar with search and buttons (centered)
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor,
+                width: 1,
+              ),
+            ),
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Search field
+                  Flexible(
+                    flex: 3,
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search tools...',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Add Tool button (height and radius match search field)
+                  ElevatedButton(
+                    onPressed: _navigateToAddTool,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                      backgroundColor: Colors.grey[700],
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(0, 52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add, size: 24),
+                        SizedBox(width: 8),
+                        Text('Add Tool', style: TextStyle(fontSize: 16)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Return Tool button (height and radius match search field)
+                  ElevatedButton(
+                    onPressed: _navigateToReturnTool,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                      backgroundColor: Colors.grey[700],
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(0, 52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.keyboard_return, size: 24),
+                        SizedBox(width: 8),
+                        Text('Return Tool', style: TextStyle(fontSize: 16)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        // Tool list (takes remaining space)
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _errorMessage != null
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: Colors.red,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Error: $_errorMessage',
+                            style: const TextStyle(color: Colors.red),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: _loadData,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : _filteredTools.isEmpty && _searchController.text.isNotEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.search_off,
+                                size: 48,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No tools found for "${_searchController.text}"',
+                                style: const TextStyle(color: Colors.grey),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        )
+                      : _filteredTools.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'No tools found.\nAdd some tools to get started!',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 16, color: Colors.grey),
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _filteredTools.length,
+                              itemBuilder: (context, index) {
+                                return ToolCard(
+                                  toolWithLocations: _filteredTools[index],
+                                  allLocations: _allLocations,
+                                  showToolDetails: _showToolDetails, // NEW
+                                  onTap: () => _navigateToEditTool(_filteredTools[index].tool),
+                                  onEdit: () => _navigateToEditTool(_filteredTools[index].tool),
+                                  onDuplicate: () => _navigateToDuplicateTool(_filteredTools[index].tool),
+                                  onDelete: () => _deleteTool(_filteredTools[index].tool),
+                                  onTransfer: (sourceLocation) {
+                                    _handleTransfer(
+                                      tool: _filteredTools[index].tool,
+                                      sourceLocation: sourceLocation,
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+        ),
+      ],
+    );
+
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: Text(widget.categoryFilter ?? 'All Inventory'), // UPDATED: Dynamic title
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
+        leading: usePermanentDrawer
+            ? null
+            : Builder(
+                builder: (context) => IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed: () => Scaffold.of(context).openDrawer(),
+                ),
+              ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -283,173 +464,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
         ],
       ),
-      drawer: const AppDrawer(),
-      body: Column(
-        children: [
-          // Top action bar with search and buttons (centered)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).dividerColor,
-                  width: 1,
-                ),
-              ),
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1200),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Search field
-                    Flexible(
-                      flex: 3,
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Search tools...',
-                          prefixIcon: const Icon(Icons.search),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-
-                    // Add Tool button (height and radius match search field)
-                    ElevatedButton(
-                      onPressed: _navigateToAddTool,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                        backgroundColor: Colors.grey[700],
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(0, 52),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.add, size: 24),
-                          SizedBox(width: 8),
-                          Text('Add Tool', style: TextStyle(fontSize: 16)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-
-                    // Return Tool button (height and radius match search field)
-                    ElevatedButton(
-                      onPressed: _navigateToReturnTool,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                        backgroundColor: Colors.grey[700],
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(0, 52),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.keyboard_return, size: 24),
-                          SizedBox(width: 8),
-                          Text('Return Tool', style: TextStyle(fontSize: 16)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Tool list (takes remaining space)
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _errorMessage != null
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.error_outline,
-                              size: 48,
-                              color: Colors.red,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Error: $_errorMessage',
-                              style: const TextStyle(color: Colors.red),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 16),
-                            ElevatedButton(
-                              onPressed: _loadData,
-                              child: const Text('Retry'),
-                            ),
-                          ],
-                        ),
-                      )
-                    : _filteredTools.isEmpty && _searchController.text.isNotEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(
-                                  Icons.search_off,
-                                  size: 48,
-                                  color: Colors.grey,
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No tools found for "${_searchController.text}"',
-                                  style: const TextStyle(color: Colors.grey),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            ),
-                          )
-                        : _filteredTools.isEmpty
-                            ? const Center(
-                                child: Text(
-                                  'No tools found.\nAdd some tools to get started!',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 16, color: Colors.grey),
-                                ),
-                              )
-                            : ListView.builder(
-                                padding: const EdgeInsets.all(16),
-                                itemCount: _filteredTools.length,
-                                itemBuilder: (context, index) {
-                                  return ToolCard(
-                                    toolWithLocations: _filteredTools[index],
-                                    allLocations: _allLocations,
-                                    showToolDetails: _showToolDetails, // NEW
-                                    onTap: () => _navigateToEditTool(_filteredTools[index].tool),
-                                    onEdit: () => _navigateToEditTool(_filteredTools[index].tool),
-                                    onDuplicate: () => _navigateToDuplicateTool(_filteredTools[index].tool),
-                                    onDelete: () => _deleteTool(_filteredTools[index].tool),
-                                    onTransfer: (sourceLocation) {
-                                      _handleTransfer(
-                                        tool: _filteredTools[index].tool,
-                                        sourceLocation: sourceLocation,
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-          ),
-        ],
-      ),
+      drawer: usePermanentDrawer ? null : const AppDrawer(),
+      body: usePermanentDrawer
+          ? Row(
+              children: [
+                const AppDrawer(asDrawer: false, closeOnTap: false),
+                const VerticalDivider(width: 1),
+                Expanded(child: bodyContent),
+              ],
+            )
+          : bodyContent,
     );
   }
 }

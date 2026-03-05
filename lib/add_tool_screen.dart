@@ -8,6 +8,7 @@ import 'models.dart';
 import 'add_inventory_dialog.dart';
 import 'app_drawer.dart';
 import 'inventory_screen.dart';
+import 'drawer_behavior.dart';
 import 'package:intl/intl.dart'; // For date formatting in history
 
 class AddToolScreen extends StatefulWidget {
@@ -26,7 +27,7 @@ class AddToolScreen extends StatefulWidget {
   State<AddToolScreen> createState() => _AddToolScreenState();
 }
 
-class _AddToolScreenState extends State<AddToolScreen> {
+class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin {
   // Cutting Tools category ID from PocketBase
   static const String CUTTING_TOOLS_CATEGORY_ID = '0ro99ktjwyl14dc';
   
@@ -42,6 +43,10 @@ class _AddToolScreenState extends State<AddToolScreen> {
   final _fluteLengthController = TextEditingController();
   final _cornerRadController = TextEditingController();
   final _neckController = TextEditingController();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
   
   // Dropdown values
   String _category = 'Cutting Tools';
@@ -592,6 +597,8 @@ class _AddToolScreenState extends State<AddToolScreen> {
   
   void _prefillFields() {
     final tool = widget.tool!;
+    // Turn off auto name before filling fields so dimension listeners don't overwrite saved name
+    _autoGenerateName = false;
     _toolNameController.text = widget.isDuplicate ? '${tool.toolName} (Copy)' : tool.toolName;
     _modelNumberController.text = tool.modelNumber ?? '';
     _urlController.text = tool.url ?? '';
@@ -650,8 +657,6 @@ class _AddToolScreenState extends State<AddToolScreen> {
         tool.photo!,
       ).toString();
     }
-    
-    _autoGenerateName = false;
   }
   
   Future<void> _loadToolLocations() async {
@@ -2095,6 +2100,7 @@ class _AddToolScreenState extends State<AddToolScreen> {
     // Show loading indicator while initializing
     if (!_isInitialized) {
       return Scaffold(
+        key: _scaffoldKey,
         appBar: AppBar(
           title: Text(_isEditMode ? 'Edit Tool' : widget.isDuplicate ? 'Duplicate Tool' : 'Add Tool'),
           backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -2105,7 +2111,10 @@ class _AddToolScreenState extends State<AddToolScreen> {
       );
     }
     
+    maybeAutoOpenDrawer();
+
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: Text(_isEditMode ? 'Edit Tool' : widget.isDuplicate ? 'Duplicate Tool' : 'Add Tool'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,

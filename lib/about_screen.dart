@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'app_drawer.dart';
 import 'git_info.dart';
+import 'drawer_behavior.dart';
 
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
@@ -11,9 +12,14 @@ class AboutScreen extends StatefulWidget {
   State<AboutScreen> createState() => _AboutScreenState();
 }
 
-class _AboutScreenState extends State<AboutScreen> {
+class _AboutScreenState extends State<AboutScreen> with AutoOpenDrawerMixin {
   String _version = 'Loading...';
   bool _isLoading = true;
+
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
 
   @override
   void initState() {
@@ -45,7 +51,10 @@ class _AboutScreenState extends State<AboutScreen> {
 
   @override
   Widget build(BuildContext context) {
+    maybeAutoOpenDrawer();
+
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: const Text('About'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,

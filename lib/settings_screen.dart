@@ -4,6 +4,8 @@ import 'app_drawer.dart';
 import 'category_management_screen.dart';
 import 'tool_import_config_screen.dart'; // NEW
 import 'theme_controller.dart';
+import 'drawer_behavior.dart';
+import 'drawer_data_cache.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -12,14 +14,20 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen> with AutoOpenDrawerMixin {
   bool _isLoading = true;
   bool _showAllInventoryInMenu = true;
   bool _showToolDetailsInList = true;
   bool _useCategoryButtons = false;
   bool _enableToolImport = false; // NEW
   bool _darkMode = false;
+  bool _keepDrawerOpen = false; // NEW
   String? _settingsId;
+
+  @override
+  GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
+
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -42,8 +50,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _showToolDetailsInList = settings.data['show_tool_details_in_list'] ?? true;
         _useCategoryButtons = settings.data['use_category_buttons'] ?? false;
         _enableToolImport = settings.data['enable_tool_import'] ?? false; // NEW
+        _keepDrawerOpen = settings.data['keep_drawer_open'] ?? false;
         _isLoading = false;
       });
+
+      // Keep in-memory drawer cache in sync so new behavior applies immediately
+      DrawerDataCache.keepDrawerOpen = _keepDrawerOpen;
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -67,6 +79,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await pbService.updateAppSettings(
         settingsId: _settingsId!,
         showAllInventoryInMenu: value,
+        showToolDetailsInList: _showToolDetailsInList,
+        useCategoryButtons: _useCategoryButtons,
+        enableToolImport: _enableToolImport,
+        keepDrawerOpen: _keepDrawerOpen,
       );
 
       setState(() {
@@ -104,6 +120,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         settingsId: _settingsId!,
         showAllInventoryInMenu: _showAllInventoryInMenu,
         showToolDetailsInList: value,
+        useCategoryButtons: _useCategoryButtons,
+        enableToolImport: _enableToolImport,
+        keepDrawerOpen: _keepDrawerOpen,
       );
 
       setState(() {
@@ -142,6 +161,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         showAllInventoryInMenu: _showAllInventoryInMenu,
         showToolDetailsInList: _showToolDetailsInList,
         useCategoryButtons: value,
+        enableToolImport: _enableToolImport,
+        keepDrawerOpen: _keepDrawerOpen,
       );
 
       setState(() {
@@ -182,6 +203,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         showToolDetailsInList: _showToolDetailsInList,
         useCategoryButtons: _useCategoryButtons,
         enableToolImport: value,
+        keepDrawerOpen: _keepDrawerOpen,
       );
 
       setState(() {
@@ -210,25 +232,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _updateKeepDrawerOpen(bool value) async {
+    if (_settingsId == null) return;
+
+    try {
+      final pbService = PocketBaseService();
+      await pbService.updateAppSettings(
+        settingsId: _settingsId!,
+        showAllInventoryInMenu: _showAllInventoryInMenu,
+        showToolDetailsInList: _showToolDetailsInList,
+        useCategoryButtons: _useCategoryButtons,
+        enableToolImport: _enableToolImport,
+        keepDrawerOpen: value,
+      );
+
+      setState(() {
+        _keepDrawerOpen = value;
+      });
+
+      // Update drawer cache immediately so new screens respect the setting
+      DrawerDataCache.keepDrawerOpen = value;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating setting: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
-      ),
-      drawer: const AppDrawer(),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
+    maybeAutoOpenDrawer();
+
+    final isWide = MediaQuery.of(context).size.width >= 900;
+    final usePermanentDrawer = isWide && DrawerDataCache.keepDrawerOpen;
+
+    final bodyContent = _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
                 // Inventory Management Section
                 const Text(
                   'INVENTORY MANAGEMENT',
@@ -294,6 +341,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           });
                           await ThemeController.instance.setDarkMode(value);
                         },
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile(
+                        secondary: const Icon(Icons.menu_open, color: Colors.blue),
+                        title: const Text('Keep side menu open on desktop'),
+                        subtitle: const Text('On large screens, open the menu by default'),
+                        value: _keepDrawerOpen,
+                        onChanged: _updateKeepDrawerOpen,
                       ),
                       const Divider(height: 1),
                       SwitchListTile(
@@ -384,7 +439,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ],
-            ),
+            );
+
+    return Scaffold(
+      key: _scaffoldKey,
+      appBar: AppBar(
+        title: const Text('Settings'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        leading: usePermanentDrawer
+            ? null
+            : Builder(
+                builder: (context) => IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed: () => Scaffold.of(context).openDrawer(),
+                ),
+              ),
+      ),
+      drawer: usePermanentDrawer ? null : const AppDrawer(),
+      body: usePermanentDrawer
+          ? Row(
+              children: [
+                const AppDrawer(asDrawer: false, closeOnTap: false),
+                const VerticalDivider(width: 1),
+                Expanded(child: bodyContent),
+              ],
+            )
+          : bodyContent,
     );
   }
 }

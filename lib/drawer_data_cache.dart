@@ -4,6 +4,7 @@ import 'pocketbase_service.dart';
 class DrawerDataCache {
   static List<dynamic> categories = [];
   static bool showAllInventory = true;
+  static bool keepDrawerOpen = false;
   static bool _loaded = false;
 
   static bool get isLoaded => _loaded;
@@ -20,6 +21,7 @@ class DrawerDataCache {
       categories = results[0] as List<dynamic>;
       final settings = results[1];
       showAllInventory = settings.data['show_all_inventory_in_menu'] ?? true;
+      keepDrawerOpen = settings.data['keep_drawer_open'] ?? false;
       _loaded = true;
     } catch (e) {
       print('DrawerDataCache preload error: $e');

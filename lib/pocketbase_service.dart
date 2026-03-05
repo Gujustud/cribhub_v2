@@ -168,6 +168,22 @@ class PocketBaseService {
     }
   }
 
+  /// Removes all tool_location records at [locationId] so the location can be deleted.
+  /// History (inventory_history) is unchanged; past moves may show "Unknown location".
+  Future<void> deleteToolLocationsAtLocation(String locationId) async {
+    try {
+      final records = await pb.collection('tool_locations').getFullList(
+        filter: 'location = "$locationId"',
+      );
+      for (final r in records) {
+        await pb.collection('tool_locations').delete(r.id);
+      }
+    } catch (e) {
+      print('Error deleting tool locations at location: $e');
+      rethrow;
+    }
+  }
+
   // Get tool by ID
   Future<dynamic> getToolById(String toolId) async {
     try {
@@ -697,6 +713,7 @@ class PocketBaseService {
         // No settings found, create default
         final defaultSettings = await pb.collection('app_settings').create(body: {
           'show_all_inventory_in_menu': true,
+          'keep_drawer_open': false,
         });
         return defaultSettings;
       }
@@ -714,6 +731,7 @@ class PocketBaseService {
     bool? showToolDetailsInList, // NEW
     bool? useCategoryButtons, // NEW
     bool? enableToolImport, // NEW - for tool import feature
+    bool? keepDrawerOpen, // NEW - keep side menu open on desktop
   }) async {
     try {
       final Map<String, dynamic> body = {
@@ -735,6 +753,11 @@ class PocketBaseService {
       // NEW: Add tool import setting
       if (enableToolImport != null) {
         body['enable_tool_import'] = enableToolImport;
+      }
+
+      // NEW: Keep drawer open on desktop
+      if (keepDrawerOpen != null) {
+        body['keep_drawer_open'] = keepDrawerOpen;
       }
 
       await pb.collection('app_settings').update(settingsId, body: body);

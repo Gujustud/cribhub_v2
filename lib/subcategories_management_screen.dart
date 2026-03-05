@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'pocketbase_service.dart';
 import 'app_drawer.dart';
 import 'settings_screen.dart'; // NEW: For back button navigation
+import 'drawer_behavior.dart';
 
 class SubcategoriesManagementScreen extends StatefulWidget {
   const SubcategoriesManagementScreen({super.key});
@@ -12,7 +13,7 @@ class SubcategoriesManagementScreen extends StatefulWidget {
 }
 
 class _SubcategoriesManagementScreenState extends State<SubcategoriesManagementScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, AutoOpenDrawerMixin {
   final _pbService = PocketBaseService();
 
   // Data
@@ -29,6 +30,11 @@ class _SubcategoriesManagementScreenState extends State<SubcategoriesManagementS
   bool _isLoading = true;
 
   late TabController _tabController;
+
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
 
   @override
   void initState() {
@@ -103,7 +109,10 @@ class _SubcategoriesManagementScreenState extends State<SubcategoriesManagementS
 
   @override
   Widget build(BuildContext context) {
+    maybeAutoOpenDrawer();
+
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Subcategories & Attributes'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,

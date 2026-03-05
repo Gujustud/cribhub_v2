@@ -8,6 +8,7 @@ import 'return_dialog.dart';
 import 'app_drawer.dart';
 import 'theme_controller.dart';
 import 'drawer_data_cache.dart';
+import 'drawer_behavior.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -63,9 +64,12 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>(); // NEW: For hover-to-open drawer
+
+  @override
+  GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
 
   void _onSearch() {
     // TODO: Implement search
@@ -98,121 +102,113 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // NEW: Stack allows us to layer the hover detection over the Scaffold
-    return Stack(
-      children: [
-        Scaffold(
-          key: _scaffoldKey, // NEW: Key for programmatic drawer control
-          appBar: AppBar(
-            backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-            title: const Text('Cribhub'),
-            leading: Builder(
-              builder: (context) => IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: () => Scaffold.of(context).openDrawer(),
+    maybeAutoOpenDrawer();
+
+    final isWide = MediaQuery.of(context).size.width >= 900;
+    final usePermanentDrawer = isWide && DrawerDataCache.keepDrawerOpen;
+
+    final content = Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Search bar with camera button (constrained width)
+            SizedBox(
+              width: 500,
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search tools...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.camera_alt),
+                    onPressed: _onScanBarcode,
+                    tooltip: 'Scan barcode/QR',
+                  ),
+                ),
+                onSubmitted: (_) => _onSearch(),
               ),
             ),
-          ),
-          drawer: const AppDrawer(),
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Search bar with camera button (constrained width)
-                  SizedBox(
-                    width: 500,
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search tools...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.camera_alt),
-                          onPressed: _onScanBarcode,
-                          tooltip: 'Scan barcode/QR',
-                        ),
-                      ),
-                      onSubmitted: (_) => _onSearch(),
+            const SizedBox(height: 40),
+            // Action buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Add button
+                ElevatedButton(
+                  onPressed: _onAddTool,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    backgroundColor: Colors.grey[700],
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  const SizedBox(height: 40),
-                  // Action buttons
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Add button
-                      ElevatedButton(
-                        onPressed: _onAddTool,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                          backgroundColor: Colors.grey[700],
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.add, size: 24),
-                            SizedBox(width: 8),
-                            Text('Add Tool', style: TextStyle(fontSize: 16)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 20),
-                      // Return button
-                      ElevatedButton(
-                        onPressed: _onReturnTool,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                          backgroundColor: Colors.grey[700],
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.keyboard_return, size: 24),
-                            SizedBox(width: 8),
-                            Text('Return Tool', style: TextStyle(fontSize: 16)),
-                          ],
-                        ),
-                      ),
+                      Icon(Icons.add, size: 24),
+                      SizedBox(width: 8),
+                      Text('Add Tool', style: TextStyle(fontSize: 16)),
                     ],
                   ),
-                ],
+                ),
+                const SizedBox(width: 20),
+                // Return button
+                ElevatedButton(
+                  onPressed: _onReturnTool,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    backgroundColor: Colors.grey[700],
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.keyboard_return, size: 24),
+                      SizedBox(width: 8),
+                      Text('Return Tool', style: TextStyle(fontSize: 16)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return Scaffold(
+      key: _scaffoldKey,
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: const Text('Cribhub'),
+        leading: usePermanentDrawer
+            ? null
+            : Builder(
+                builder: (context) => IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed: () => Scaffold.of(context).openDrawer(),
+                ),
               ),
-            ),
-          ),
-        ),
-        // NEW: Simple hover zone for auto-opening drawer (20px on left edge)
-        // User manually closes by clicking outside or pressing ESC
-        Positioned(
-          left: 0,
-          top: 56, // Start below AppBar
-          bottom: 0,
-          width: 20,
-          child: MouseRegion(
-            opaque: false, // Don't block anything
-            onEnter: (_) {
-              // Only open if drawer is currently closed
-              if (!(_scaffoldKey.currentState?.isDrawerOpen ?? false)) {
-                _scaffoldKey.currentState?.openDrawer();
-              }
-            },
-            child: Container(
-              color: Colors.transparent,
-            ),
-          ),
-        ),
-      ],
+      ),
+      drawer: usePermanentDrawer ? null : const AppDrawer(),
+      body: usePermanentDrawer
+          ? Row(
+              children: [
+                const AppDrawer(asDrawer: false, closeOnTap: false),
+                const VerticalDivider(width: 1),
+                Expanded(child: content),
+              ],
+            )
+          : content,
     );
   }
 

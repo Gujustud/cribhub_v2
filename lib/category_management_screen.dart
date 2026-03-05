@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'pocketbase_service.dart';
 import 'app_drawer.dart';
 import 'settings_screen.dart';
+import 'drawer_behavior.dart';
+import 'drawer_data_cache.dart';
 
 class CategoryManagementScreen extends StatefulWidget {
   const CategoryManagementScreen({super.key});
@@ -12,7 +14,7 @@ class CategoryManagementScreen extends StatefulWidget {
   State<CategoryManagementScreen> createState() => _CategoryManagementScreenState();
 }
 
-class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
+class _CategoryManagementScreenState extends State<CategoryManagementScreen> with AutoOpenDrawerMixin {
   final PocketBaseService _pbService = PocketBaseService();
   
   List<dynamic> _categories = [];
@@ -23,6 +25,11 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   Set<String> _expandedSubcategories = {};
   
   bool _isLoading = true;
+
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
 
   @override
   void initState() {
@@ -675,6 +682,74 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       ..sort((a, b) => (a.data['sort_order'] ?? 0).compareTo(b.data['sort_order'] ?? 0));
   }
 
+  Future<void> _onRootSubcategoryReorder(int oldIndex, int newIndex) async {
+    if (_selectedCategoryId == null) return;
+    setState(() {
+      if (newIndex > oldIndex) newIndex -= 1;
+      final rootSubs = _getRootSubcategories();
+      final item = rootSubs.removeAt(oldIndex);
+      rootSubs.insert(newIndex, item);
+      for (int i = 0; i < rootSubs.length; i++) {
+        rootSubs[i].data['sort_order'] = i + 1;
+      }
+    });
+    try {
+      for (final sub in _getRootSubcategories()) {
+        await _pbService.updateSubcategory(
+          subcategoryId: sub.id,
+          name: sub.data['name'],
+          sortOrder: sub.data['sort_order'],
+          label: sub.data['label'],
+          customLabel: sub.data['custom_label'],
+          attributeListId: sub.data['attribute_list'],
+          displayMode: sub.data['display_mode'],
+          fieldType: sub.data['field_type'],
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving order: $e'), backgroundColor: Colors.red),
+        );
+      }
+      _loadData();
+    }
+  }
+
+  Future<void> _onChildSubcategoryReorder(String parentId, int oldIndex, int newIndex) async {
+    setState(() {
+      if (newIndex > oldIndex) newIndex -= 1;
+      final children = _getChildSubcategories(parentId);
+      final item = children.removeAt(oldIndex);
+      children.insert(newIndex, item);
+      for (int i = 0; i < children.length; i++) {
+        children[i].data['sort_order'] = i + 1;
+      }
+    });
+    try {
+      for (final sub in _getChildSubcategories(parentId)) {
+        await _pbService.updateSubcategory(
+          subcategoryId: sub.id,
+          name: sub.data['name'],
+          sortOrder: sub.data['sort_order'],
+          label: sub.data['label'],
+          customLabel: sub.data['custom_label'],
+          attributeListId: sub.data['attribute_list'],
+          parentSubcategoryId: parentId,
+          displayMode: sub.data['display_mode'],
+          fieldType: sub.data['field_type'],
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving order: $e'), backgroundColor: Colors.red),
+        );
+      }
+      _loadData();
+    }
+  }
+
   Widget _buildFieldTypeBadge(String fieldType, String displayMode) {
     if (fieldType == 'text') {
       return Container(
@@ -718,7 +793,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     }
   }
 
-  Widget _buildSubcategoryTree(dynamic subcategory, int depth) {
+  Widget _buildSubcategoryTree(dynamic subcategory, int depth, {bool showDragHandle = false, int reorderableIndex = 0}) {
     final children = _getChildSubcategories(subcategory.id);
     final hasChildren = children.isNotEmpty;
     final isExpanded = _expandedSubcategories.contains(subcategory.id);
@@ -727,6 +802,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     final displayMode = subcategory.data['display_mode'] ?? 'dropdown';
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Card(
           margin: EdgeInsets.only(left: depth * 16.0, top: 4, right: 4, bottom: 4),
@@ -734,6 +810,11 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
             leading: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (showDragHandle)
+                  ReorderableDragStartListener(
+                    index: reorderableIndex,
+                    child: Icon(Icons.drag_handle, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
                 if (hasChildren)
                   GestureDetector(
                     onTap: () => _toggleExpanded(subcategory.id),
@@ -786,7 +867,20 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
           ),
         ),
         if (hasChildren && isExpanded)
-          ...children.map((child) => _buildSubcategoryTree(child, depth + 1)),
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            buildDefaultDragHandles: false,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: children.length,
+            onReorder: (oldIndex, newIndex) => _onChildSubcategoryReorder(subcategory.id, oldIndex, newIndex),
+            itemBuilder: (context, index) {
+              final child = _getChildSubcategories(subcategory.id)[index];
+              return KeyedSubtree(
+                key: Key(child.id),
+                child: _buildSubcategoryTree(child, depth + 1, showDragHandle: true, reorderableIndex: index),
+              );
+            },
+          ),
       ],
     );
   }
@@ -1132,25 +1226,18 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     final colorScheme = theme.colorScheme;
     final dividerColor = theme.dividerColor;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Category Management'),
-        backgroundColor: colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
-      ),
-      drawer: const AppDrawer(),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // LEFT PANEL - Categories
-                Container(
+    maybeAutoOpenDrawer();
+
+    final isWide = MediaQuery.of(context).size.width >= 900;
+    final usePermanentDrawer = isWide && DrawerDataCache.keepDrawerOpen;
+
+    final bodyContent = _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // LEFT PANEL - Categories
+              Container(
                   width: 250,
                   decoration: BoxDecoration(
                     border: Border(right: BorderSide(color: dividerColor)),
@@ -1314,11 +1401,18 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                                       style: TextStyle(fontSize: 16, color: colorScheme.onSurfaceVariant),
                                     ),
                                   )
-                                : ListView(
+                                : ReorderableListView.builder(
                                     padding: const EdgeInsets.all(8),
-                                    children: [
-                                      ..._getRootSubcategories().map((sub) => _buildSubcategoryTree(sub, 0)),
-                                    ],
+                                    buildDefaultDragHandles: false,
+                                    itemCount: _getRootSubcategories().length,
+                                    onReorder: _onRootSubcategoryReorder,
+                                    itemBuilder: (context, index) {
+                                      final sub = _getRootSubcategories()[index];
+                                      return KeyedSubtree(
+                                        key: Key(sub.id),
+                                        child: _buildSubcategoryTree(sub, 0, showDragHandle: true, reorderableIndex: index),
+                                      );
+                                    },
                                   ),
                       ),
                       // Add Subcategory button centered below list
@@ -1343,7 +1437,32 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                   ),
                 ),
               ],
-            ),
+            );
+
+    return Scaffold(
+      key: _scaffoldKey,
+      appBar: AppBar(
+        title: const Text('Category Management'),
+        backgroundColor: colorScheme.inversePrimary,
+        leading: usePermanentDrawer
+            ? null
+            : Builder(
+                builder: (context) => IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed: () => Scaffold.of(context).openDrawer(),
+                ),
+              ),
+      ),
+      drawer: usePermanentDrawer ? null : const AppDrawer(),
+      body: usePermanentDrawer
+          ? Row(
+              children: [
+                const AppDrawer(asDrawer: false, closeOnTap: false),
+                const VerticalDivider(width: 1),
+                Expanded(child: bodyContent),
+              ],
+            )
+          : bodyContent,
     );
   }
 }

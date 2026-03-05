@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'pocketbase_service.dart';
 import 'app_drawer.dart';
+import 'drawer_behavior.dart';
 
 class BrandsScreen extends StatefulWidget {
   const BrandsScreen({super.key});
@@ -9,10 +10,15 @@ class BrandsScreen extends StatefulWidget {
   State<BrandsScreen> createState() => _BrandsScreenState();
 }
 
-class _BrandsScreenState extends State<BrandsScreen> {
+class _BrandsScreenState extends State<BrandsScreen> with AutoOpenDrawerMixin {
   List<dynamic> _brands = [];
   List<dynamic> _categories = [];
   bool _isLoading = true;
+
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
 
   @override
   void initState() {
@@ -298,7 +304,10 @@ class _BrandsScreenState extends State<BrandsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    maybeAutoOpenDrawer();
+
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Brand Management'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
