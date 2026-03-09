@@ -420,3 +420,101 @@ class InventoryHistory {
     }
   }
 }
+
+// Purchase tracking
+class Purchase {
+  final String id;
+  final DateTime purchaseDate;
+  final String? supplierId;
+  final String? orderReference;
+  final String? notes;
+  final double? total;
+  final String? supplierName;
+
+  Purchase({
+    required this.id,
+    required this.purchaseDate,
+    this.supplierId,
+    this.orderReference,
+    this.notes,
+    this.total,
+    this.supplierName,
+  });
+
+  factory Purchase.fromRecord(dynamic record) {
+    final data = record.data;
+    String? supplierName;
+    try {
+      if (record.expand != null && record.expand['supplier'] != null) {
+        final s = record.expand['supplier'];
+        if (s is List && s.isNotEmpty) {
+          supplierName = s[0].data?['company_name'];
+        } else {
+          supplierName = s.data?['company_name'];
+        }
+      }
+    } catch (_) {}
+    return Purchase(
+      id: record.id,
+      purchaseDate: data['purchase_date'] != null
+          ? DateTime.parse(data['purchase_date'].toString())
+          : DateTime.parse(record.created),
+      supplierId: data['supplier'],
+      orderReference: data['order_reference'],
+      notes: data['notes'],
+      total: data['total']?.toDouble(),
+      supplierName: supplierName,
+    );
+  }
+}
+
+class PurchaseItem {
+  final String id;
+  final String purchaseId;
+  final String? toolId;       // null for tax/shipping lines
+  final int quantity;
+  final double? unitCost;
+  final String? toolName;
+  final String lineType;      // 'item' | 'tax' | 'shipping'
+  final String? description;  // e.g. 'GST', 'PST', 'Shipping'
+
+  PurchaseItem({
+    required this.id,
+    required this.purchaseId,
+    this.toolId,
+    required this.quantity,
+    this.unitCost,
+    this.toolName,
+    this.lineType = 'item',
+    this.description,
+  });
+
+  factory PurchaseItem.fromRecord(dynamic record) {
+    final data = record.data;
+    String? toolName;
+    try {
+      if (record.expand != null && record.expand['tool'] != null) {
+        final t = record.expand['tool'];
+        if (t is List && t.isNotEmpty) {
+          toolName = t[0].data?['tool_name'];
+        } else {
+          toolName = t.data?['tool_name'];
+        }
+      }
+    } catch (_) {}
+    return PurchaseItem(
+      id: record.id,
+      purchaseId: data['purchase'] ?? '',
+      toolId: data['tool'],
+      quantity: (data['quantity'] ?? 0).toInt(),
+      unitCost: data['unit_cost']?.toDouble(),
+      toolName: toolName,
+      lineType: data['line_type'] ?? 'item',
+      description: data['description'],
+    );
+  }
+
+  bool get isItem => lineType == 'item';
+  bool get isTax => lineType == 'tax';
+  bool get isShipping => lineType == 'shipping';
+}

@@ -207,6 +207,33 @@ unzip -o ~/pb_migrations.zip
 
 Restart PocketBase if needed, then it will apply new migrations on startup.
 
+### 5.5 Purchase tracking collections (optional)
+
+If you use the **Purchases** feature, create these two collections in the PocketBase admin (**Settings → Collections**):
+
+**Collection: `purchases`**
+
+| Field            | Type   | Notes                    |
+|------------------|--------|--------------------------|
+| `purchase_date`  | date   | Required                 |
+| `supplier`       | relation | Single, → `suppliers` |
+| `order_reference`| text   | Optional                 |
+| `notes`          | text   | Optional                 |
+| `total`          | number | Optional                 |
+
+**Collection: `purchase_items`**
+
+| Field   | Type     | Notes                                                     |
+|---------|----------|-----------------------------------------------------------|
+| `purchase` | relation | Single, → `purchases`                                  |
+| `tool`  | relation | Single, → `inventory`; **optional** for tax/shipping lines |
+| `quantity` | number | Required (use 1 for tax/shipping)                      |
+| `unit_cost` | number | Optional (unit price for items; amount for tax/shipping) |
+| `line_type` | text   | `item` (default), `tax`, or `shipping`                 |
+| `description` | text  | Optional; e.g. "GST", "PST", "Shipping"               |
+
+Set list/create/view rules as needed (e.g. allow authenticated users to manage).
+
 ---
 
 ## 6. Verify deployment

@@ -1,5 +1,6 @@
 // multi_step_location_picker.dart
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'pocketbase_service.dart';
 
 class MultiStepLocationPicker extends StatefulWidget {
@@ -30,11 +31,30 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
   // When at a leaf location, cache which tools are there (for inline warning)
   String? _toolsAtLocationId;
   List<String> _toolsAtLocationNames = [];
-  
+  /// Order from "Manage Location Types" (SharedPreferences key: location_type_order)
+  Map<String, int> _locationTypeOrder = {};
+
   @override
   void initState() {
     super.initState();
-    _loadTypes();
+    _loadTypeOrderThenTypes();
+  }
+
+  Future<void> _loadTypeOrderThenTypes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final orderJson = prefs.getString('location_type_order');
+    if (orderJson != null) {
+      final Map<String, int> order = {};
+      orderJson.split(',').forEach((pair) {
+        final parts = pair.split(':');
+        if (parts.length == 2) {
+          final n = int.tryParse(parts[1]);
+          if (n != null) order[parts[0].toLowerCase()] = n;
+        }
+      });
+      if (mounted) setState(() => _locationTypeOrder = order);
+    }
+    if (mounted) _loadTypes();
   }
   
   void _loadTypes() {
@@ -42,9 +62,14 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
     final types = widget.allLocations
         .map((loc) => loc.data['type'] as String)
         .toSet()
-        .toList()
-      ..sort();
-    
+        .toList();
+    // Sort by Manage Location Types order (1=Toolbox, 2=Machine, etc.), then alphabetically for unknowns
+    types.sort((a, b) {
+      final orderA = _locationTypeOrder[a.toLowerCase()] ?? 999;
+      final orderB = _locationTypeOrder[b.toLowerCase()] ?? 999;
+      if (orderA != orderB) return orderA.compareTo(orderB);
+      return a.compareTo(b);
+    });
     setState(() {
       _locationHierarchy = types.map((type) => {'type': type, 'isType': true}).toList();
     });
@@ -67,7 +92,7 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
             loc.data['type'] == type && 
             (loc.data['parent'] == null || loc.data['parent'] == ''))
         .toList();
-    
+    _sortLocationsByNameNumeric(locations);
     setState(() {
       _locationHierarchy = locations;
     });
@@ -86,7 +111,7 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
     final children = widget.allLocations
         .where((loc) => loc.data['parent'] == parentId)
         .toList();
-    
+    _sortLocationsByNameNumeric(children);
     setState(() {
       _locationHierarchy = children;
       _toolsAtLocationId = null;
@@ -95,6 +120,28 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
       // This allows user to create new sub-locations
     });
     if (children.isEmpty) _loadToolsAtLocation(parentId);
+  }
+
+  /// Sort locations by name with numeric order: "Bin 1", "Bin 2", "Bin 14", "Bin 16".
+  /// Uses trailing number if present (e.g. "Bin 14" -> 14), else full name as int, else string.
+  void _sortLocationsByNameNumeric(List<dynamic> locations) {
+    int? _extractNumber(String name) {
+      final s = name.trim();
+      final lastWord = s.split(RegExp(r'\s+')).lastOrNull;
+      if (lastWord != null) {
+        final n = int.tryParse(lastWord);
+        if (n != null) return n;
+      }
+      return int.tryParse(s);
+    }
+    locations.sort((a, b) {
+      final na = (a.data['name'] as String?) ?? '';
+      final nb = (b.data['name'] as String?) ?? '';
+      final ia = _extractNumber(na);
+      final ib = _extractNumber(nb);
+      if (ia != null && ib != null) return ia.compareTo(ib);
+      return na.compareTo(nb);
+    });
   }
 
   Future<void> _loadToolsAtLocation(String locationId) async {

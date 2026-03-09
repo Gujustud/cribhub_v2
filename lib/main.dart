@@ -1,6 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'add_tool_screen.dart';
-import 'inventory_screen.dart'; // UPDATED: Changed from tool_list_screen.dart
+import 'inventory_screen.dart';
 import 'location_management_screen.dart';
 import 'brands_screen.dart';
 import 'suppliers_screen.dart';
@@ -9,6 +10,8 @@ import 'app_drawer.dart';
 import 'theme_controller.dart';
 import 'drawer_data_cache.dart';
 import 'drawer_behavior.dart';
+import 'models.dart';
+import 'pocketbase_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +28,12 @@ class CribhubApp extends StatelessWidget {
       colorScheme: ColorScheme.fromSeed(
         seedColor: Colors.blue,
         brightness: Brightness.light,
+      ).copyWith(
+        inversePrimary: Colors.grey.shade400,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.grey,
+        foregroundColor: Color(0xFF1a1a1a),
       ),
       useMaterial3: true,
     );
@@ -66,14 +75,76 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
   final TextEditingController _searchController = TextEditingController();
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>(); // NEW: For hover-to-open drawer
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  List<Tool>? _searchSuggestions;
+  List<Tool>? _cachedTools;
+  Timer? _searchDebounce;
 
   @override
   GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
 
-  void _onSearch() {
-    // TODO: Implement search
-    print('Searching for: ${_searchController.text}');
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchTextChanged);
+  }
+
+  void _onSearchTextChanged() {
+    final text = _searchController.text.trim();
+    if (text.length < 2) {
+      setState(() => _searchSuggestions = null);
+      return;
+    }
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), _updateSearchSuggestions);
+  }
+
+  Future<void> _updateSearchSuggestions() async {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.length < 2 || !mounted) return;
+
+    try {
+      if (_cachedTools == null) {
+        final pb = PocketBaseService();
+        final records = await pb.getTools();
+        if (!mounted) return;
+        _cachedTools = records.map((r) => Tool.fromRecord(r)).toList();
+      }
+      final filtered = _cachedTools!
+          .where((t) =>
+              t.toolName.toLowerCase().contains(query) ||
+              (t.brand?.toLowerCase().contains(query) ?? false) ||
+              (t.modelNumber?.toLowerCase().contains(query) ?? false))
+          .toList();
+      // Sort by diameter (asc), then # flutes, then flute length. Nulls last.
+      filtered.sort((a, b) {
+        final diaA = a.diameterIn ?? (a.diameterMm != null ? (a.diameterMm! / 25.4) : double.infinity);
+        final diaB = b.diameterIn ?? (b.diameterMm != null ? (b.diameterMm! / 25.4) : double.infinity);
+        final cmpDia = diaA.compareTo(diaB);
+        if (cmpDia != 0) return cmpDia;
+        final flA = a.flutes ?? 0x7fffffff;
+        final flB = b.flutes ?? 0x7fffffff;
+        final cmpFl = flA.compareTo(flB);
+        if (cmpFl != 0) return cmpFl;
+        final lenA = a.fluteLength ?? double.infinity;
+        final lenB = b.fluteLength ?? double.infinity;
+        return lenA.compareTo(lenB);
+      });
+      final matches = filtered.take(3).toList();
+      if (mounted) setState(() => _searchSuggestions = matches);
+    } catch (e) {
+      if (mounted) setState(() => _searchSuggestions = null);
+    }
+  }
+
+  void _openToolDetails(Tool tool) {
+    _searchController.clear();
+    setState(() => _searchSuggestions = null);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => AddToolScreen(tool: tool)),
+    );
   }
 
   void _onScanBarcode() {
@@ -110,13 +181,16 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
     final content = Center(
       child: Padding(
         padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Search bar with camera button (constrained width)
-            SizedBox(
-              width: 500,
-              child: TextField(
+        child: SizedBox(
+          height: 420,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              const SizedBox(height: 80),
+              // Search bar with camera button (constrained width)
+              SizedBox(
+                width: 500,
+                child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
                   hintText: 'Search tools...',
@@ -129,13 +203,45 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
                     tooltip: 'Scan barcode/QR',
                   ),
                 ),
-                onSubmitted: (_) => _onSearch(),
+                onSubmitted: (_) => FocusScope.of(context).unfocus(),
               ),
             ),
-            const SizedBox(height: 40),
-            // Action buttons
+            if ((_searchSuggestions?.length ?? 0) > 0) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: 500,
+                child: Card(
+                  elevation: 4,
+                  child: Builder(
+                    builder: (context) {
+                      final list = _searchSuggestions!;
+                      return ListView.separated(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        itemCount: list.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, i) {
+                          final tool = list[i];
+                          final category = tool.category;
+                          return ListTile(
+                            title: Text(tool.toolName),
+                            subtitle: category.isNotEmpty
+                                ? Text(category)
+                                : null,
+                            onTap: () => _openToolDetails(tool),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 40),
+              // Action buttons
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 // Add button
                 ElevatedButton(
@@ -183,7 +289,8 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
           ],
         ),
       ),
-    );
+    ),
+  );
 
     return Scaffold(
       key: _scaffoldKey,
@@ -214,6 +321,8 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
 
   @override
   void dispose() {
+    _searchController.removeListener(_onSearchTextChanged);
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }

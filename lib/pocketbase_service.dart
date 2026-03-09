@@ -554,6 +554,7 @@ class PocketBaseService {
     String? contact,
     String? directTel,
     String? email,
+    String? notes,
     List<String>? categoryIds,
   }) async {
     try {
@@ -565,6 +566,7 @@ class PocketBaseService {
         'contact': contact,
         'direct_tel': directTel,
         'email': email,
+        'notes': notes,
       };
       if (categoryIds != null && categoryIds.isNotEmpty) {
         body['categories'] = categoryIds;
@@ -585,6 +587,7 @@ class PocketBaseService {
     String? contact,
     String? directTel,
     String? email,
+    String? notes,
     List<String>? categoryIds,
   }) async {
     try {
@@ -596,6 +599,7 @@ class PocketBaseService {
         'contact': contact,
         'direct_tel': directTel,
         'email': email,
+        'notes': notes,
       };
       // Always set categories, even if empty (to clear existing ones)
       if (categoryIds != null) {
@@ -1373,5 +1377,142 @@ class PocketBaseService {
     }
   }
 
- 
+  // ============================================================================
+  // PURCHASE TRACKING
+  // ============================================================================
+
+  Future<List<dynamic>> getPurchases({String? supplierId}) async {
+    try {
+      if (supplierId != null && supplierId.isNotEmpty) {
+        return await pb.collection('purchases').getFullList(
+          filter: 'supplier = "$supplierId"',
+          sort: '-purchase_date',
+          expand: 'supplier',
+        );
+      }
+      return await pb.collection('purchases').getFullList(
+        sort: '-purchase_date',
+        expand: 'supplier',
+      );
+    } catch (e) {
+      print('Error getting purchases: $e');
+      rethrow;
+    }
+  }
+
+  Future<dynamic> createPurchase({
+    required DateTime purchaseDate,
+    String? supplierId,
+    String? orderReference,
+    String? notes,
+    double? total,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'purchase_date': purchaseDate.toIso8601String().split('T').first,
+      };
+      if (supplierId != null && supplierId.isNotEmpty) body['supplier'] = supplierId;
+      if (orderReference != null && orderReference.isNotEmpty) body['order_reference'] = orderReference;
+      if (notes != null && notes.isNotEmpty) body['notes'] = notes;
+      if (total != null) body['total'] = total;
+      final record = await pb.collection('purchases').create(body: body);
+      return record;
+    } catch (e) {
+      print('Error creating purchase: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updatePurchase(String id, {
+    DateTime? purchaseDate,
+    String? supplierId,
+    String? orderReference,
+    String? notes,
+    double? total,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+      if (purchaseDate != null) body['purchase_date'] = purchaseDate.toIso8601String().split('T').first;
+      if (supplierId != null) body['supplier'] = supplierId.isEmpty ? null : supplierId;
+      if (orderReference != null) body['order_reference'] = orderReference;
+      if (notes != null) body['notes'] = notes;
+      if (total != null) body['total'] = total;
+      if (body.isEmpty) return;
+      await pb.collection('purchases').update(id, body: body);
+    } catch (e) {
+      print('Error updating purchase: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deletePurchase(String id) async {
+    try {
+      final items = await pb.collection('purchase_items').getFullList(filter: 'purchase = "$id"');
+      for (final item in items) {
+        await pb.collection('purchase_items').delete(item.id);
+      }
+      await pb.collection('purchases').delete(id);
+    } catch (e) {
+      print('Error deleting purchase: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<dynamic>> getPurchaseItems(String purchaseId) async {
+    try {
+      return await pb.collection('purchase_items').getFullList(
+        filter: 'purchase = "$purchaseId"',
+        expand: 'tool',
+      );
+    } catch (e) {
+      print('Error getting purchase items: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<dynamic>> getPurchaseItemsByTool(String toolId) async {
+    try {
+      return await pb.collection('purchase_items').getFullList(
+        filter: 'tool = "$toolId"',
+        expand: 'purchase,purchase.supplier,tool',
+        sort: '-purchase.purchase_date',
+      );
+    } catch (e) {
+      print('Error getting purchase items by tool: $e');
+      rethrow;
+    }
+  }
+
+  Future<dynamic> createPurchaseItem({
+    required String purchaseId,
+    String? toolId,
+    required int quantity,
+    double? unitCost,
+    String lineType = 'item',
+    String? description,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'purchase': purchaseId,
+        'quantity': quantity,
+        'line_type': lineType,
+      };
+      if (toolId != null && toolId.isNotEmpty) body['tool'] = toolId;
+      if (unitCost != null) body['unit_cost'] = unitCost;
+      if (description != null && description.isNotEmpty) body['description'] = description;
+      return await pb.collection('purchase_items').create(body: body);
+    } catch (e) {
+      print('Error creating purchase item: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deletePurchaseItem(String id) async {
+    try {
+      await pb.collection('purchase_items').delete(id);
+    } catch (e) {
+      print('Error deleting purchase item: $e');
+      rethrow;
+    }
+  }
   }

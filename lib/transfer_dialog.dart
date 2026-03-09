@@ -1,4 +1,5 @@
 // transfer_dialog.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'models.dart';
 import 'pocketbase_service.dart';
@@ -24,6 +25,19 @@ class _TransferDialogState extends State<TransferDialog> {
   String? _selectedDestination;
   bool _isSubmitting = false;
 
+  final TextEditingController _searchController = TextEditingController();
+  List<Location>? _suggestions;
+  Timer? _searchDebounce;
+  static const int _maxSuggestions = 5;
+  static const int _minSearchLength = 2;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
   // Build full hierarchical path for a location
   String _buildLocationPath(Location location) {
     final names = <String>[];
@@ -44,59 +58,51 @@ class _TransferDialogState extends State<TransferDialog> {
     return names.join(' - ');
   }
 
-  // Get the top-level parent's type for grouping
-  String _getTopLevelType(Location location) {
-    var current = location;
-    
-    // Walk up to the root
-    while (current.parentId != null && current.parentId!.isNotEmpty) {
-      try {
-        current = widget.allLocations.firstWhere((loc) => loc.id == current.parentId);
-      } catch (e) {
-        break;
-      }
-    }
-    
-    return current.type.toLowerCase();
+  /// All locations that are valid destinations (exclude source).
+  List<Location> get _destinationLocations {
+    return widget.allLocations
+        .where((loc) => loc.id != widget.sourceLocation.locationId)
+        .toList();
   }
 
-  // Group locations by their top-level parent's type
-  Map<String, List<Location>> get _groupedLocations {
-    final grouped = <String, List<Location>>{};
-    
-    for (final loc in widget.allLocations) {
-      // Exclude the source location
-      if (loc.id == widget.sourceLocation.locationId) continue;
-      
-      final topLevelType = _getTopLevelType(loc);
-      if (!grouped.containsKey(topLevelType)) {
-        grouped[topLevelType] = [];
+  void _onSearchChanged() {
+    final query = _searchController.text.trim();
+    if (query.length < _minSearchLength) {
+      setState(() => _suggestions = null);
+      return;
+    }
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 200), () {
+      final q = query.toLowerCase();
+      final paths = _destinationLocations
+          .map((loc) => MapEntry(loc, _buildLocationPath(loc)))
+          .where((e) => e.value.toLowerCase().contains(q))
+          .toList();
+      paths.sort((a, b) => a.value.compareTo(b.value));
+      if (mounted) {
+        setState(() {
+          _suggestions = paths
+              .take(_maxSuggestions)
+              .map((e) => e.key)
+              .toList();
+        });
       }
-      grouped[topLevelType]!.add(loc);
-    }
-    
-    // Sort each group by full path
-    for (final key in grouped.keys) {
-      grouped[key]!.sort((a, b) => _buildLocationPath(a).compareTo(_buildLocationPath(b)));
-    }
-    
-    return grouped;
+    });
   }
 
-  // Get display name for location type groups
-  String _getTypeDisplayName(String type) {
-    switch (type) {
-      case 'machine':
-        return 'Machines';
-      case 'shelf':
-        return 'Shelves';
-      case 'toolbox':
-        return 'Toolboxes';
-      case 'recycle':
-        return 'Recycle';
-      default:
-        return type[0].toUpperCase() + type.substring(1);
-    }
+  void _selectDestination(Location loc) {
+    setState(() {
+      _selectedDestination = loc.id;
+      _searchController.clear();
+      _suggestions = null;
+    });
+  }
+
+  void _clearDestination() {
+    setState(() {
+      _selectedDestination = null;
+      _suggestions = null;
+    });
   }
 
   void _incrementQuantity() {
@@ -281,7 +287,7 @@ class _TransferDialogState extends State<TransferDialog> {
               ),
               const SizedBox(height: 24),
 
-              // Destination dropdown
+              // Destination: search field with suggestions (or show selected)
               const Text(
                 'Destination',
                 style: TextStyle(
@@ -290,29 +296,80 @@ class _TransferDialogState extends State<TransferDialog> {
                 ),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _selectedDestination,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.black,
+              if (_selectedDestination != null) ...[
+                Builder(
+                  builder: (context) {
+                    Location? loc;
+                    try {
+                      loc = widget.allLocations.firstWhere(
+                          (l) => l.id == _selectedDestination);
+                    } catch (_) {
+                      loc = null;
+                    }
+                    final path = loc != null ? _buildLocationPath(loc) : _selectedDestination!;
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[400]!),
+                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.grey[50],
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              path,
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ),
+                          if (!_isSubmitting)
+                            TextButton(
+                              onPressed: _clearDestination,
+                              child: const Text('Change'),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
-                decoration: InputDecoration(
-                  hintText: 'Select destination',
-                  hintStyle: const TextStyle(fontSize: 14),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+              ] else ...[
+                TextField(
+                  controller: _searchController,
+                  enabled: !_isSubmitting,
+                  decoration: InputDecoration(
+                    hintText: 'Search destination',
+                    hintStyle: const TextStyle(fontSize: 14),
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  onChanged: (_) => _onSearchChanged(),
                 ),
-                items: _buildDropdownItems(),
-                onChanged: _isSubmitting
-                    ? null
-                    : (value) {
-                        setState(() {
-                          _selectedDestination = value;
-                        });
+                if (_suggestions != null && _suggestions!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Card(
+                    elevation: 2,
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      padding: EdgeInsets.zero,
+                      itemCount: _suggestions!.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final loc = _suggestions![i];
+                        final path = _buildLocationPath(loc);
+                        return ListTile(
+                          dense: true,
+                          title: Text(path, style: const TextStyle(fontSize: 13)),
+                          onTap: () => _selectDestination(loc),
+                        );
                       },
-              ),
+                    ),
+                  ),
+                ],
+              ],
             ],
           ),
         ),
@@ -350,55 +407,4 @@ class _TransferDialogState extends State<TransferDialog> {
     );
   }
 
-  List<DropdownMenuItem<String>> _buildDropdownItems() {
-    final items = <DropdownMenuItem<String>>[];
-    final grouped = _groupedLocations;
-    
-    // Order of types - MACHINES FIRST
-    final typeOrder = ['machine', 'shelf', 'toolbox', 'recycle'];
-    
-    for (final type in typeOrder) {
-      if (!grouped.containsKey(type)) continue;
-      
-      final locations = grouped[type]!;
-      if (locations.isEmpty) continue;
-      
-      // Add header (disabled item)
-      items.add(
-        DropdownMenuItem<String>(
-          value: null,
-          enabled: false,
-          child: Padding(
-            padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
-            child: Text(
-              _getTypeDisplayName(type),
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.grey,
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ),
-      );
-      
-      // Add locations in this group with full paths
-      for (final loc in locations) {
-        items.add(
-          DropdownMenuItem<String>(
-            value: loc.id,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 12.0),
-              child: Text(
-                _buildLocationPath(loc),
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-          ),
-        );
-      }
-    }
-    
-    return items;
-  }
 }

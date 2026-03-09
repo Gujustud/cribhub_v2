@@ -8,6 +8,7 @@ import 'models.dart';
 import 'add_inventory_dialog.dart';
 import 'app_drawer.dart';
 import 'inventory_screen.dart';
+import 'transfer_dialog.dart';
 import 'drawer_behavior.dart';
 import 'package:intl/intl.dart'; // For date formatting in history
 
@@ -107,6 +108,10 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
   List<InventoryHistory> _recentHistory = [];
   bool _loadingHistory = false;
   
+  // Purchase history (price over time)
+  List<dynamic> _purchaseHistoryRecords = [];
+  bool _loadingPurchaseHistory = false;
+  
   // Initialization state
   bool _isInitialized = false;
   
@@ -164,6 +169,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     if (_isEditMode) {
       _loadToolLocations();
       _loadRecentHistory();
+      _loadPurchaseHistory();
     }
     
     // Mark initialization as complete and trigger UI update
@@ -707,6 +713,28 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       print('Error loading history: $e');
       setState(() {
         _loadingHistory = false;
+      });
+    }
+  }
+
+  Future<void> _loadPurchaseHistory() async {
+    if (!_isEditMode) return;
+
+    setState(() {
+      _loadingPurchaseHistory = true;
+    });
+
+    try {
+      final pbService = PocketBaseService();
+      final records = await pbService.getPurchaseItemsByTool(widget.tool!.id);
+      setState(() {
+        _purchaseHistoryRecords = records;
+        _loadingPurchaseHistory = false;
+      });
+    } catch (e) {
+      print('Error loading purchase history: $e');
+      setState(() {
+        _loadingPurchaseHistory = false;
       });
     }
   }
@@ -2112,6 +2140,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     }
     
     maybeAutoOpenDrawer();
+    final isNarrow = MediaQuery.of(context).size.width < 800;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -2507,18 +2536,24 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                     ),
             ),
             const SizedBox(height: 16),
+            if (isNarrow) ...[
+              const Divider(),
+              const SizedBox(height: 16),
+              _buildMobileSidePanel(context),
+            ],
                 ],
               ),
             ),
             
             // RIGHT COLUMN - Photo & Inventory
-            Expanded(
-              flex: 2,
-              child: Container(
-                color: Theme.of(context).colorScheme.surface,
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
+            if (!isNarrow)
+              Expanded(
+                flex: 2,
+                child: Container(
+                  color: Theme.of(context).colorScheme.surface,
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
                     // Photo
                     Container(
                       height: 200,
@@ -2638,6 +2673,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: InventoryLocationTag(
+                              tool: widget.tool!,
                               toolLocation: toolLocation,
                               allLocations: _allLocations,
                               onChanged: () {
@@ -2693,6 +2729,78 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                         )
                       else
                         ..._buildHistoryItems(_recentHistory),
+                    ],
+                    
+                    // Price over time (purchase history) - edit mode only
+                    if (_isEditMode) ...[
+                      const SizedBox(height: 32),
+                      const Divider(),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Price over time',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_loadingPurchaseHistory)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      else if (_purchaseHistoryRecords.isEmpty)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Text(
+                              'No purchase history',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                          ),
+                        )
+                      else
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: DataTable(
+                            headingRowColor: WidgetStateProperty.all(Theme.of(context).colorScheme.surfaceContainerHighest),
+                            columns: const [
+                              DataColumn(label: Text('Date')),
+                              DataColumn(label: Text('Supplier')),
+                              DataColumn(label: Text('Unit cost'), numeric: true),
+                              DataColumn(label: Text('Qty'), numeric: true),
+                            ],
+                            rows: _purchaseHistoryRecords.map((r) {
+                              String dateStr = '';
+                              String supplierName = '';
+                              try {
+                                final purchase = r.expand?['purchase'];
+                                if (purchase != null) {
+                                  final p = purchase is List ? purchase.isNotEmpty ? purchase[0] : null : purchase;
+                                  if (p != null) {
+                                    final d = p.data?['purchase_date'];
+                                    if (d != null) dateStr = DateFormat.yMMMd().format(DateTime.parse(d.toString()));
+                                    final sup = p.expand?['supplier'];
+                                    if (sup != null) {
+                                      final s = sup is List ? sup.isNotEmpty ? sup[0] : null : sup;
+                                      if (s != null) supplierName = s.data?['company_name'] ?? '';
+                                    }
+                                  }
+                                }
+                              } catch (_) {}
+                              final data = r.data;
+                              final unitCost = data['unit_cost']?.toDouble();
+                              final qty = (data['quantity'] ?? 0).toInt();
+                              return DataRow(
+                                cells: [
+                                  DataCell(Text(dateStr)),
+                                  DataCell(Text(supplierName)),
+                                  DataCell(Text(unitCost != null ? '\$${unitCost.toStringAsFixed(2)}' : '—')),
+                                  DataCell(Text('$qty')),
+                                ],
+                              );
+                            }).toList(),
+                          ),
+                        ),
                     ],
                     
                     // Performance Stats: show whenever category is Cutting Tools (add or edit)
@@ -2772,6 +2880,29 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
           ],
         ),
       ),
+    );
+  }
+
+  // Mobile: side panel content (photo, inventory, history) stacked under form.
+  Widget _buildMobileSidePanel(BuildContext context) {
+    // Simple placeholder for now – reuses desktop content conceptually.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceVariant,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Theme.of(context).dividerColor),
+          ),
+          child: const Text(
+            'Inventory & history are shown in the side panel on wider screens. '
+            'On mobile this area will be improved to show those details inline.',
+            style: TextStyle(fontSize: 12),
+          ),
+        ),
+      ],
     );
   }
   
@@ -3171,12 +3302,14 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
 
 // Keep the InventoryLocationTag widget exactly as it was (from previous version)
 class InventoryLocationTag extends StatelessWidget {
+  final Tool tool;
   final ToolLocation toolLocation;
   final List<Location> allLocations;
   final VoidCallback onChanged;
 
   const InventoryLocationTag({
     Key? key,
+    required this.tool,
     required this.toolLocation,
     required this.allLocations,
     required this.onChanged,
@@ -3399,173 +3532,16 @@ class InventoryLocationTag extends StatelessWidget {
   }
   
   Future<void> _showTransferDialog(BuildContext context) async {
-    final pbService = PocketBaseService();
-    final allLocs = await pbService.getLocations();
-    final availableLocations = allLocs.where((loc) => loc.id != toolLocation.locationId).toList();
-    
-    String? selectedLocationId;
-    final quantityController = TextEditingController(text: toolLocation.quantity.toString());
-    
-    if (!context.mounted) return;
-    
-    await showDialog(
+    final result = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Transfer Tool'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: quantityController,
-                decoration: const InputDecoration(
-                  labelText: 'Quantity to Transfer',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: selectedLocationId,
-                decoration: const InputDecoration(
-                  labelText: 'To Location',
-                  border: OutlineInputBorder(),
-                ),
-                hint: const Text('Select destination'),
-                items: {
-                  for (var loc in availableLocations) loc.id: loc
-                }.values.map((loc) {
-                  final path = pbService.getLocationPath(loc.id, allLocs);
-                  return DropdownMenuItem<String>(
-                    value: loc.id,
-                    child: Text(path),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setDialogState(() {
-                    selectedLocationId = value;
-                  });
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (selectedLocationId == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please select a destination')),
-                  );
-                  return;
-                }
-                
-                final transferQty = int.tryParse(quantityController.text);
-                if (transferQty == null || transferQty < 1) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Invalid quantity')),
-                  );
-                  return;
-                }
-                
-                if (transferQty > toolLocation.quantity) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Cannot transfer more than available')),
-                  );
-                  return;
-                }
-                
-                try {
-                  final sourceQtyBefore = toolLocation.quantity;
-                  final destQtyBefore = await pbService.getCurrentQuantityAtLocation(
-                    toolId: toolLocation.toolId,
-                    locationId: selectedLocationId!,
-                  );
-                  
-                  final newSourceQty = toolLocation.quantity - transferQty;
-                  if (newSourceQty == 0) {
-                    await pbService.pb.collection('tool_locations').delete(toolLocation.id);
-                  } else {
-                    await pbService.pb.collection('tool_locations').update(
-                      toolLocation.id,
-                      body: {'quantity': newSourceQty},
-                    );
-                  }
-                  
-                  final existingAtDest = await pbService.pb
-                      .collection('tool_locations')
-                      .getFullList(
-                        filter: 'tool = "${toolLocation.toolId}" && location = "$selectedLocationId"',
-                      );
-                  
-                  if (existingAtDest.isNotEmpty) {
-                    final existing = existingAtDest.first;
-                    final currentQty = existing.data['quantity'] as int;
-                    await pbService.pb.collection('tool_locations').update(
-                      existing.id,
-                      body: {'quantity': currentQty + transferQty},
-                    );
-                  } else {
-                    await pbService.createToolLocation(
-                      toolId: toolLocation.toolId,
-                      locationId: selectedLocationId!,
-                      quantity: transferQty,
-                    );
-                  }
-                  
-                  // Log transfer_out from source location
-                  await pbService.logInventoryHistory(
-                    toolId: toolLocation.toolId,
-                    locationId: toolLocation.locationId,
-                    action: 'transfer_out',
-                    quantity: transferQty,
-                    quantityBefore: sourceQtyBefore,
-                    quantityAfter: newSourceQty,
-                    relatedLocationId: selectedLocationId,
-                  );
-                  
-                  // Log transfer_in at destination location
-                  await pbService.logInventoryHistory(
-                    toolId: toolLocation.toolId,
-                    locationId: selectedLocationId!,
-                    action: 'transfer_in',
-                    quantity: transferQty,
-                    quantityBefore: destQtyBefore,
-                    quantityAfter: destQtyBefore + transferQty,
-                    relatedLocationId: toolLocation.locationId,
-                  );
-                  
-                  Navigator.pop(dialogContext);
-                  onChanged();
-                  
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Transfer complete!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              child: const Text('Transfer'),
-            ),
-          ],
-        ),
+      builder: (context) => TransferDialog(
+        tool: tool,
+        sourceLocation: toolLocation,
+        allLocations: allLocations,
       ),
     );
+    if (result == true) {
+      onChanged();
+    }
   }
 }

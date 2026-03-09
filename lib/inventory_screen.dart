@@ -10,11 +10,13 @@ import 'drawer_behavior.dart';
 import 'drawer_data_cache.dart';
 
 class InventoryScreen extends StatefulWidget {
-  final String? categoryFilter; // NEW: Optional category filter
-  
+  final String? categoryFilter; // Optional category filter
+  final String? initialSearchQuery; // Optional: pre-fill search (e.g. from main page)
+
   const InventoryScreen({
     super.key,
-    this.categoryFilter, // NEW: Optional parameter
+    this.categoryFilter,
+    this.initialSearchQuery,
   });
 
   @override
@@ -39,6 +41,9 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    if (widget.initialSearchQuery != null && widget.initialSearchQuery!.trim().isNotEmpty) {
+      _searchController.text = widget.initialSearchQuery!.trim();
+    }
     _loadData();
   }
 
@@ -240,9 +245,11 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
       setState(() {
         _toolsWithLocations = toolsWithLocs;
         _filteredTools = toolsWithLocs;
-        _showToolDetails = showDetails; // NEW
+        _showToolDetails = showDetails;
         _isLoading = false;
       });
+      // Re-apply search filter when opening with initialSearchQuery (e.g. from main page)
+      _onSearchChanged();
     } catch (e, stackTrace) {
       setState(() {
         _errorMessage = e.toString();
@@ -275,6 +282,7 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
 
     final isWide = MediaQuery.of(context).size.width >= 900;
     final usePermanentDrawer = isWide && DrawerDataCache.keepDrawerOpen;
+    final isNarrow = MediaQuery.of(context).size.width < 600;
 
     final bodyContent = Column(
       children: [
@@ -293,72 +301,137 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1200),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Search field
-                  Flexible(
-                    flex: 3,
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search tools...',
-                        prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+              child: isNarrow
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'Search tools...',
+                            prefixIcon: const Icon(Icons.search),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Add Tool button (height and radius match search field)
-                  ElevatedButton(
-                    onPressed: _navigateToAddTool,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                      backgroundColor: Colors.grey[700],
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(0, 52),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _navigateToAddTool,
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                                  backgroundColor: Colors.grey[700],
+                                  foregroundColor: Colors.white,
+                                  minimumSize: const Size(0, 52),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.add, size: 24),
+                                    SizedBox(width: 8),
+                                    Text('Add Tool', style: TextStyle(fontSize: 16)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _navigateToReturnTool,
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                                  backgroundColor: Colors.grey[700],
+                                  foregroundColor: Colors.white,
+                                  minimumSize: const Size(0, 52),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.keyboard_return, size: 24),
+                                    SizedBox(width: 8),
+                                    Text('Return Tool', style: TextStyle(fontSize: 16)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.add, size: 24),
-                        SizedBox(width: 8),
-                        Text('Add Tool', style: TextStyle(fontSize: 16)),
+                        Flexible(
+                          flex: 3,
+                          child: TextField(
+                            controller: _searchController,
+                            decoration: InputDecoration(
+                              hintText: 'Search tools...',
+                              prefixIcon: const Icon(Icons.search),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          onPressed: _navigateToAddTool,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                            backgroundColor: Colors.grey[700],
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(0, 52),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.add, size: 24),
+                              SizedBox(width: 8),
+                              Text('Add Tool', style: TextStyle(fontSize: 16)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          onPressed: _navigateToReturnTool,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                            backgroundColor: Colors.grey[700],
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(0, 52),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.keyboard_return, size: 24),
+                              SizedBox(width: 8),
+                              Text('Return Tool', style: TextStyle(fontSize: 16)),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Return Tool button (height and radius match search field)
-                  ElevatedButton(
-                    onPressed: _navigateToReturnTool,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                      backgroundColor: Colors.grey[700],
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(0, 52),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.keyboard_return, size: 24),
-                        SizedBox(width: 8),
-                        Text('Return Tool', style: TextStyle(fontSize: 16)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
             ),
           ),
         ),
@@ -589,27 +662,22 @@ class ToolCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     
-                    // Location tags
+                    // Location tags (wrap on narrow so they don't overflow)
                     () {
-                      // Filter out recycle locations
-                      final visibleLocations = locations.where((loc) => 
-                        loc.location?.type.toLowerCase() != 'recycle'
-                      ).toList();
-                      
+                      final visibleLocations = locations.where((loc) =>
+                          loc.location?.type.toLowerCase() != 'recycle').toList();
                       if (visibleLocations.isEmpty) {
                         return const SizedBox.shrink();
                       }
-                      
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                      return Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        alignment: WrapAlignment.start,
                         children: visibleLocations.map((toolLocation) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: LocationTag(
-                              toolLocation: toolLocation,
-                              allLocations: allLocations,
-                              onTap: () => onTransfer(toolLocation),
-                            ),
+                          return LocationTag(
+                            toolLocation: toolLocation,
+                            allLocations: allLocations,
+                            onTap: () => onTransfer(toolLocation),
                           );
                         }).toList(),
                       );
@@ -736,12 +804,17 @@ class LocationTag extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           border: Border.all(color: borderColor, width: 1.5),
         ),
-        child: Text(
-          'Qty: $quantity • $locationPath',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: textColor,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 280),
+          child: Text(
+            'Qty: $quantity • $locationPath',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
         ),
       ),
