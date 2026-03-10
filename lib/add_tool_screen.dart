@@ -44,6 +44,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
   final _fluteLengthController = TextEditingController();
   final _cornerRadController = TextEditingController();
   final _neckController = TextEditingController();
+  final _notesController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
@@ -653,6 +654,10 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     }
     if (tool.neck != null) {
       _neckController.text = tool.neck.toString();
+    }
+    if (tool.record != null && tool.record.data != null) {
+      final n = tool.record.data['notes'];
+      _notesController.text = n != null ? n.toString() : '';
     }
     
     // Load photo if exists
@@ -2020,6 +2025,9 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
           'flute_length': double.tryParse(_fluteLengthController.text),
           'corner_rad': double.tryParse(_cornerRadController.text),
           'neck': double.tryParse(_neckController.text),
+          'notes': _notesController.text.trim().isEmpty
+              ? null
+              : _notesController.text.trim(),
         };
         
         print('DEBUG _saveTool: Saving with brand = $_selectedBrandId, supplier = $_selectedSupplierId');
@@ -2438,7 +2446,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
             ),
             const SizedBox(height: 16),
 
-            // Flutes, Flute Length, Neck
+            // Flutes, Flute Length, Neck, and Corner Radius (same row when CR)
             Row(
               children: [
                 Expanded(
@@ -2446,7 +2454,9 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                     controller: _flutesController,
                     decoration: const InputDecoration(
                       labelText: 'Number of Flutes',
+                      floatingLabelBehavior: FloatingLabelBehavior.always,
                       border: OutlineInputBorder(),
+                      isDense: true,
                     ),
                     keyboardType: TextInputType.number,
                     validator: (value) {
@@ -2466,7 +2476,9 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                     controller: _fluteLengthController,
                     decoration: const InputDecoration(
                       labelText: 'Flute Length',
+                      floatingLabelBehavior: FloatingLabelBehavior.always,
                       border: OutlineInputBorder(),
+                      isDense: true,
                     ),
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
@@ -2487,32 +2499,48 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                     controller: _neckController,
                     decoration: const InputDecoration(
                       labelText: 'Neck',
+                      floatingLabelBehavior: FloatingLabelBehavior.always,
                       border: OutlineInputBorder(),
+                      isDense: true,
                     ),
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
                   ),
                 ),
+                if (_subSubcategory == 'CR') ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _cornerRadController,
+                      decoration: const InputDecoration(
+                        labelText: 'Corner Radius',
+                        floatingLabelBehavior: FloatingLabelBehavior.always,
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 16),
-            
-                  // Corner Radius
-            if (_subSubcategory == 'CR')
-              Column(
-                children: [
-                  TextFormField(
-                    controller: _cornerRadController,
-                    decoration: const InputDecoration(
-                      labelText: 'Corner Radius',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              ),
             ], // End of hardcoded Cutting Tools fields
+
+            // Notes (left column, below category-specific fields, above Save)
+            const SizedBox(height: 8),
+            TextField(
+              controller: _notesController,
+              maxLines: 4,
+              minLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Notes',
+                floatingLabelBehavior: FloatingLabelBehavior.always,
+                border: OutlineInputBorder(),
+                alignLabelWithHint: true,
+              ),
+            ),
                   
             const SizedBox(height: 24),
                   
@@ -3296,6 +3324,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     _fluteLengthController.dispose();
     _cornerRadController.dispose();
     _neckController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 }

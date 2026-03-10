@@ -1,11 +1,185 @@
 // location_management_screen.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'pocketbase_service.dart';
 import 'app_drawer.dart';
+import 'add_tool_screen.dart';
+import 'models.dart';
 import 'settings_screen.dart'; // NEW: For back button
 import 'drawer_behavior.dart';
 import 'drawer_data_cache.dart';
+
+/// Hover over the list icon to load and show tool names/counts at this location (cached briefly).
+class _LocationContentsHoverIcon extends StatefulWidget {
+  const _LocationContentsHoverIcon({
+    required this.location,
+    required this.onPressed,
+  });
+
+  final dynamic location;
+  final VoidCallback onPressed;
+
+  @override
+  State<_LocationContentsHoverIcon> createState() => _LocationContentsHoverIconState();
+}
+
+class _LocationContentsHoverIconState extends State<_LocationContentsHoverIcon> {
+  Timer? _hoverTimer;
+  OverlayEntry? _overlayEntry;
+  final LayerLink _layerLink = LayerLink();
+
+  static final Map<String, List<dynamic>> _cache = {};
+  static final Map<String, DateTime> _cacheTime = {};
+  static const Duration _cacheTtl = Duration(seconds: 45);
+
+  /// Call after location/tool data changes so hover shows fresh lists.
+  static void clearCache() {
+    _cache.clear();
+    _cacheTime.clear();
+  }
+
+  static String _toolNameFromRecord(dynamic r) {
+    final tool = r.expand?['tool'];
+    if (tool == null) return 'Tool';
+    final t = tool is List ? (tool.isNotEmpty ? tool[0] : null) : tool;
+    return t?.data['tool_name']?.toString() ?? 'Tool';
+  }
+
+  static int _qtyFromRecord(dynamic r) {
+    final q = r.data['quantity'];
+    if (q is int) return q;
+    return int.tryParse(q?.toString() ?? '') ?? 0;
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  void _onExit(PointerEvent event) {
+    _hoverTimer?.cancel();
+    _hoverTimer = null;
+    _removeOverlay();
+  }
+
+  void _onEnter(PointerEvent event) {
+    _hoverTimer?.cancel();
+    _hoverTimer = Timer(const Duration(milliseconds: 500), _fetchAndShowOverlay);
+  }
+
+  Future<void> _fetchAndShowOverlay() async {
+    if (!mounted) return;
+    final id = widget.location.id as String;
+    List<dynamic> records;
+    final cachedAt = _cacheTime[id];
+    if (cachedAt != null &&
+        DateTime.now().difference(cachedAt) < _cacheTtl &&
+        _cache.containsKey(id)) {
+      records = List<dynamic>.from(_cache[id]!);
+    } else {
+      try {
+        records = await PocketBaseService().getToolLocationsAtLocationWithTool(id);
+      } catch (_) {
+        records = [];
+      }
+      _cache[id] = records;
+      _cacheTime[id] = DateTime.now();
+    }
+
+    if (!mounted) return;
+    _removeOverlay();
+
+    final overlay = Overlay.of(context);
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+
+    final namesWithQty = <String>[];
+    for (final r in records) {
+      final name = _toolNameFromRecord(r);
+      final q = _qtyFromRecord(r);
+      namesWithQty.add(q > 1 ? '$name (×$q)' : name);
+    }
+
+    _overlayEntry = OverlayEntry(
+      builder: (ctx) => Positioned(
+        width: 320,
+        child: CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          offset: const Offset(0, 36),
+          followerAnchor: Alignment.topLeft,
+          targetAnchor: Alignment.bottomLeft,
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(8),
+            color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: namesWithQty.isEmpty
+                  ? Text(
+                      'No tools at this location.',
+                      style: TextStyle(
+                        color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                        fontSize: 13,
+                      ),
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${namesWithQty.length} tool${namesWithQty.length == 1 ? '' : 's'}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Theme.of(ctx).colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 200),
+                          child: SingleChildScrollView(
+                            child: SelectableText(
+                              namesWithQty.join('\n'),
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+    overlay.insert(_overlayEntry!);
+  }
+
+  @override
+  void dispose() {
+    _hoverTimer?.cancel();
+    _removeOverlay();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: MouseRegion(
+        onEnter: _onEnter,
+        onExit: _onExit,
+        child: IconButton(
+          icon: const Icon(Icons.list_alt, size: 20, color: Colors.teal),
+          onPressed: widget.onPressed,
+          tooltip: null, // Hover overlay shows loaded tool names/counts
+        ),
+      ),
+    );
+  }
+}
 
 class LocationManagementScreen extends StatefulWidget {
   const LocationManagementScreen({super.key});
@@ -118,6 +292,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
         }
       }
       
+      _LocationContentsHoverIconState.clearCache();
       setState(() {
         _locations = locations;
         _isLoading = false;
@@ -142,6 +317,36 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
         );
       }
     }
+  }
+
+  static String _normalizeLocationName(String name) =>
+      name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+  /// Prevent duplicate location names under the same parent (siblings), per type.
+  bool _siblingNameExists({
+    required String? parentId,
+    required String type,
+    required String name,
+    String? excludeLocationId,
+  }) {
+    final normalized = _normalizeLocationName(name);
+    if (normalized.isEmpty) return false;
+
+    return _locations.any((loc) {
+      if (excludeLocationId != null && loc.id == excludeLocationId) return false;
+
+      final locType = (loc.data['type'] ?? '').toString();
+      if (locType != type) return false;
+
+      final locParent = loc.data['parent'];
+      final sameParent = (parentId == null || parentId.isEmpty)
+          ? (locParent == null || locParent.toString().isEmpty)
+          : (locParent?.toString() == parentId);
+      if (!sameParent) return false;
+
+      final locName = (loc.data['name'] ?? '').toString();
+      return _normalizeLocationName(locName) == normalized;
+    });
   }
 
   void _showManageTypesDialog() {
@@ -402,6 +607,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
   void _showAddLocationDialog({String? parentId, String? parentName}) {
     final nameController = TextEditingController();
     String selectedType = _selectedType ?? _sortedLocationTypes.first;
+    String? nameError;
 
     showDialog(
       context: context,
@@ -420,12 +626,18 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
               ],
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Location Name',
                   hintText: 'e.g., Toolbox-1, Drawer-A, etc.',
                   border: OutlineInputBorder(),
+                  errorText: nameError,
                 ),
                 textCapitalization: TextCapitalization.words,
+                onChanged: (_) {
+                  if (nameError != null) {
+                    setDialogState(() => nameError = null);
+                  }
+                },
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
@@ -449,6 +661,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
                 onChanged: (value) {
                   setDialogState(() {
                     selectedType = value!;
+                    nameError = null;
                   });
                 },
               ),
@@ -461,17 +674,25 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
             ),
             ElevatedButton(
               onPressed: () async {
-                if (nameController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter a location name')),
-                  );
+                final name = nameController.text.trim();
+                if (name.isEmpty) {
+                  setDialogState(() => nameError = 'Please enter a location name');
+                  return;
+                }
+
+                if (_siblingNameExists(
+                  parentId: parentId,
+                  type: selectedType,
+                  name: name,
+                )) {
+                  setDialogState(() => nameError = 'A "$name" already exists here.');
                   return;
                 }
 
                 try {
                   final pbService = PocketBaseService();
                   await pbService.createLocation(
-                    name: nameController.text,
+                    name: name,
                     type: selectedType,
                     parentId: parentId,
                   );
@@ -482,7 +703,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Location "${nameController.text}" added!'),
+                        content: Text('Location "$name" added!'),
                         backgroundColor: Colors.green,
                       ),
                     );
@@ -509,6 +730,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
   void _showEditLocationDialog(dynamic location) {
     final nameController = TextEditingController(text: location.data['name']);
     String selectedType = location.data['type'];
+    String? nameError;
 
     showDialog(
       context: context,
@@ -520,11 +742,17 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
             children: [
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Location Name',
                   border: OutlineInputBorder(),
+                  errorText: nameError,
                 ),
                 textCapitalization: TextCapitalization.words,
+                onChanged: (_) {
+                  if (nameError != null) {
+                    setDialogState(() => nameError = null);
+                  }
+                },
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
@@ -548,6 +776,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
                 onChanged: (value) {
                   setDialogState(() {
                     selectedType = value!;
+                    nameError = null;
                   });
                 },
               ),
@@ -560,10 +789,19 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
             ),
             ElevatedButton(
               onPressed: () async {
-                if (nameController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter a location name')),
-                  );
+                final name = nameController.text.trim();
+                if (name.isEmpty) {
+                  setDialogState(() => nameError = 'Please enter a location name');
+                  return;
+                }
+
+                if (_siblingNameExists(
+                  parentId: location.data['parent']?.toString(),
+                  type: selectedType,
+                  name: name,
+                  excludeLocationId: location.id,
+                )) {
+                  setDialogState(() => nameError = 'A "$name" already exists here.');
                   return;
                 }
 
@@ -571,7 +809,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
                   final pbService = PocketBaseService();
                   await pbService.updateLocation(
                     locationId: location.id,
-                    name: nameController.text,
+                    name: name,
                     type: selectedType,
                     parentId: location.data['parent'],
                   );
@@ -582,7 +820,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Location updated to "${nameController.text}"!'),
+                        content: Text('Location updated to "$name"!'),
                         backgroundColor: Colors.green,
                       ),
                     );
@@ -701,18 +939,146 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
     );
   }
 
+  /// Show tools that have quantity at this location (Option B: view by location).
+  Future<void> _showLocationContentsDialog(dynamic location) async {
+    final path = _buildLocationPathFromRecord(location);
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const AlertDialog(
+        content: SizedBox(
+          width: 280,
+          height: 120,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ),
+    );
+
+    List<dynamic> records = [];
+    try {
+      records = await PocketBaseService().getToolLocationsAtLocationWithTool(location.id);
+    } catch (_) {}
+
+    if (!mounted) return;
+    Navigator.of(context).pop();
+
+    if (!mounted) return;
+    // Compact dialog: capped width and height so it doesn't dominate the screen.
+    final listHeight = records.isEmpty
+        ? 0.0
+        : (records.length * 52.0 + 8).clamp(56.0, 220.0);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+        contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        title: Text(
+          path,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+        ),
+        content: SizedBox(
+          width: 360,
+          child: records.isEmpty
+              ? const Text(
+                  'No tools at this location.',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                )
+              : SizedBox(
+                  height: listHeight,
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    itemCount: records.length,
+                    itemBuilder: (context, i) {
+                    final r = records[i];
+                    final qty = (r.data['quantity'] ?? 0).toInt();
+                    final tool = r.expand?['tool'];
+                    dynamic t;
+                    if (tool != null) {
+                      t = tool is List
+                          ? (tool.isNotEmpty ? tool[0] : null)
+                          : tool;
+                    }
+                    final name = t?.data['tool_name'] ?? 'Tool';
+                    return ListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                      title: Text(name, style: const TextStyle(fontSize: 14)),
+                      subtitle: Text('Qty: $qty', style: const TextStyle(fontSize: 12)),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        if (t == null) return;
+                        Navigator.pop(ctx);
+                        final toolModel = Tool.fromRecord(t);
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AddToolScreen(tool: toolModel),
+                          ),
+                        );
+                        if (mounted) _loadData();
+                      },
+                    );
+                  },
+                ),
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // NEW: Get root locations filtered by selected type
   List<dynamic> _getRootLocationsByType() {
     if (_selectedType == null) return [];
-    return _locations.where((loc) => 
-      loc.data['type'] == _selectedType && 
+    final list = _locations.where((loc) =>
+      loc.data['type'] == _selectedType &&
       (loc.data['parent'] == null || loc.data['parent'] == '')
     ).toList();
+    list.sort(_compareLocationRecordsByName);
+    return list;
   }
 
   List<dynamic> _getChildLocations(String parentId) {
-    return _locations.where((loc) => loc.data['parent'] == parentId).toList();
+    final list = _locations.where((loc) => loc.data['parent'] == parentId).toList();
+    list.sort(_compareLocationRecordsByName);
+    return list;
   }
+
+  /// Natural sort by location name so "Bin 2" comes before "Bin 14"; alphabetic otherwise.
+  static String _nameOf(dynamic loc) =>
+      (loc.data['name'] ?? '').toString().trim();
+
+  static int _compareNatural(String a, String b) {
+    final re = RegExp(r'(\d+|\D+)');
+    final la = re.allMatches(a.toLowerCase()).map((m) => m.group(0)!).toList();
+    final lb = re.allMatches(b.toLowerCase()).map((m) => m.group(0)!).toList();
+    final len = la.length < lb.length ? la.length : lb.length;
+    for (var i = 0; i < len; i++) {
+      final ca = la[i], cb = lb[i];
+      final na = int.tryParse(ca), nb = int.tryParse(cb);
+      if (na != null && nb != null) {
+        final c = na.compareTo(nb);
+        if (c != 0) return c;
+      } else {
+        final c = ca.compareTo(cb);
+        if (c != 0) return c;
+      }
+    }
+    return la.length.compareTo(lb.length);
+  }
+
+  static int _compareLocationRecordsByName(dynamic a, dynamic b) =>
+      _compareNatural(_nameOf(a), _nameOf(b));
 
   /// Build full hierarchical path for a location record, e.g. "Toolbox A > Drawer A > Row 2".
   String _buildLocationPathFromRecord(dynamic location) {
@@ -776,6 +1142,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                _LocationContentsHoverIcon(
+                  location: location,
+                  onPressed: () => _showLocationContentsDialog(location),
+                ),
                 IconButton(
                   icon: const Icon(Icons.edit, size: 20, color: Colors.blue),
                   onPressed: () => _showEditLocationDialog(location),

@@ -1,295 +1,151 @@
-## CribHub Deployment Guide
+# CribHub Deployment Guide
 
-This doc covers how to build and deploy the CribHub **web app** to the Proxmox / PocketBase server that serves `https://cribhub.sscadcam.com`.
+Build and deploy the CribHub **web app** to the Proxmox / PocketBase server at `https://cribhub.sscadcam.com`.
 
-The stack:
-- Flutter web app (built to `build/web/`)
-- PocketBase + Nginx on the server
-- Static files served from `/opt/pocketbase/pb_public`
+**Stack:** Flutter web → `build/web/` → zip → server. Static files live in `/opt/pocketbase/pb_public`; Nginx serves them.
 
 ---
 
-## 1. URLs and environments
+## Copying commands
 
-Runtime URLs come from **`lib/app_config.dart`**:
-
-- `AppConfig.pocketBaseUrl`
-- `AppConfig.mcpUrl`
-
-These values are set at **build time** via `--dart-define`:
-
-- Local dev defaults (no defines):
-  - PocketBase: `http://localhost:8090`
-  - MCP: `http://localhost:8001`
-- Production (server build):
-  - PocketBase: `https://cribhub.sscadcam.com/`
-  - MCP: `https://cribhub.sscadcam.com/mcp`
-
-### Local development
-
-1. Start PocketBase and the MCP server locally:
-   - PocketBase on `http://localhost:8090`
-   - MCP server on `http://localhost:8001`
-
-2. Run the Flutter app:
-
-   ```bash
-   cd c:\cribhub
-   flutter run -d chrome
-   ```
-
-   No `--dart-define` flags needed; the defaults in `AppConfig` will point at `localhost`.
+Command blocks below use **indented lines** (no backticks). Select and copy the lines that start with spaces—PowerShell and bash ignore leading spaces, so you won't get the "backticks not recognized" error.
 
 ---
 
-## 2. Production web build (on laptop)
+## 1. URLs (build time)
 
-Run the build script from the repo root. It updates the About-page git info from the current commit, then builds with production URLs (so you don’t have to remember a separate step):
+The app reads **`lib/app_config.dart`** for `PocketBaseUrl` and `McpUrl`. Values are set at build time via `--dart-define`:
 
-```powershell
-cd c:\cribhub
-.\scripts\build_web.ps1
-```
+| Environment | PocketBase | MCP |
+|-------------|------------|-----|
+| Local (no defines) | `http://localhost:8090` | `http://localhost:8001` |
+| Production | `https://cribhub.sscadcam.com/` | `https://cribhub.sscadcam.com/mcp` |
 
-This refreshes `lib/git_info.dart` from git and runs:
+**Local dev:** Start PocketBase on 8090 and MCP on 8001, then run:
 
-```powershell
-flutter build web `
-  --dart-define=POCKETBASE_URL=https://cribhub.sscadcam.com/ `
-  --dart-define=MCP_URL=https://cribhub.sscadcam.com/mcp
-```
-
-This creates the production web bundle under:
-
-```text
-c:\cribhub\build\web\
-  index.html
-  assets/
-  main.dart.js
-  ...
-```
-
-### Create the deployment zip
-
-Create a small `deploy` folder and zip **the contents of `build/web`** (not the `web` folder itself):
-
-```powershell
-cd c:\cribhub
-mkdir deploy -ErrorAction SilentlyContinue
-Remove-Item deploy\dist.zip -ErrorAction SilentlyContinue
-
-Compress-Archive -Path build\web\* -DestinationPath deploy\dist.zip -Force
-```
-
-After this you should have:
-
-```text
-c:\cribhub\deploy\dist.zip
-```
-
-The zip should unpack to:
-
-```text
-index.html
-assets/
-canvaskit/
-icons/
-...
-```
-
-> If the zip unpacks to `web/index.html`, you zipped the folder instead of its contents. Always zip `build\web\*`, not `build\web`.
+    cd c:\cribhub
+    flutter run -d chrome
 
 ---
 
-## 3. Serve the zip from the laptop
+## 2. Build and zip (laptop)
 
-From your laptop, start a simple HTTP server in the `deploy` folder:
+**Step 1 – Production build**
 
-```powershell
-cd c:\cribhub\deploy
-python -m http.server 8888
-```
+From repo root, run the build script. It updates About-page git info and builds with production URLs:
 
-Leave this running during deploy.
+    cd c:\cribhub
+    .\scripts\build_web.ps1
 
-Find your laptop’s LAN IP (e.g. `192.168.1.247`) via:
+Output is in `build\web\` (index.html, assets/, main.dart.js, etc.).
 
-```powershell
-ipconfig
-```
+**Step 2 – Create deployment zip**
 
-Use the IPv4 address of the LAN adapter; the server must be able to reach `http://<LAPTOP_IP>:8888/`.
+Zip the **contents** of `build\web`, not the `web` folder itself:
 
----
+    cd c:\cribhub
+    mkdir deploy -ErrorAction SilentlyContinue
+    Remove-Item deploy\dist.zip -ErrorAction SilentlyContinue
+    Compress-Archive -Path build\web\* -DestinationPath deploy\dist.zip -Force
 
-## 4. Nginx / web root on the server
+You should have `deploy\dist.zip`. Unzipped, it must give `index.html` at the top level, not `web/index.html`. If you see `web/index.html`, you zipped the folder; use `build\web\*` instead.
 
-On the CribHub container, Nginx is configured in:
+**Step 3 – Serve the zip**
 
-```text
-/etc/nginx/sites-available/cribhub
-```
+On the laptop, serve the deploy folder so the server can download the zip:
 
-Key part:
+    cd c:\cribhub\deploy
+    python -m http.server 8888
 
-```nginx
-location / {
-    root /opt/pocketbase/pb_public;
-    try_files $uri $uri/ /index.html;
-    index index.html;
-}
-```
-
-So **`/opt/pocketbase/pb_public`** must contain `index.html`, `assets/`, etc.
+Leave this running. Get your laptop’s LAN IP with `ipconfig` (e.g. 192.168.1.247). The server will use `http://<LAPTOP_IP>:8888/dist.zip`.
 
 ---
 
-## 5. Deploy steps on the server
+## 3. Deploy on the server
 
-All commands below run on the CribHub container (SSH as `root` or equivalent).
+Run these on the CribHub container (SSH). Replace `192.168.1.247` with your laptop IP if different.
 
-### 5.1 Download the new build
+**Download zip**
 
-Replace `192.168.1.247` with your laptop IP if it changes.
+    cd ~
+    rm -f dist.zip
+    curl -O http://192.168.1.247:8888/dist.zip
+    ls -la dist.zip
 
-```bash
-cd ~
-rm -f dist.zip
-curl -O http://192.168.1.247:8888/dist.zip
-ls -la dist.zip
-```
+**Clear old app files**
 
-Confirm `dist.zip` looks roughly the right size (several MB).
+    cd /opt/pocketbase/pb_public
+    rm -f main.dart.js index.html flutter.js flutter_bootstrap.js flutter_service_worker.js manifest.json version.json .last_build_id favicon.png
+    rm -rf assets canvaskit icons
 
-### 5.2 Clear old app files
+**Unzip new build**
 
-Remove the previous web build so nothing stale is left:
+    cd /opt/pocketbase/pb_public
+    unzip -o ~/dist.zip
+    ls -la
 
-```bash
-cd /opt/pocketbase/pb_public
-
-rm -f main.dart.js index.html flutter.js flutter_bootstrap.js \
-      flutter_service_worker.js manifest.json version.json \
-      .last_build_id favicon.png
-
-rm -rf assets canvaskit icons
-```
-
-### 5.3 Unzip the new build
-
-```bash
-cd /opt/pocketbase/pb_public
-unzip -o ~/dist.zip
-ls -la
-```
-
-You should now see:
-
-```text
-index.html
-assets/
-canvaskit/
-icons/
-main.dart.js
-...
-```
-
-If instead everything is under `web/` (e.g. `web/index.html`), then the zip was created incorrectly; go back and recreate `dist.zip` from `build\web\*`.
-
-### 5.4 (Optional) Migrations
-
-If you’ve changed PocketBase migrations and created a `pb_migrations.zip`, unzip it where the PocketBase binary expects migrations (typically next to the `pb` binary):
-
-```bash
-cd /opt/pocketbase/pb_migrations
-unzip -o ~/pb_migrations.zip
-```
-
-Restart PocketBase if needed, then it will apply new migrations on startup.
-
-### 5.5 Purchase tracking collections (optional)
-
-If you use the **Purchases** feature, create these two collections in the PocketBase admin (**Settings → Collections**):
-
-**Collection: `purchases`**
-
-| Field            | Type   | Notes                    |
-|------------------|--------|--------------------------|
-| `purchase_date`  | date   | Required                 |
-| `supplier`       | relation | Single, → `suppliers` |
-| `order_reference`| text   | Optional                 |
-| `notes`          | text   | Optional                 |
-| `total`          | number | Optional                 |
-
-**Collection: `purchase_items`**
-
-| Field   | Type     | Notes                                                     |
-|---------|----------|-----------------------------------------------------------|
-| `purchase` | relation | Single, → `purchases`                                  |
-| `tool`  | relation | Single, → `inventory`; **optional** for tax/shipping lines |
-| `quantity` | number | Required (use 1 for tax/shipping)                      |
-| `unit_cost` | number | Optional (unit price for items; amount for tax/shipping) |
-| `line_type` | text   | `item` (default), `tax`, or `shipping`                 |
-| `description` | text  | Optional; e.g. "GST", "PST", "Shipping"               |
-
-Set list/create/view rules as needed (e.g. allow authenticated users to manage).
+You should see `index.html`, `assets/`, `canvaskit/`, `icons/`, `main.dart.js`, etc. at the top level. If everything is under `web/`, the zip was wrong; recreate it from `build\web\*`.
 
 ---
 
-## 6. Verify deployment
+## 4. Nginx
 
-### 6.1 Browser cache and service worker
-
-Flutter web registers a service worker (`flutter_service_worker.js`) that can cache old bundles. If the site still looks old after deploy:
-
-1. Open `https://cribhub.sscadcam.com` in Chrome.
-2. Open DevTools (F12) → **Application** → **Storage**.
-3. Click **Clear site data** for this origin (cookies, cache, storage, service workers).
-4. Reload the page (Ctrl+Shift+R).
-
-Alternatively, open the site in a **private/incognito** window, which bypasses the existing service worker.
-
-When everything is correct, the About screen should show the new short hash from `lib/git_info.dart`, and inventory data should load from the live PocketBase.
+Nginx is configured in `/etc/nginx/sites-available/cribhub`. Root is `/opt/pocketbase/pb_public` with `try_files $uri $uri/ /index.html`. No change needed unless you move the app.
 
 ---
 
-## 7. Quick reference
+## 5. After deploy – browser cache
 
-### Laptop (build + zip)
+Flutter web uses a service worker. If the site still shows the old version:
 
-```powershell
-cd c:\cribhub
+1. Chrome → F12 → **Application** → **Storage** → **Clear site data** for the origin.
+2. Hard refresh (Ctrl+Shift+R).
 
-# Production build (updates git info, then builds for live server)
-.\scripts\build_web.ps1
+Or open the site in a **private/incognito** window.
 
-# Create dist.zip from build/web contents
-mkdir deploy -ErrorAction SilentlyContinue
-Remove-Item deploy\dist.zip -ErrorAction SilentlyContinue
-Compress-Archive -Path build\web\* -DestinationPath deploy\dist.zip -Force
+Check the About screen for the new git hash and confirm data loads from PocketBase.
 
-# Serve it
-cd c:\cribhub\deploy
-python -m http.server 8888
-```
+---
 
-### Server (download + deploy)
+## 6. Optional
 
-```bash
-# Download
-cd ~
-curl -O http://192.168.1.247:8888/dist.zip
+**PocketBase migrations**  
+If you have a `pb_migrations.zip`, unzip it into the migrations directory (next to the `pb` binary), then restart PocketBase.
 
-# Clear old build
-cd /opt/pocketbase/pb_public
-rm -f main.dart.js index.html flutter.js flutter_bootstrap.js \
-      flutter_service_worker.js manifest.json version.json \
-      .last_build_id favicon.png
-rm -rf assets canvaskit icons
+**Purchase tracking**  
+For the Purchases feature, create two collections in PocketBase admin (**Settings → Collections**):
 
-# Unzip new build
-unzip -o ~/dist.zip
-```
+- **`purchases`**  
+  `purchase_date` (date, required), `supplier` (relation → suppliers), `order_reference` (text), `notes` (text), `total` (number).
 
-Then hard-refresh the browser or clear site data if needed.
+- **`purchase_items`**  
+  `purchase` (relation → purchases), `tool` (relation → inventory; optional for tax/shipping), `quantity` (number, required), `unit_cost` (number), `line_type` (text: item / tax / shipping), `description` (text).
 
+Set list/create/update rules for your auth (e.g. authenticated users).
+
+**Tool notes (edit screen)**  
+The Add/Edit Tool screen saves a **Notes** field on the `inventory` collection. Add a text field **`notes`** (optional) to the `inventory` collection if update fails with an unknown field error.
+
+---
+
+## Quick reference
+
+**Laptop**
+
+    cd c:\cribhub
+    .\scripts\build_web.ps1
+    mkdir deploy -ErrorAction SilentlyContinue
+    Remove-Item deploy\dist.zip -ErrorAction SilentlyContinue
+    Compress-Archive -Path build\web\* -DestinationPath deploy\dist.zip -Force
+    cd deploy
+    python -m http.server 8888
+
+**Server**
+
+    cd ~ && curl -O http://192.168.1.247:8888/dist.zip
+    cd /opt/pocketbase/pb_public
+    rm -f main.dart.js index.html flutter.js flutter_bootstrap.js flutter_service_worker.js manifest.json version.json .last_build_id favicon.png
+    rm -rf assets canvaskit icons
+    unzip -o ~/dist.zip
+
+Then hard-refresh the browser or clear site data.
