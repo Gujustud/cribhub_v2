@@ -1,4 +1,6 @@
 // add_inventory_dialog.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'multi_step_location_picker.dart';
@@ -26,6 +28,11 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
   List<dynamic> _currentLocations = [];
   String? _selectedLocationId;
   String? _selectedLocationPath;
+  final TextEditingController _searchController = TextEditingController();
+  List<dynamic>? _suggestions;
+  Timer? _searchDebounce;
+  static const int _maxSuggestions = 5;
+  static const int _minSearchLength = 2;
 
   void _submit() {
     if (_selectedLocationId == null) return;
@@ -47,12 +54,42 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
     super.initState();
     _currentLocations = widget.allLocations;
   }
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    _searchController.dispose();
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
   
   Future<void> _refreshLocations() async {
     final pbService = PocketBaseService();
     final locations = await pbService.getLocations();
     setState(() {
       _currentLocations = locations;
+    });
+  }
+
+  void _onSearchChanged() {
+    final query = _searchController.text.trim();
+    if (query.length < _minSearchLength) {
+      setState(() => _suggestions = null);
+      return;
+    }
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 200), () {
+      final q = query.toLowerCase();
+      final paths = _currentLocations
+          .map((loc) => MapEntry(loc, _buildLocationPathFromRecord(loc)))
+          .where((e) => e.value.toLowerCase().contains(q))
+          .toList();
+      paths.sort((a, b) => a.value.compareTo(b.value));
+      if (mounted) {
+        setState(() {
+          _suggestions = paths.take(_maxSuggestions).map((e) => e.key).toList();
+        });
+      }
     });
   }
   
@@ -208,6 +245,50 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
               ),
               const SizedBox(height: 8),
             ],
+
+            // Search field for destination location
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search location by name or path',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              onChanged: (_) => _onSearchChanged(),
+            ),
+            if (_suggestions != null && _suggestions!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Card(
+                elevation: 2,
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  itemCount: _suggestions!.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    final loc = _suggestions![i];
+                    final path = _buildLocationPathFromRecord(loc);
+                    return ListTile(
+                      dense: true,
+                      title: Text(path, style: const TextStyle(fontSize: 13)),
+                      onTap: () {
+                        setState(() {
+                          _selectedLocationId = loc.id;
+                          _selectedLocationPath = path;
+                          _suggestions = null;
+                          _searchController.clear();
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
             
             // Selected location summary
             if (_selectedLocationPath != null) ...[
@@ -247,10 +328,10 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
             ],
 
             if (!hasExistingLocations && !hasHistoricalLocations)
-                const Text(
-                  'Select Location:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
+              const Text(
+                'Select Location:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
             const SizedBox(height: 8),
             Container(
               constraints: const BoxConstraints(maxHeight: 400),
@@ -368,9 +449,4 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
     return names.join(' → ');
   }
   
-  @override
-  void dispose() {
-    _quantityController.dispose();
-    super.dispose();
-  }
 }

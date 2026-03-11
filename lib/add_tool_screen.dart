@@ -229,6 +229,25 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       return;
     }
 
+    // If user entered something in URL, ensure it at least looks like a URL.
+    if (url.isNotEmpty &&
+        !(url.toLowerCase().startsWith('http://') ||
+          url.toLowerCase().startsWith('https://'))) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'That does not look like a valid URL.\n'
+              'Please enter the full URL (e.g. https://example.com/your-tool).',
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() {
       _isImporting = true;
     });
@@ -324,7 +343,10 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Import failed: $error'),
+              content: Text(
+                'Import failed. Please double-check the URL or model number.\n'
+                'Details: $error',
+              ),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 5),
             ),
@@ -335,7 +357,10 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
+            content: Text(
+              'Something went wrong while importing. '
+              'Please make sure the URL is correct and try again.',
+            ),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),
@@ -2006,6 +2031,26 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       }
     }
 
+    // Basic URL validation: if provided, it should look like a real URL.
+    final rawUrl = _urlController.text.trim();
+    if (rawUrl.isNotEmpty &&
+        !(rawUrl.toLowerCase().startsWith('http://') ||
+          rawUrl.toLowerCase().startsWith('https://'))) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'That does not look like a valid URL.\n'
+              'Please enter the full URL (e.g. https://example.com/your-tool).',
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
     if (_formKey.currentState!.validate()) {
       try {
         showDialog(
@@ -2040,9 +2085,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
           'model_number': _modelNumberController.text.isEmpty 
               ? null 
               : _modelNumberController.text,
-          'url': _urlController.text.isEmpty 
-              ? null 
-              : _urlController.text,
+          'url': rawUrl.isEmpty ? null : rawUrl,
           'brand': _selectedBrandId,
           'supplier': _selectedSupplierId,
           'diameter_in': double.tryParse(_diameterInController.text),
@@ -3503,45 +3546,30 @@ class InventoryLocationTag extends StatelessWidget {
       }
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: borderColor, width: 1.5),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              'Qty: $quantity • $locationPath',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: textColor,
+    return InkWell(
+      onTap: () => _showTransferDialog(context),
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: borderColor, width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Qty: $quantity • $locationPath',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
               ),
             ),
-          ),
-          // Transfer icon
-          IconButton(
-            icon: const Icon(Icons.swap_horiz, size: 18),
-            color: iconColor,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            tooltip: 'Transfer',
-            onPressed: () => _showTransferDialog(context),
-          ),
-          const SizedBox(width: 8),
-          // Delete icon
-          IconButton(
-            icon: const Icon(Icons.delete_outline, size: 18),
-            color: isDark ? colorScheme.error : Colors.red[700],
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            tooltip: 'Remove from location',
-            onPressed: () => _confirmDelete(context),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

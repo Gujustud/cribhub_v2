@@ -172,6 +172,76 @@ class _TransferDialogState extends State<TransferDialog> {
     }
   }
 
+  Future<void> _handleDelete() async {
+    final sourceLoc = widget.sourceLocation.location;
+    if (sourceLoc == null) return;
+
+    final path = _buildLocationPath(sourceLoc);
+    final qty = widget.sourceLocation.quantity;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove from Location'),
+        content: Text('Remove this tool from $path?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      final pbService = PocketBaseService();
+      await pbService.logInventoryHistory(
+        toolId: widget.sourceLocation.toolId,
+        locationId: widget.sourceLocation.locationId,
+        action: 'remove',
+        quantity: qty,
+        quantityBefore: qty,
+        quantityAfter: 0,
+      );
+
+      await pbService.pb.collection('tool_locations').delete(widget.sourceLocation.id);
+
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Removed from location!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final sourceLoc = widget.sourceLocation.location;
@@ -375,33 +445,45 @@ class _TransferDialogState extends State<TransferDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(false),
-          child: const Text(
-            'Cancel',
-            style: TextStyle(fontSize: 14),
-          ),
-        ),
-        ElevatedButton(
-          onPressed: _isSubmitting ? null : _handleSubmit,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          ),
-          child: _isSubmitting
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Text(
-                  'Transfer',
-                  style: TextStyle(fontSize: 14),
-                ),
+        Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              color: Colors.red,
+              tooltip: 'Remove from location',
+              onPressed: _isSubmitting ? null : _handleDelete,
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(false),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontSize: 14),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _isSubmitting ? null : _handleSubmit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: _isSubmitting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Text(
+                      'Transfer',
+                      style: TextStyle(fontSize: 14),
+                    ),
+            ),
+          ],
         ),
       ],
     );
