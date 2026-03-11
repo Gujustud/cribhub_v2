@@ -736,20 +736,22 @@ class LocationTag extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    if (quantity <= 0) {
-      return const SizedBox.shrink();
-    }
-
     final locationPath = _buildLocationPath(location);
     final type = location.type.toLowerCase();
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isEmpty = quantity <= 0; // Show 0-qty as "home" location with muted style
 
     // Theme-aware colors: use container colors in dark mode so tags aren't overly bright
+    // Empty (0-qty) uses muted outline so "home bin" stays visible
     Color backgroundColor;
     Color borderColor;
     Color textColor;
-    if (isDark) {
+    if (isEmpty) {
+      backgroundColor = colorScheme.surfaceContainerHighest;
+      borderColor = colorScheme.outline;
+      textColor = colorScheme.onSurfaceVariant;
+    } else if (isDark) {
       switch (type) {
         case 'toolbox':
           backgroundColor = colorScheme.errorContainer;

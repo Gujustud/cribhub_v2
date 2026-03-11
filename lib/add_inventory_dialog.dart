@@ -1,5 +1,6 @@
 // add_inventory_dialog.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'multi_step_location_picker.dart';
 import 'pocketbase_service.dart';
 import 'models.dart';
@@ -22,9 +23,24 @@ class AddInventoryDialog extends StatefulWidget {
 
 class _AddInventoryDialogState extends State<AddInventoryDialog> {
   final _quantityController = TextEditingController(text: '1');
+  List<dynamic> _currentLocations = [];
   String? _selectedLocationId;
   String? _selectedLocationPath;
-  List<dynamic> _currentLocations = [];
+
+  void _submit() {
+    if (_selectedLocationId == null) return;
+    final qty = int.tryParse(_quantityController.text);
+    if (qty == null || qty < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid quantity')),
+      );
+      return;
+    }
+    Navigator.pop(context, {
+      'quantity': qty,
+      'locationId': _selectedLocationId,
+    });
+  }
   
   @override
   void initState() {
@@ -48,14 +64,29 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
     final historicalLocations = _getHistoricalLocationsWithoutInventory();
     final hasHistoricalLocations = historicalLocations.isNotEmpty;
     
-    return AlertDialog(
-      title: const Text('Add Inventory'),
-      content: SizedBox(
-        width: 600,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return Shortcuts(
+      shortcuts: {
+        // Enter confirms "Add Inventory" from anywhere in this dialog.
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.numpadEnter): ActivateIntent(),
+      },
+      child: Actions(
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (intent) {
+              _submit();
+              return null;
+            },
+          ),
+        },
+        child: AlertDialog(
+          title: const Text('Add Inventory'),
+          content: SizedBox(
+            width: 600,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
             // Quantity input
             TextField(
               controller: _quantityController,
@@ -70,7 +101,7 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
             const SizedBox(height: 16),
             
             // Quick-add section for existing locations (edit mode only)
-            if (hasExistingLocations && _selectedLocationId == null) ...[
+            if (hasExistingLocations) ...[
               const Text(
                 'Quick Add to Existing Location:',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
@@ -91,10 +122,16 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
                     
                     final path = _buildLocationPathFromLocation(location);
                     final currentQty = toolLocation.quantity;
+                    final isSelected = _selectedLocationId == location.id;
                     
                     return ListTile(
                       dense: true,
-                      leading: const Icon(Icons.add_circle_outline, color: Colors.blue),
+                      selected: isSelected,
+                      selectedTileColor: Colors.green[100],
+                      leading: Icon(
+                        isSelected ? Icons.check_circle : Icons.add_circle_outline,
+                        color: isSelected ? Colors.green : Colors.blue,
+                      ),
                       title: Text(path, style: const TextStyle(fontSize: 13)),
                       subtitle: Text('Currently has $currentQty', style: const TextStyle(fontSize: 11)),
                       trailing: const Icon(Icons.chevron_right, size: 16),
@@ -111,8 +148,8 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
               const SizedBox(height: 16),
             ],
             
-            // NEW: Historical locations section (previously used, currently empty)
-            if (hasHistoricalLocations && _selectedLocationId == null) ...[
+            // Historical locations section (previously used, currently empty)
+            if (hasHistoricalLocations) ...[
               if (hasExistingLocations) const Divider(),
               const Text(
                 'Previously Used Locations:',
@@ -130,10 +167,16 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
                   shrinkWrap: true,
                   children: historicalLocations.map((location) {
                     final path = _buildLocationPathFromRecord(location);
+                    final isSelected = _selectedLocationId == location.id;
                     
                     return ListTile(
                       dense: true,
-                      leading: Icon(Icons.history, color: Colors.orange[700]),
+                      selected: isSelected,
+                      selectedTileColor: Colors.green[100],
+                      leading: Icon(
+                        isSelected ? Icons.check_circle : Icons.history,
+                        color: isSelected ? Colors.green : Colors.orange[700],
+                      ),
                       title: Text(
                         path,
                         style: TextStyle(fontSize: 13, color: Colors.grey[700]),
@@ -157,7 +200,7 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
             ],
             
             // Divider before "Select Different Location" if we have existing or historical
-            if ((hasExistingLocations || hasHistoricalLocations) && _selectedLocationId == null) ...[
+            if (hasExistingLocations || hasHistoricalLocations) ...[
               const Divider(),
               const Text(
                 'Or Select a Different Location:',
@@ -166,7 +209,7 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
               const SizedBox(height: 8),
             ],
             
-            // Selected location display
+            // Selected location summary
             if (_selectedLocationPath != null) ...[
               Container(
                 padding: const EdgeInsets.all(12),
@@ -181,84 +224,69 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Location: $_selectedLocationPath',
+                        'Selected: $_selectedLocationPath',
                         style: const TextStyle(fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.arrow_back, size: 20),
+                      icon: const Icon(Icons.close, size: 20),
+                      tooltip: 'Clear selection',
                       onPressed: () {
                         setState(() {
                           _selectedLocationId = null;
                           _selectedLocationPath = null;
                         });
                       },
-                      tooltip: 'Change location',
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
             ],
-            
-            // Location picker
-            if (_selectedLocationId == null) ...[
-              if (!hasExistingLocations && !hasHistoricalLocations)
+
+            if (!hasExistingLocations && !hasHistoricalLocations)
                 const Text(
                   'Select Location:',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
-              const SizedBox(height: 8),
-              Container(
-                constraints: const BoxConstraints(maxHeight: 400),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey[300]!),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: SingleChildScrollView(
-                  child: MultiStepLocationPicker(
-                    allLocations: _currentLocations,
-                    onLocationSelected: (locationId) {
-                      // Build path for display
-                      final path = _buildLocationPath(locationId);
-                      setState(() {
-                        _selectedLocationId = locationId;
-                        _selectedLocationPath = path;
-                      });
-                    },
-                    onRefreshLocations: _refreshLocations,
-                  ),
+            const SizedBox(height: 8),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 400),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey[300]!),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SingleChildScrollView(
+                child: MultiStepLocationPicker(
+                  allLocations: _currentLocations,
+                  onLocationSelected: (locationId) {
+                    final path = _buildLocationPath(locationId);
+                    setState(() {
+                      _selectedLocationId = locationId;
+                      _selectedLocationPath = path;
+                    });
+                  },
+                  onRefreshLocations: _refreshLocations,
                 ),
               ),
-            ],
+            ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: _selectedLocationId == null ? null : _submit,
+              child: const Text('Add Inventory'),
+            ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: _selectedLocationId == null
-              ? null
-              : () {
-                  final qty = int.tryParse(_quantityController.text);
-                  if (qty == null || qty < 1) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter a valid quantity')),
-                    );
-                    return;
-                  }
-                  
-                  Navigator.pop(context, {
-                    'quantity': qty,
-                    'locationId': _selectedLocationId,
-                  });
-                },
-          child: const Text('Add Inventory'),
-        ),
-      ],
     );
   }
   

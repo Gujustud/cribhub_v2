@@ -612,7 +612,55 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+        builder: (context, setDialogState) {
+          Future<void> submit() async {
+            final name = nameController.text.trim();
+            if (name.isEmpty) {
+              setDialogState(() => nameError = 'Please enter a location name');
+              return;
+            }
+
+            if (_siblingNameExists(
+              parentId: parentId,
+              type: selectedType,
+              name: name,
+            )) {
+              setDialogState(() => nameError = 'A "$name" already exists here.');
+              return;
+            }
+
+            try {
+              final pbService = PocketBaseService();
+              await pbService.createLocation(
+                name: name,
+                type: selectedType,
+                parentId: parentId,
+              );
+
+              Navigator.pop(context);
+              _loadData();
+
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Location "$name" added!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          }
+
+          return AlertDialog(
           title: Text(parentId == null ? 'Add Location' : 'Add Sub-Location'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -633,6 +681,9 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
                   errorText: nameError,
                 ),
                 textCapitalization: TextCapitalization.words,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => submit(),
                 onChanged: (_) {
                   if (nameError != null) {
                     setDialogState(() => nameError = null);
@@ -673,56 +724,12 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () async {
-                final name = nameController.text.trim();
-                if (name.isEmpty) {
-                  setDialogState(() => nameError = 'Please enter a location name');
-                  return;
-                }
-
-                if (_siblingNameExists(
-                  parentId: parentId,
-                  type: selectedType,
-                  name: name,
-                )) {
-                  setDialogState(() => nameError = 'A "$name" already exists here.');
-                  return;
-                }
-
-                try {
-                  final pbService = PocketBaseService();
-                  await pbService.createLocation(
-                    name: name,
-                    type: selectedType,
-                    parentId: parentId,
-                  );
-
-                  Navigator.pop(context);
-                  _loadData();
-
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Location "$name" added!'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
-              },
+              onPressed: submit,
               child: const Text('Add'),
             ),
           ],
-        ),
+        );
+        },
       ),
     );
   }

@@ -141,11 +141,11 @@ class PocketBaseService {
     }
   }
 
-  // Get tool locations at a specific location
+  // Get tool locations at a specific location (includes 0-qty so "home bin" stays visible)
   Future<List<dynamic>> getToolLocationsAtLocation(String locationId) async {
     try {
       final records = await pb.collection('tool_locations').getFullList(
-        filter: 'location = "$locationId" && quantity > 0',
+        filter: 'location = "$locationId"',
       );
       return records;
     } catch (e) {
@@ -154,11 +154,11 @@ class PocketBaseService {
     }
   }
 
-  /// Tool locations at [locationId] with tool expanded (for checking tool_name).
+  /// Tool locations at [locationId] with tool expanded (includes 0-qty for "home bin").
   Future<List<dynamic>> getToolLocationsAtLocationWithTool(String locationId) async {
     try {
       final records = await pb.collection('tool_locations').getFullList(
-        filter: 'location = "$locationId" && quantity > 0',
+        filter: 'location = "$locationId"',
         expand: 'tool',
       );
       return records;
@@ -228,16 +228,12 @@ class PocketBaseService {
         locationId: toLocationId,
       );
 
-      // Update source location (reduce quantity or delete if 0)
+      // Update source location (reduce quantity; keep record at 0 as "home" bin)
       final newSourceQty = currentQty - quantity;
-      if (currentQty == quantity) {
-        await pb.collection('tool_locations').delete(fromRecord.id);
-      } else {
-        await pb.collection('tool_locations').update(
-          fromRecord.id,
-          body: {'quantity': newSourceQty},
-        );
-      }
+      await pb.collection('tool_locations').update(
+        fromRecord.id,
+        body: {'quantity': newSourceQty},
+      );
 
       // Update or create destination location
       final toRecords = await pb.collection('tool_locations').getFullList(

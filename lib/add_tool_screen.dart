@@ -63,8 +63,8 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
   Map<int, double?> _subcategoryNumberValues = {}; // level → number value
   
   // Temporary backward compatibility variables (will be replaced with dynamic system)
-  String? _subcategory = 'Endmills';
-  String? _subSubcategory = 'Flat';
+  String? _subcategory;
+  String? _subSubcategory;
   
   // Attribute
   String? _selectedAttributeValue;
@@ -84,6 +84,9 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
   List<dynamic> _suppliers = [];
   String? _selectedBrandId;
   String? _selectedSupplierId;
+  /// FocusNodes from Autocomplete fieldViewBuilder so we can refocus after Enter select.
+  FocusNode? _brandFieldFocusNode;
+  FocusNode? _supplierFieldFocusNode;
   
   // Auto-generated tool name
   String _toolName = '';
@@ -1980,6 +1983,29 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
   }
 
   void _saveTool() async {
+    // Ensure dynamic subcategory text vars are up to date before validation checks.
+    _updateSubcategoryText();
+
+    // Cutting Tools: require Tool Type, then Style.
+    if (_category == 'Cutting Tools') {
+      if (_subcategory == null || _subcategory!.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please select a Tool Type')),
+          );
+        }
+        return;
+      }
+      if (_subSubcategory == null || _subSubcategory!.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please select a Style')),
+          );
+        }
+        return;
+      }
+    }
+
     if (_formKey.currentState!.validate()) {
       try {
         showDialog(
@@ -2278,12 +2304,15 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
             ),
             const SizedBox(height: 16),
             
-            // Brand and Supplier row
-            Row(
-              children: [
-                // BRAND - Searchable Autocomplete
-                Expanded(
-                  child: Autocomplete<String>(
+            // Brand and Supplier row (explicit Tab order: Brand → Supplier)
+            FocusTraversalGroup(
+              child: Row(
+                children: [
+                  // BRAND - Searchable Autocomplete
+                  FocusTraversalOrder(
+                    order: const NumericFocusOrder(1),
+                    child: Expanded(
+                      child: Autocomplete<String>(
                     initialValue: _selectedBrandId != null && _brands.any((b) => b.id == _selectedBrandId)
                         ? TextEditingValue(
                             text: _brands.firstWhere((b) => b.id == _selectedBrandId).data['name'],
@@ -2304,11 +2333,17 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                       setState(() {
                         _selectedBrandId = brand.id;
                       });
+                      // Keep focus in Brand field so Tab moves to Supplier
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _brandFieldFocusNode?.requestFocus();
+                      });
                     },
                     fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                      _brandFieldFocusNode = focusNode;
                       return TextFormField(
                         controller: controller,
                         focusNode: focusNode,
+                        onFieldSubmitted: (_) => onFieldSubmitted(),
                         decoration: InputDecoration(
                           labelText: 'Brand',
                           floatingLabelBehavior: FloatingLabelBehavior.always,
@@ -2334,11 +2369,14 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                       );
                     },
                   ),
-                ),
+                    ),
+                  ),
                 const SizedBox(width: 16),
                 // SUPPLIER - Searchable Autocomplete
-                Expanded(
-                  child: Autocomplete<String>(
+                FocusTraversalOrder(
+                  order: const NumericFocusOrder(2),
+                  child: Expanded(
+                    child: Autocomplete<String>(
                     initialValue: _selectedSupplierId != null && _suppliers.any((s) => s.id == _selectedSupplierId)
                         ? TextEditingValue(
                             text: _suppliers.firstWhere((s) => s.id == _selectedSupplierId).data['company_name'],
@@ -2359,11 +2397,17 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                       setState(() {
                         _selectedSupplierId = supplier.id;
                       });
+                      // Keep focus in Supplier field so Tab moves to next field (e.g. URL)
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _supplierFieldFocusNode?.requestFocus();
+                      });
                     },
                     fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                      _supplierFieldFocusNode = focusNode;
                       return TextFormField(
                         controller: controller,
                         focusNode: focusNode,
+                        onFieldSubmitted: (_) => onFieldSubmitted(),
                         decoration: InputDecoration(
                           labelText: 'Supplier',
                           floatingLabelBehavior: FloatingLabelBehavior.always,
@@ -2389,8 +2433,10 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                       );
                     },
                   ),
+                  ),
                 ),
               ],
+            ),
             ),
                   const SizedBox(height: 16),
 
@@ -2520,6 +2566,16 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                       ),
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
+                      validator: (value) {
+                        if (_subSubcategory != 'CR') return null;
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Required';
+                        }
+                        if (double.tryParse(value) == null) {
+                          return 'Invalid number';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                 ],
