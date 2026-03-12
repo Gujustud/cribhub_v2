@@ -160,6 +160,10 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
               'quantity': item.quantity,
               'unitCost': item.unitCost,
               'description': item.description ?? '',
+              // Text shown in the Item field; prefer saved description, else tool name.
+              'itemText': (item.description?.isNotEmpty == true)
+                  ? item.description
+                  : (item.toolName ?? ''),
             });
           }
           _gstChecked = gst;
@@ -172,7 +176,13 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
               'quantity': 1,
               'unitCost': null as double?,
               'description': '',
+              'itemText': '',
             });
+          }
+        } else if (p == null) {
+          // Ensure the starter line has an itemText slot.
+          if (_lineItems.isNotEmpty) {
+            _lineItems[0]['itemText'] ??= '';
           }
         }
         _isLoadingData = false;
@@ -539,6 +549,8 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                     final item = _lineItems[i];
                     final rawType = item['type'] as String? ?? 'item';
                     final lineType = rawType == 'tax' ? 'item' : rawType;
+                    // Lazily ensure the visible text backing field exists.
+                    item['itemText'] ??= item['toolName'] ?? '';
                     // Lazily create controllers per line so typing doesn't fight rebuilds.
                     if (lineType == 'item') {
                       item['quantityController'] ??=
@@ -594,9 +606,24 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                   setState(() {
                                     _lineItems[i]['toolId'] = tool.id;
                                     _lineItems[i]['toolName'] = tool.toolName;
+                                    // Show "Tool Name (MODEL)" in the field so it matches the tool
+                                    // but still surfaces the model number from the invoice.
+                                    final model = tool.modelNumber;
+                                    _lineItems[i]['itemText'] = (model != null && model.isNotEmpty)
+                                        ? '${tool.toolName} ($model)'
+                                        : tool.toolName;
                                   });
                                 },
                                 fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                                  // Keep the text field showing whatever the user typed
+                                  // (invoice description / model), not the internal tool name.
+                                  final desiredText = (item['itemText'] as String?) ?? '';
+                                  if (controller.text != desiredText) {
+                                    controller.text = desiredText;
+                                    controller.selection = TextSelection.fromPosition(
+                                      TextPosition(offset: controller.text.length),
+                                    );
+                                  }
                                   return TextField(
                                     controller: controller,
                                     focusNode: focusNode,
@@ -606,6 +633,10 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                       border: OutlineInputBorder(),
                                       suffixIcon: Icon(Icons.search, size: 20),
                                     ),
+                                    onChanged: (value) {
+                                      // Remember the raw invoice text the user wants to see.
+                                      item['itemText'] = value;
+                                    },
                                   );
                                 },
                                 optionsViewBuilder: (context, onSelected, options) {

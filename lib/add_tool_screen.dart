@@ -85,7 +85,9 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
   List<dynamic> _brands = [];
   List<dynamic> _suppliers = [];
   String? _selectedBrandId;
+  String? _selectedBrandName;
   String? _selectedSupplierId;
+  String? _selectedSupplierName;
   /// FocusNodes from Autocomplete fieldViewBuilder so we can refocus after Enter select.
   FocusNode? _brandFieldFocusNode;
   FocusNode? _supplierFieldFocusNode;
@@ -659,14 +661,16 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     }
     
     // Don't set brand/supplier until they're loaded
-    // Will be set in _loadBrandsAndSuppliers if valid
+    // Will be validated in _loadBrandsAndSuppliers if valid
     print('DEBUG _prefillFields: tool.brandId = ${tool.brandId}, tool.supplierId = ${tool.supplierId}');
     if (tool.brandId != null && tool.brandId!.isNotEmpty) {
       _selectedBrandId = tool.brandId;
-      print('DEBUG _prefillFields: Set _selectedBrandId = $_selectedBrandId');
+      _selectedBrandName = tool.brand;
+      print('DEBUG _prefillFields: Set _selectedBrandId = $_selectedBrandId, _selectedBrandName = $_selectedBrandName');
     }
     if (tool.supplierId != null && tool.supplierId!.isNotEmpty) {
       _selectedSupplierId = tool.supplierId;
+      _selectedSupplierName = tool.supplier;
       print('DEBUG _prefillFields: Set _selectedSupplierId = $_selectedSupplierId');
     }
     
@@ -976,12 +980,14 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
           final supplierExists = suppliers.any((s) => s.id == _selectedSupplierId);
           if (supplierExists) {
             final supplier = suppliers.firstWhere((s) => s.id == _selectedSupplierId);
-            print('DEBUG _loadBrandsAndSuppliers: Found supplier ${supplier.data['company_name']} for ID $_selectedSupplierId');
+            _selectedSupplierName = supplier.data['company_name'] as String?;
+            print('DEBUG _loadBrandsAndSuppliers: Found supplier ${_selectedSupplierName} for ID $_selectedSupplierId');
           } else {
             print('DEBUG _loadBrandsAndSuppliers: Supplier with ID $_selectedSupplierId not found in filtered list');
             // If not preserving selections, clear the ID
             if (!preserveSelections || preservedSupplierId == null) {
               _selectedSupplierId = null;
+              _selectedSupplierName = null;
             }
           }
         }
@@ -2374,11 +2380,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                     order: const NumericFocusOrder(1),
                     child: Expanded(
                       child: Autocomplete<String>(
-                    initialValue: _selectedBrandId != null && _brands.any((b) => b.id == _selectedBrandId)
-                        ? TextEditingValue(
-                            text: _brands.firstWhere((b) => b.id == _selectedBrandId).data['name'],
-                          )
-                        : const TextEditingValue(),
+                    initialValue: const TextEditingValue(),
                     optionsBuilder: (TextEditingValue textEditingValue) {
                       if (textEditingValue.text.isEmpty) {
                         return _brands.map((brand) => brand.data['name'] as String);
@@ -2393,6 +2395,30 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                       final brand = _brands.firstWhere((b) => b.data['name'] == selectedName);
                       setState(() {
                         _selectedBrandId = brand.id;
+                        _selectedBrandName = brand.data['name'] as String?;
+
+                        // If brand has a default supplier, always auto-select it
+                        // (changing brand should update supplier to match).
+                        final defaultSupplierId = brand.data['default_supplier'] as String?;
+                        if (defaultSupplierId != null &&
+                            defaultSupplierId.isNotEmpty) {
+                          dynamic matchingSupplier;
+                          try {
+                            matchingSupplier = _suppliers.firstWhere(
+                              (s) => s.id == defaultSupplierId,
+                            );
+                          } catch (_) {
+                            matchingSupplier = null;
+                          }
+                          if (matchingSupplier != null) {
+                            _selectedSupplierId = matchingSupplier.id as String;
+                            _selectedSupplierName =
+                                matchingSupplier.data['company_name'] as String?;
+                            print('DEBUG brand onSelected: auto-selected supplier $_selectedSupplierId / $_selectedSupplierName');
+                          } else {
+                            print('DEBUG brand onSelected: default supplier $defaultSupplierId not found in _suppliers');
+                          }
+                        }
                       });
                       // Keep focus in Brand field so Tab moves to Supplier
                       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2401,6 +2427,14 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                     },
                     fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
                       _brandFieldFocusNode = focusNode;
+                      // Keep text in sync with our selected brand name
+                      final desiredText = _selectedBrandName ?? '';
+                      if (controller.text != desiredText) {
+                        controller.text = desiredText;
+                        controller.selection = TextSelection.fromPosition(
+                          TextPosition(offset: controller.text.length),
+                        );
+                      }
                       return TextFormField(
                         controller: controller,
                         focusNode: focusNode,
@@ -2415,11 +2449,15 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                               controller.clear();
                               setState(() {
                                 _selectedBrandId = null;
+                                _selectedBrandName = null;
                               });
+                              // Keep focus so user can immediately type a new brand
+                              _brandFieldFocusNode?.requestFocus();
                             },
                           ),
                         ),
                         onChanged: (value) {
+                          _selectedBrandName = value;
                           // Clear selection if text doesn't match any brand
                           if (!_brands.any((b) => b.data['name'] == value)) {
                             setState(() {
@@ -2437,12 +2475,8 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                 FocusTraversalOrder(
                   order: const NumericFocusOrder(2),
                   child: Expanded(
-                    child: Autocomplete<String>(
-                    initialValue: _selectedSupplierId != null && _suppliers.any((s) => s.id == _selectedSupplierId)
-                        ? TextEditingValue(
-                            text: _suppliers.firstWhere((s) => s.id == _selectedSupplierId).data['company_name'],
-                          )
-                        : const TextEditingValue(),
+                  child: Autocomplete<String>(
+                    initialValue: const TextEditingValue(),
                     optionsBuilder: (TextEditingValue textEditingValue) {
                       if (textEditingValue.text.isEmpty) {
                         return _suppliers.map((supplier) => supplier.data['company_name'] as String);
@@ -2457,6 +2491,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                       final supplier = _suppliers.firstWhere((s) => s.data['company_name'] == selectedName);
                       setState(() {
                         _selectedSupplierId = supplier.id;
+                        _selectedSupplierName = supplier.data['company_name'] as String?;
                       });
                       // Keep focus in Supplier field so Tab moves to next field (e.g. URL)
                       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2465,6 +2500,14 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                     },
                     fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
                       _supplierFieldFocusNode = focusNode;
+                      // Keep text in sync with our selected supplier name
+                      final desiredText = _selectedSupplierName ?? '';
+                      if (controller.text != desiredText) {
+                        controller.text = desiredText;
+                        controller.selection = TextSelection.fromPosition(
+                          TextPosition(offset: controller.text.length),
+                        );
+                      }
                       return TextFormField(
                         controller: controller,
                         focusNode: focusNode,
@@ -2478,12 +2521,14 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                             onPressed: () {
                               controller.clear();
                               setState(() {
-                                _selectedSupplierId = null;
+                              _selectedSupplierId = null;
+                              _selectedSupplierName = null;
                               });
                             },
                           ),
                         ),
                         onChanged: (value) {
+                          _selectedSupplierName = value;
                           // Clear selection if text doesn't match any supplier
                           if (!_suppliers.any((s) => s.data['company_name'] == value)) {
                             setState(() {

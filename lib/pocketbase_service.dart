@@ -411,11 +411,15 @@ class PocketBaseService {
     String? urlPattern,
     bool? scraperEnabled,
     String? scraperNotes,
+    String? defaultSupplierId,
   }) async {
     try {
       final body = <String, dynamic>{'name': name};
       if (categoryIds != null && categoryIds.isNotEmpty) {
         body['categories'] = categoryIds;
+      }
+      if (defaultSupplierId != null && defaultSupplierId.isNotEmpty) {
+        body['default_supplier'] = defaultSupplierId;
       }
       // Add scraping fields if provided
       if (urlPattern != null && urlPattern.isNotEmpty) {
@@ -441,6 +445,7 @@ class PocketBaseService {
     String? urlPattern,
     bool? scraperEnabled,
     String? scraperNotes,
+    String? defaultSupplierId,
   }) async {
     try {
       final body = <String, dynamic>{'name': name};
@@ -451,6 +456,10 @@ class PocketBaseService {
         // If null, set to empty array to clear all categories
         body['categories'] = [];
       }
+      // Always set default_supplier (can be null/empty to clear)
+      body['default_supplier'] =
+          (defaultSupplierId != null && defaultSupplierId.isNotEmpty) ? defaultSupplierId : null;
+
       // Add scraping fields if provided
       if (urlPattern != null) {
         body['url_pattern'] = urlPattern;

@@ -13,6 +13,7 @@ class BrandsScreen extends StatefulWidget {
 class _BrandsScreenState extends State<BrandsScreen> with AutoOpenDrawerMixin {
   List<dynamic> _brands = [];
   List<dynamic> _categories = [];
+  List<dynamic> _suppliers = [];
   bool _isLoading = true;
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -35,10 +36,12 @@ class _BrandsScreenState extends State<BrandsScreen> with AutoOpenDrawerMixin {
       final pbService = PocketBaseService();
       final brands = await pbService.getBrands();
       final categories = await pbService.getCategories();
+      final suppliers = await pbService.getSuppliers();
       
       setState(() {
         _brands = brands;
         _categories = categories;
+        _suppliers = suppliers;
         _isLoading = false;
       });
     } catch (e) {
@@ -70,6 +73,24 @@ class _BrandsScreenState extends State<BrandsScreen> with AutoOpenDrawerMixin {
     
     bool scraperEnabled = brand?.data['scraper_enabled'] ?? false;
     List<String> selectedCategoryIds = [];
+    String? selectedSupplierId;
+
+    // Parse existing default supplier relation robustly
+    if (brand != null) {
+      final ds = brand.data['default_supplier'];
+      if (ds is String) {
+        selectedSupplierId = ds;
+      } else if (ds is Map && ds['id'] != null) {
+        selectedSupplierId = ds['id'] as String;
+      } else {
+        try {
+          final dynamic dyn = ds;
+          if (dyn != null && dyn.id is String) {
+            selectedSupplierId = dyn.id as String;
+          }
+        } catch (_) {}
+      }
+    }
     
     // Parse existing categories
     if (brand != null) {
@@ -98,6 +119,41 @@ class _BrandsScreenState extends State<BrandsScreen> with AutoOpenDrawerMixin {
                     border: OutlineInputBorder(),
                   ),
                   autofocus: !isEdit,
+                ),
+                const SizedBox(height: 16),
+
+                // Default Supplier (optional)
+                const Text(
+                  'Default Supplier (optional)',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String?>(
+                  value: selectedSupplierId != null &&
+                          _suppliers.any((s) => s.id == selectedSupplierId)
+                      ? selectedSupplierId
+                      : null,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('— None —'),
+                    ),
+                    ..._suppliers.map((s) {
+                      return DropdownMenuItem<String?>(
+                        value: s.id as String,
+                        child: Text(s.data['company_name'] ?? s.id),
+                      );
+                    }),
+                  ],
+                  onChanged: (value) {
+                    setDialogState(() {
+                      selectedSupplierId = value;
+                    });
+                  },
                 ),
                 const SizedBox(height: 16),
                 
@@ -223,6 +279,7 @@ class _BrandsScreenState extends State<BrandsScreen> with AutoOpenDrawerMixin {
                       urlPattern: scraperEnabled ? urlPatternController.text.trim() : '',
                       scraperEnabled: scraperEnabled,
                       scraperNotes: scraperEnabled ? scraperNotesController.text.trim() : '',
+                      defaultSupplierId: selectedSupplierId,
                     );
                   } else {
                     await pbService.createBrand(
@@ -231,6 +288,7 @@ class _BrandsScreenState extends State<BrandsScreen> with AutoOpenDrawerMixin {
                       urlPattern: scraperEnabled ? urlPatternController.text.trim() : null,
                       scraperEnabled: scraperEnabled,
                       scraperNotes: scraperEnabled ? scraperNotesController.text.trim() : null,
+                      defaultSupplierId: selectedSupplierId,
                     );
                   }
 

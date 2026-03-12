@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import 'pocketbase_service.dart';
 import 'models.dart';
 import 'add_purchase_screen.dart';
+import 'app_drawer.dart';
+import 'drawer_behavior.dart';
 
 class SupplierDetailScreen extends StatefulWidget {
   /// null = new supplier (add mode), non-null = edit mode
@@ -14,7 +16,7 @@ class SupplierDetailScreen extends StatefulWidget {
   State<SupplierDetailScreen> createState() => _SupplierDetailScreenState();
 }
 
-class _SupplierDetailScreenState extends State<SupplierDetailScreen> {
+class _SupplierDetailScreenState extends State<SupplierDetailScreen> with AutoOpenDrawerMixin {
   // Form controllers
   final _companyNameController = TextEditingController();
   final _contactController     = TextEditingController();
@@ -31,6 +33,11 @@ class _SupplierDetailScreenState extends State<SupplierDetailScreen> {
   List<Purchase> _purchases = [];
   bool _isLoadingPurchases = true;
   bool _isSaving = false;
+
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
 
   bool get _isNew => widget.supplier == null;
 
@@ -49,8 +56,27 @@ class _SupplierDetailScreenState extends State<SupplierDetailScreen> {
       _addressController.text     = d['address']       ?? '';
       final cats = d['categories'];
       if (cats is List) {
-        for (var c in cats) {
-          _selectedCategoryIds.add(c is String ? c : c.toString());
+        for (final c in cats) {
+          String? id;
+          if (c is String) {
+            id = c;
+          } else if (c is Map && c['id'] != null) {
+            id = c['id'] as String;
+          } else {
+            // Fallback: try common patterns or last-resort string
+            try {
+              final dynamic dyn = c;
+              if (dyn.id is String) {
+                id = dyn.id as String;
+              }
+            } catch (_) {
+              // ignore
+            }
+            id ??= c.toString();
+          }
+          if (id != null && id.isNotEmpty) {
+            _selectedCategoryIds.add(id);
+          }
         }
       }
     }
@@ -225,11 +251,20 @@ class _SupplierDetailScreenState extends State<SupplierDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    maybeAutoOpenDrawer();
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: Text(_isNew ? 'Add Supplier' : _companyNameController.text.isEmpty ? 'Supplier' : _companyNameController.text),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
       ),
+      drawer: const AppDrawer(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
