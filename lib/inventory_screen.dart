@@ -54,21 +54,87 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
   }
 
   void _onSearchChanged() {
-    final query = _searchController.text.toLowerCase();
+    final query = _searchController.text.toLowerCase().trim();
+    final rawInput = _searchController.text.toLowerCase();
+    final rawTokens = rawInput.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+
+    // Special-case: treat "bin <number>" as a phrase match against location paths.
+    // This prevents "bin 1" from matching "row 1 / bin 2" just because it contains "1".
+    final requiredBinNumbers = <String>[];
+    final exactBinNumbers = <String>{};
+    final tokens = <String>[];
+    for (var i = 0; i < rawTokens.length; i++) {
+      final t = rawTokens[i];
+      if (t == 'bin' && i + 1 < rawTokens.length) {
+        final next = rawTokens[i + 1];
+        if (RegExp(r'^\d+$').hasMatch(next)) {
+          requiredBinNumbers.add(next);
+          // If the user types a space after the number (e.g. "bin 1 "),
+          // treat it as an exact bin match; otherwise allow prefix (bin 1 matches bin 16).
+          final isLastPair = i + 1 == rawTokens.length - 1;
+          if (isLastPair && rawInput.endsWith(' ')) {
+            exactBinNumbers.add(next);
+          }
+          i++; // skip number token
+          continue;
+        }
+      }
+      tokens.add(t);
+    }
     setState(() {
-      if (query.isEmpty) {
+      if (rawInput.trim().isEmpty) {
         _filteredTools = _toolsWithLocations;
       } else {
         _filteredTools = _toolsWithLocations.where((toolWithLoc) {
           final tool = toolWithLoc.tool;
-          return tool.toolName.toLowerCase().contains(query) ||
-                 (tool.brand?.toLowerCase().contains(query) ?? false) ||
-                 (tool.modelNumber?.toLowerCase().contains(query) ?? false) ||
-                 tool.category.toLowerCase().contains(query) ||
-                 (tool.subcategory?.toLowerCase().contains(query) ?? false);
+          final locationText = toolWithLoc.locations
+              .map((tl) => _buildLocationPathFromToolLocation(tl))
+              .where((s) => s.isNotEmpty)
+              .join(' | ')
+              .toLowerCase();
+
+          // Require all requested bin phrases to match location paths.
+          final binsOk = requiredBinNumbers.every((n) {
+            final re = exactBinNumbers.contains(n)
+                ? RegExp(r'\bbin\s*' + RegExp.escape(n) + r'\b')
+                : RegExp(r'\bbin\s*' + RegExp.escape(n) + r'\d*\b');
+            return re.hasMatch(locationText);
+          });
+          if (!binsOk) return false;
+
+          final fields = <String>[
+            tool.toolName,
+            tool.brand ?? '',
+            tool.modelNumber ?? '',
+            tool.category,
+            tool.subcategory ?? '',
+            // Location path(s): allows searching for "bin 5", "toolbox a", etc.
+            locationText,
+          ].join(' ').toLowerCase();
+
+          // Token-based matching so multi-word queries like "toolbox a bin 5" work well.
+          return tokens.every(fields.contains);
         }).toList();
       }
     });
+  }
+
+  String _buildLocationPathFromToolLocation(ToolLocation tl) {
+    final loc = tl.location;
+    if (loc == null) return '';
+    final names = <String>[];
+    Location? current = loc;
+    while (current != null) {
+      names.insert(0, current.name);
+      final parentId = current.parentId;
+      if (parentId == null || parentId.isEmpty) break;
+      try {
+        current = _allLocations.firstWhere((l) => l.id == parentId);
+      } catch (_) {
+        break;
+      }
+    }
+    return names.join(' ');
   }
 
   void _navigateToAddTool() async {

@@ -12,6 +12,9 @@ class Tool {
   final String? manufacturerBarcode;
   final String? brandId;  // NEW - stores the brand ID
   final String? supplierId;  // NEW - stores the supplier ID
+  final bool needsRestock; // Manual buy-list flag
+  final int? restockQty; // Qty to buy (manual)
+  final String? restockNotes; // Optional notes for purchasing
   final double? diameterIn;
   final double? diameterMm;
   final int? flutes;
@@ -36,6 +39,9 @@ class Tool {
     this.manufacturerBarcode,
     this.brandId,
     this.supplierId,
+    this.needsRestock = false,
+    this.restockQty,
+    this.restockNotes,
     this.diameterIn,
     this.diameterMm,
     this.flutes,
@@ -84,6 +90,9 @@ class Tool {
       manufacturerBarcode: data['manufacturer_barcode'],
       brandId: data['brand'],  // NEW
       supplierId: data['supplier'],  // NEW
+      needsRestock: data['needs_restock'] == true,
+      restockQty: (data['restock_qty'] != null) ? (data['restock_qty'] as num).toInt() : null,
+      restockNotes: data['restock_notes'],
       diameterIn: data['diameter_in']?.toDouble(),
       diameterMm: data['diameter_mm']?.toDouble(),
       flutes: data['flutes']?.toInt(),

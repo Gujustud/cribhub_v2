@@ -45,6 +45,8 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
   final _cornerRadController = TextEditingController();
   final _neckController = TextEditingController();
   final _notesController = TextEditingController();
+  final _restockQtyController = TextEditingController();
+  final _restockNotesController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
@@ -115,6 +117,9 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
   // Purchase history (price over time)
   List<dynamic> _purchaseHistoryRecords = [];
   bool _loadingPurchaseHistory = false;
+  
+  // Manual buy list (restock)
+  bool _needsRestock = false;
   
   // Initialization state
   bool _isInitialized = false;
@@ -686,6 +691,12 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     if (tool.record != null && tool.record.data != null) {
       final n = tool.record.data['notes'];
       _notesController.text = n != null ? n.toString() : '';
+
+      _needsRestock = tool.record.data['needs_restock'] == true;
+      final rq = tool.record.data['restock_qty'];
+      _restockQtyController.text = (rq == null) ? '' : rq.toString();
+      final rn = tool.record.data['restock_notes'];
+      _restockNotesController.text = rn == null ? '' : rn.toString();
     }
     
     // Load photo if exists
@@ -2097,6 +2108,13 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
           'notes': _notesController.text.trim().isEmpty
               ? null
               : _notesController.text.trim(),
+          'needs_restock': _needsRestock,
+          'restock_qty': _needsRestock
+              ? (int.tryParse(_restockQtyController.text.trim()) ?? 1)
+              : null,
+          'restock_notes': _needsRestock && _restockNotesController.text.trim().isNotEmpty
+              ? _restockNotesController.text.trim()
+              : null,
         };
         
         print('DEBUG _saveTool: Saving with brand = $_selectedBrandId, supplier = $_selectedSupplierId');
@@ -2727,14 +2745,62 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                     ),
                     const SizedBox(height: 24),
                     
-                    // Inventory section
+                    // Inventory section + Buy toggle inline
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
                           'Inventory',
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
+                        const SizedBox(width: 16),
+                        Checkbox(
+                          value: _needsRestock,
+                          onChanged: (v) {
+                            setState(() {
+                              _needsRestock = v == true;
+                              if (_needsRestock &&
+                                  _restockQtyController.text.trim().isEmpty) {
+                                _restockQtyController.text = '1';
+                              }
+                            });
+                          },
+                        ),
+                        const Text('Buy'),
+                        const SizedBox(width: 8),
+                        if (_needsRestock) ...[
+                          SizedBox(
+                            width: 80,
+                            child: TextFormField(
+                              controller: _restockQtyController,
+                              decoration: const InputDecoration(
+                                labelText: 'Qty',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              keyboardType: TextInputType.number,
+                              validator: (value) {
+                                if (!_needsRestock) return null;
+                                final v =
+                                    int.tryParse((value ?? '').trim());
+                                if (v == null || v < 1) return '!';
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _restockNotesController,
+                              decoration: const InputDecoration(
+                                labelText: 'Notes',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              maxLines: 1,
+                            ),
+                          ),
+                        ] else
+                          const Spacer(),
                         IconButton(
                           onPressed: _showAddInventoryDialog,
                           icon: const Icon(Icons.add_circle),
@@ -3424,6 +3490,8 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     _cornerRadController.dispose();
     _neckController.dispose();
     _notesController.dispose();
+    _restockQtyController.dispose();
+    _restockNotesController.dispose();
     super.dispose();
   }
 }

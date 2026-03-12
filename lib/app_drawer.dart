@@ -5,6 +5,7 @@ import 'location_management_screen.dart';
 import 'brands_screen.dart';
 import 'suppliers_screen.dart';
 import 'purchases_screen.dart';
+import 'buy_list_screen.dart';
 import 'settings_screen.dart';
 import 'about_screen.dart';
 import 'main.dart';
@@ -144,6 +145,17 @@ class AppDrawer extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const PurchasesScreen()),
+            );
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.playlist_add_check),
+          title: const Text('Buy List'),
+          onTap: () {
+            maybeCloseDrawer(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const BuyListScreen()),
             );
           },
         ),
