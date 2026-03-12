@@ -69,6 +69,17 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
     _orderRefController.dispose();
     _notesController.dispose();
     _dateController.dispose();
+    // Dispose any per-line TextEditingControllers we created
+    for (final item in _lineItems) {
+      final qtyCtrl = item['quantityController'];
+      if (qtyCtrl is TextEditingController) {
+        qtyCtrl.dispose();
+      }
+      final unitCtrl = item['unitCostController'];
+      if (unitCtrl is TextEditingController) {
+        unitCtrl.dispose();
+      }
+    }
     super.dispose();
   }
 
@@ -528,6 +539,23 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                     final item = _lineItems[i];
                     final rawType = item['type'] as String? ?? 'item';
                     final lineType = rawType == 'tax' ? 'item' : rawType;
+                    // Lazily create controllers per line so typing doesn't fight rebuilds.
+                    if (lineType == 'item') {
+                      item['quantityController'] ??=
+                          TextEditingController(text: '${item['quantity']}');
+                      item['unitCostController'] ??= TextEditingController(
+                        text: item['unitCost'] != null
+                            ? (item['unitCost'] as double).toString()
+                            : '',
+                      );
+                    } else {
+                      // Shipping: only unit cost controller is used
+                      item['unitCostController'] ??= TextEditingController(
+                        text: item['unitCost'] != null
+                            ? (item['unitCost'] as double).toString()
+                            : '',
+                      );
+                    }
                     return Padding(
                       key: ValueKey('line_$i'),
                       padding: const EdgeInsets.only(bottom: 12),
@@ -630,7 +658,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                   border: OutlineInputBorder(),
                                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                 ),
-                                controller: TextEditingController(text: '${item['quantity']}'),
+                                controller: item['quantityController'] as TextEditingController,
                                 onChanged: (v) {
                                   _lineItems[i]['quantity'] = int.tryParse(v) ?? 1;
                                   setState(() {});
@@ -648,11 +676,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                   border: OutlineInputBorder(),
                                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                 ),
-                                controller: TextEditingController(
-                                  text: item['unitCost'] != null
-                                      ? (item['unitCost'] as double).toString()
-                                      : '',
-                                ),
+                                controller: item['unitCostController'] as TextEditingController,
                                 onChanged: (v) {
                                   _lineItems[i]['unitCost'] = double.tryParse(v);
                                   setState(() {});
@@ -707,11 +731,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                   labelText: 'Amount',
                                   border: OutlineInputBorder(),
                                 ),
-                                controller: TextEditingController(
-                                  text: item['unitCost'] != null
-                                      ? (item['unitCost'] as double).toString()
-                                      : '',
-                                ),
+                                controller: item['unitCostController'] as TextEditingController,
                                 onChanged: (v) {
                                   _lineItems[i]['unitCost'] = double.tryParse(v);
                                   _lineItems[i]['quantity'] = 1;
@@ -730,7 +750,17 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                 IconButton(
                                   icon: const Icon(Icons.delete, size: 18),
                                   onPressed: () {
-                                    setState(() => _lineItems.removeAt(i));
+                                    // Clean up controllers for this line before removing it
+                                    final removed = _lineItems.removeAt(i);
+                                    final qtyCtrl = removed['quantityController'];
+                                    if (qtyCtrl is TextEditingController) {
+                                      qtyCtrl.dispose();
+                                    }
+                                    final unitCtrl = removed['unitCostController'];
+                                    if (unitCtrl is TextEditingController) {
+                                      unitCtrl.dispose();
+                                    }
+                                    setState(() {});
                                   },
                                   tooltip: 'Remove line',
                                   color: Colors.grey[700],
