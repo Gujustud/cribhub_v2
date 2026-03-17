@@ -46,6 +46,9 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
   final _fluteLengthController = TextEditingController();
   final _cornerRadController = TextEditingController();
   final _neckController = TextEditingController();
+  final _tslotRadiusController = TextEditingController();  // NEW: T-slot radius
+  final _chamferAngleController = TextEditingController();  // NEW: Chamfer angle
+  final _chamferTipDiameterController = TextEditingController();  // NEW: Chamfer tip diameter
   final _notesController = TextEditingController();
   final _restockQtyController = TextEditingController();
   final _restockNotesController = TextEditingController();
@@ -140,6 +143,9 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     _fluteLengthController.addListener(_scheduleToolNameUpdate);
     _cornerRadController.addListener(_scheduleToolNameUpdate);
     _neckController.addListener(_scheduleToolNameUpdate);
+    _tslotRadiusController.addListener(_scheduleToolNameUpdate);  // NEW
+    _chamferAngleController.addListener(_scheduleToolNameUpdate);  // NEW
+    _chamferTipDiameterController.addListener(_scheduleToolNameUpdate);  // NEW
   }
   
   Future<void> _initializeScreen() async {
@@ -694,6 +700,21 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     if (tool.neck != null) {
       _neckController.text = tool.neck.toString();
     }
+    // Load T-slot radius, chamfer angle, chamfer tip diameter
+    if (tool.record != null && tool.record.data != null) {
+      final tslotRadius = tool.record.data['tslot_radius'];
+      if (tslotRadius != null) {
+        _tslotRadiusController.text = tslotRadius.toString();
+      }
+      final chamferAngle = tool.record.data['chamfer_angle'];
+      if (chamferAngle != null) {
+        _chamferAngleController.text = chamferAngle.toString();
+      }
+      final chamferTip = tool.record.data['chamfer_tip_diameter'];
+      if (chamferTip != null) {
+        _chamferTipDiameterController.text = chamferTip.toString();
+      }
+    }
     if (tool.record != null && tool.record.data != null) {
       final n = tool.record.data['notes'];
       _notesController.text = n != null ? n.toString() : '';
@@ -1179,11 +1200,38 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       name += '_${neckStr}NR';
     }
     
-    // Add type suffix for Ball and Tslot
+    // T-slot radius (optional - only if filled)
+    if (_subSubcategory == 'Tslot') {
+      final tslotRadius = double.tryParse(_tslotRadiusController.text);
+      if (tslotRadius != null && tslotRadius > 0) {
+        String tsrStr = _formatThreeDecimal(tslotRadius);
+        name += '_${tsrStr}R';
+      }
+    }
+    
+    // Chamfer angle and tip diameter
+    if (_subSubcategory == 'Chamfer') {
+      final chamferAngle = double.tryParse(_chamferAngleController.text);
+      final chamferTip = double.tryParse(_chamferTipDiameterController.text);
+      
+      if (chamferAngle != null) {
+        // Angle as integer (e.g., 45, 60, 90)
+        name += '_${chamferAngle.toInt()}DEG';
+      }
+      
+      if (chamferTip != null && chamferTip > 0) {
+        String tipStr = _formatThreeDecimal(chamferTip);
+        name += '_${tipStr}TIP';
+      }
+    }
+    
+    // Add type suffix for Ball, Tslot, and Chamfer
     if (_subSubcategory == 'Ball') {
       name += '_BALL';
     } else if (_subSubcategory == 'Tslot') {
       name += '_TSLOT';
+    } else if (_subSubcategory == 'Chamfer') {
+      name += '_CHAMFER';
     }
     
     return name;
@@ -2029,6 +2077,21 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       _cornerRadController.clear();
     }
     
+    // Clear T-slot radius if not Tslot type
+    if (_subSubcategory != 'Tslot' && _tslotRadiusController.text.isNotEmpty) {
+      _tslotRadiusController.clear();
+    }
+    
+    // Clear chamfer fields if not Chamfer type
+    if (_subSubcategory != 'Chamfer') {
+      if (_chamferAngleController.text.isNotEmpty) {
+        _chamferAngleController.clear();
+      }
+      if (_chamferTipDiameterController.text.isNotEmpty) {
+        _chamferTipDiameterController.clear();
+      }
+    }
+    
     // Update tool name to reflect subcategory changes (fixes Ball/CR suffix sticking)
     if (_autoGenerateName) {
       _updateToolName();
@@ -2122,6 +2185,9 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
           'flute_length': double.tryParse(_fluteLengthController.text),
           'corner_rad': double.tryParse(_cornerRadController.text),
           'neck': double.tryParse(_neckController.text),
+          'tslot_radius': double.tryParse(_tslotRadiusController.text),  // NEW
+          'chamfer_angle': double.tryParse(_chamferAngleController.text),  // NEW
+          'chamfer_tip_diameter': double.tryParse(_chamferTipDiameterController.text),  // NEW
           'notes': _notesController.text.trim().isEmpty
               ? null
               : _notesController.text.trim(),
@@ -2685,6 +2751,74 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                           const TextInputType.numberWithOptions(decimal: true),
                       validator: (value) {
                         if (_subSubcategory != 'CR') return null;
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Required';
+                        }
+                        if (double.tryParse(value) == null) {
+                          return 'Invalid number';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+                // T-slot radius (optional)
+                if (_subSubcategory == 'Tslot') ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _tslotRadiusController,
+                      decoration: const InputDecoration(
+                        labelText: 'T-Slot Radius (optional)',
+                        floatingLabelBehavior: FloatingLabelBehavior.always,
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                  ),
+                ],
+                // Chamfer angle and tip diameter
+                if (_subSubcategory == 'Chamfer') ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _chamferAngleController,
+                      decoration: const InputDecoration(
+                        labelText: 'Chamfer Angle',
+                        floatingLabelBehavior: FloatingLabelBehavior.always,
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      validator: (value) {
+                        if (_subSubcategory != 'Chamfer') return null;
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Required';
+                        }
+                        if (double.tryParse(value) == null) {
+                          return 'Invalid number';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _chamferTipDiameterController,
+                      decoration: const InputDecoration(
+                        labelText: 'Tip Diameter',
+                        floatingLabelBehavior: FloatingLabelBehavior.always,
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      validator: (value) {
+                        if (_subSubcategory != 'Chamfer') return null;
                         if (value == null || value.trim().isEmpty) {
                           return 'Required';
                         }
@@ -3604,6 +3738,9 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     _fluteLengthController.dispose();
     _cornerRadController.dispose();
     _neckController.dispose();
+    _tslotRadiusController.dispose();  // NEW
+    _chamferAngleController.dispose();  // NEW
+    _chamferTipDiameterController.dispose();  // NEW
     _notesController.dispose();
     _restockQtyController.dispose();
     _restockNotesController.dispose();
