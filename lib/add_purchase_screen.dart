@@ -232,17 +232,28 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
     return sum;
   }
 
-  double _totalTaxAndShipping() {
-    double sum = 0;
+  double _shippingTotal() {
+    double shipping = 0;
     for (final item in _lineItems) {
       final type = item['type'] as String? ?? 'item';
       if (type == 'shipping') {
-        sum += (item['unitCost'] as double?) ?? 0;
+        shipping += (item['unitCost'] as double?) ?? 0;
       }
     }
-    final subtotal = _subtotalItems();
-    if (_gstChecked) sum += subtotal * _gstRate;
-    if (_pstChecked) sum += subtotal * _pstRate;
+    return shipping;
+  }
+
+  double _taxableBase() {
+    return _subtotalItems() + _shippingTotal();
+  }
+
+  double _totalTaxAndShipping() {
+    double sum = 0;
+    final shipping = _shippingTotal();
+    sum += shipping;
+    final taxableBase = _taxableBase();
+    if (_gstChecked) sum += taxableBase * _gstRate;
+    if (_pstChecked) sum += taxableBase * _pstRate;
     return sum;
   }
 
@@ -754,12 +765,13 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                             ),
                             const SizedBox(width: 8),
                             SizedBox(
-                              width: 100,
+                              width: 110,
                               child: TextField(
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 decoration: const InputDecoration(
                                   floatingLabelBehavior: FloatingLabelBehavior.always,
-                                  labelText: 'Amount',
+                                  labelText: 'Subtotal',
+                                  prefixText: '\$',
                                   border: OutlineInputBorder(),
                                 ),
                                 controller: item['unitCostController'] as TextEditingController,
@@ -767,6 +779,32 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                   _lineItems[i]['unitCost'] = double.tryParse(v);
                                   _lineItems[i]['quantity'] = 1;
                                   setState(() {});
+                                },
+                                onEditingComplete: () {
+                                  final ctrl = item['unitCostController'] as TextEditingController;
+                                  final parsed = double.tryParse(ctrl.text);
+                                  if (parsed != null) {
+                                    final formatted = parsed.toStringAsFixed(2);
+                                    if (ctrl.text != formatted) {
+                                      ctrl.text = formatted;
+                                      ctrl.selection = TextSelection.fromPosition(
+                                        TextPosition(offset: ctrl.text.length),
+                                      );
+                                    }
+                                  }
+                                },
+                                onSubmitted: (_) {
+                                  final ctrl = item['unitCostController'] as TextEditingController;
+                                  final parsed = double.tryParse(ctrl.text);
+                                  if (parsed != null) {
+                                    final formatted = parsed.toStringAsFixed(2);
+                                    if (ctrl.text != formatted) {
+                                      ctrl.text = formatted;
+                                      ctrl.selection = TextSelection.fromPosition(
+                                        TextPosition(offset: ctrl.text.length),
+                                      );
+                                    }
+                                  }
                                 },
                               ),
                             ),
@@ -818,45 +856,46 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                     );
                   }),
                   const SizedBox(height: 16),
-                  // Tax/Total row: right-aligned, Total box pinned to same position as Subtotal
-                  // Item row right side: [8][110 Subtotal][8][52 buttons] = 178px from right
-                  // Total row mirrors:   [GST/PST checkboxes...][8][110 Total][8][52 spacer]
+                  // Summary row: right-aligned, shows item subtotal, shipping, GST/PST, and total (no box).
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Spacer(),
-                      Checkbox(
-                        value: _gstChecked == true,
-                        onChanged: (v) => setState(() => _gstChecked = v == true),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Checkbox(
+                                value: _gstChecked == true,
+                                onChanged: (v) => setState(() => _gstChecked = v == true),
+                              ),
+                              Text(
+                                'GST${_gstChecked ? ' \$${(_taxableBase() * _gstRate).toStringAsFixed(2)}' : ''}',
+                              ),
+                              const SizedBox(width: 16),
+                              Checkbox(
+                                value: _pstChecked == true,
+                                onChanged: (v) => setState(() => _pstChecked = v == true),
+                              ),
+                              Text(
+                                'PST${_pstChecked ? ' \$${(_taxableBase() * _pstRate).toStringAsFixed(2)}' : ''}',
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text('Items: \$${_subtotalItems().toStringAsFixed(2)}'),
+                          Text('Shipping: \$${_shippingTotal().toStringAsFixed(2)}'),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Total: \$${(_subtotalItems() + _totalTaxAndShipping()).toStringAsFixed(2)}',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
-                      Text('GST${_gstChecked ? ' \$${(_subtotalItems() * _gstRate).toStringAsFixed(2)}' : ''}'),
-                      const SizedBox(width: 16),
-                      Checkbox(
-                        value: _pstChecked == true,
-                        onChanged: (v) => setState(() => _pstChecked = v == true),
-                      ),
-                      Text('PST${_pstChecked ? ' \$${(_subtotalItems() * _pstRate).toStringAsFixed(2)}' : ''}'),
-                      // Match exact item row: [8px][110px Subtotal][8px][52px buttons]
                       const SizedBox(width: 8),
-                      SizedBox(
-                        width: 110,
-                        child: InputDecorator(
-                          decoration: const InputDecoration(
-                                  floatingLabelBehavior: FloatingLabelBehavior.always,
-                            labelText: 'Total',
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          ),
-                          child: Text(
-                            '\$${(_subtotalItems() + _totalTaxAndShipping()).toStringAsFixed(2)}',
-                            style: const TextStyle(fontSize: 16),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),  // matches the gap after Subtotal in item rows
-                      const SizedBox(width: 52), // matches the button column width in item rows
+                      const SizedBox(width: 52),
                     ],
                   ),
                   const SizedBox(height: 24),

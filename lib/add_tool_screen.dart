@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'pocketbase_service.dart';
@@ -10,6 +11,7 @@ import 'app_drawer.dart';
 import 'inventory_screen.dart';
 import 'transfer_dialog.dart';
 import 'drawer_behavior.dart';
+import 'label_print_service.dart';
 import 'package:intl/intl.dart'; // For date formatting in history
 
 class AddToolScreen extends StatefulWidget {
@@ -1090,17 +1092,26 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       setState(() {
         _toolName = newName;
       });
-      _toolNameController.text = newName;
+      // Only overwrite controller when we have a generated name (Cutting Tools).
+      // For other categories _generateToolName() returns ''; don't clear user input.
+      if (newName.isNotEmpty) {
+        _toolNameController.text = newName;
+      }
     }
   }
   
   void _updateToolName() {
     if (!_autoGenerateName) return;
     
+    final newName = _generateToolName();
     setState(() {
-      _toolName = _generateToolName();
-      _toolNameController.text = _toolName;
+      _toolName = newName;
     });
+    // Only overwrite controller when we have a generated name (Cutting Tools).
+    // For other categories _generateToolName() returns ''; don't clear user input.
+    if (newName.isNotEmpty) {
+      _toolNameController.text = newName;
+    }
   }
 
   String _formatThreeDecimal(double value) {
@@ -2789,328 +2800,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                       ),
                     ),
                     const SizedBox(height: 24),
-                    
-                    // Inventory section + Buy toggle inline
-                    Row(
-                      children: [
-                        const Text(
-                          'Inventory',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: 16),
-                        Checkbox(
-                          value: _needsRestock,
-                          onChanged: (v) {
-                            setState(() {
-                              _needsRestock = v == true;
-                              if (_needsRestock &&
-                                  _restockQtyController.text.trim().isEmpty) {
-                                _restockQtyController.text = '1';
-                              }
-                            });
-                          },
-                        ),
-                        const Text('Buy'),
-                        const SizedBox(width: 8),
-                        if (_needsRestock) ...[
-                          SizedBox(
-                            width: 80,
-                            child: TextFormField(
-                              controller: _restockQtyController,
-                              decoration: const InputDecoration(
-                                labelText: 'Qty',
-                                border: OutlineInputBorder(),
-                                isDense: true,
-                              ),
-                              keyboardType: TextInputType.number,
-                              validator: (value) {
-                                if (!_needsRestock) return null;
-                                final v =
-                                    int.tryParse((value ?? '').trim());
-                                if (v == null || v < 1) return '!';
-                                return null;
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: _restockNotesController,
-                              decoration: const InputDecoration(
-                                labelText: 'Notes',
-                                border: OutlineInputBorder(),
-                                isDense: true,
-                              ),
-                              maxLines: 1,
-                            ),
-                          ),
-                        ] else
-                          const Spacer(),
-                        IconButton(
-                          onPressed: _showAddInventoryDialog,
-                          icon: const Icon(Icons.add_circle),
-                          color: Colors.blue,
-                          tooltip: 'Add Inventory',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    
-                    // Show pending inventory for add/duplicate mode
-                    if (!_isEditMode && _inventoryToAdd != null)
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          border: Border.all(color: Colors.blue[300]!),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Qty: ${_inventoryToAdd!['quantity']}',
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                  Text(
-                                    _inventoryToAdd!['locationPath'],
-                                    style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close, size: 20),
-                              onPressed: () {
-                      setState(() {
-                                  _inventoryToAdd = null;
-                      });
-                    },
-                            ),
-                          ],
-                        ),
-                      ),
-                    
-                    // Location tags for edit mode
-                    if (_isEditMode) ...[
-                      if (_toolLocations.isEmpty)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: Text(
-                              'No inventory',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ),
-                        )
-                      else
-                        ..._getSortedToolLocations().map((toolLocation) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: InventoryLocationTag(
-                              tool: widget.tool!,
-                              toolLocation: toolLocation,
-                              allLocations: _allLocations,
-                              onChanged: () {
-                                _loadToolLocations();
-                                _loadRecentHistory(); // Refresh history when inventory changes
-                              },
-                            ),
-                          );
-                        }),
-                    ],
-                    
-                    // NEW: History section (edit mode only)
-                    if (_isEditMode) ...[
-                      const SizedBox(height: 32),
-                      const Divider(),
-            const SizedBox(height: 16),
-            
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Recent History',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          if (_recentHistory.isNotEmpty)
-                            TextButton.icon(
-                              onPressed: () {
-                                _showAllHistory();
-                              },
-                              icon: const Icon(Icons.history, size: 18),
-                              label: const Text('View All'),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      
-                      if (_loadingHistory)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: CircularProgressIndicator(),
-                          ),
-                        )
-                      else if (_recentHistory.isEmpty)
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Text(
-                              'No history yet',
-                              style: TextStyle(color: Colors.grey[600]),
-                            ),
-                          ),
-                        )
-                      else
-                        ..._buildHistoryItems(_recentHistory),
-                    ],
-                    
-                    // Price over time (purchase history) - edit mode only
-                    if (_isEditMode) ...[
-                      const SizedBox(height: 32),
-                      const Divider(),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Price over time',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      if (_loadingPurchaseHistory)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: CircularProgressIndicator(),
-                          ),
-                        )
-                      else if (_purchaseHistoryRecords.isEmpty)
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Text(
-                              'No purchase history',
-                              style: TextStyle(color: Colors.grey[600]),
-                            ),
-                          ),
-                        )
-                      else
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
-                            headingRowColor: WidgetStateProperty.all(Theme.of(context).colorScheme.surfaceContainerHighest),
-                            columns: const [
-                              DataColumn(label: Text('Date')),
-                              DataColumn(label: Text('Supplier')),
-                              DataColumn(label: Text('Unit cost'), numeric: true),
-                              DataColumn(label: Text('Qty'), numeric: true),
-                            ],
-                            rows: _purchaseHistoryRecords.map((r) {
-                              String dateStr = '';
-                              String supplierName = '';
-                              try {
-                                final purchase = r.expand?['purchase'];
-                                if (purchase != null) {
-                                  final p = purchase is List ? purchase.isNotEmpty ? purchase[0] : null : purchase;
-                                  if (p != null) {
-                                    final d = p.data?['purchase_date'];
-                                    if (d != null) dateStr = DateFormat.yMMMd().format(DateTime.parse(d.toString()));
-                                    final sup = p.expand?['supplier'];
-                                    if (sup != null) {
-                                      final s = sup is List ? sup.isNotEmpty ? sup[0] : null : sup;
-                                      if (s != null) supplierName = s.data?['company_name'] ?? '';
-                                    }
-                                  }
-                                }
-                              } catch (_) {}
-                              final data = r.data;
-                              final unitCost = data['unit_cost']?.toDouble();
-                              final qty = (data['quantity'] ?? 0).toInt();
-                              return DataRow(
-                                cells: [
-                                  DataCell(Text(dateStr)),
-                                  DataCell(Text(supplierName)),
-                                  DataCell(Text(unitCost != null ? '\$${unitCost.toStringAsFixed(2)}' : '—')),
-                                  DataCell(Text('$qty')),
-                                ],
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                    ],
-                    
-                    // Performance Stats: show whenever category is Cutting Tools (add or edit)
-                    if (_category.toLowerCase() == 'cutting tools') ...[
-                      const SizedBox(height: 32),
-                      const Divider(),
-                      const SizedBox(height: 16),
-                      
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Performance Stats',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          Tooltip(
-                            message: 'Performance tracking coming soon',
-                            child: Icon(Icons.info_outline, color: Colors.grey[600], size: 20),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceVariant,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Theme.of(context).dividerColor),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                _buildStatItem(
-                                  icon: Icons.access_time,
-                                  label: 'Avg Tool Life',
-                                  value: '-- hrs',
-                                  color: Colors.blue,
-                                ),
-                                _buildStatItem(
-                                  icon: Icons.inventory_2,
-                                  label: 'Total Used',
-                                  value: '--',
-                                  color: Colors.orange,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                _buildStatItem(
-                                  icon: Icons.trending_up,
-                                  label: 'Best Location',
-                                  value: '--',
-                                  color: Colors.green,
-                                ),
-                                _buildStatItem(
-                                  icon: Icons.trending_down,
-                                  label: 'Worst Location',
-                                  value: '--',
-                                  color: Colors.red,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                    ..._buildInventoryAndHistorySection(context),
                   ],
                 ),
               ),
@@ -3121,27 +2811,328 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     );
   }
 
-  // Mobile: side panel content (photo, inventory, history) stacked under form.
+  // Mobile: inventory and history in one panel below the form.
   Widget _buildMobileSidePanel(BuildContext context) {
-    // Simple placeholder for now – reuses desktop content conceptually.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+      children: _buildInventoryAndHistorySection(context),
+    );
+  }
+
+  /// Shared inventory row, location tags, recent history, price over time, and (for Cutting Tools) performance stats.
+  List<Widget> _buildInventoryAndHistorySection(BuildContext context) {
+    return [
+      const SizedBox(height: 16),
+      const Text(
+        'Inventory',
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Checkbox(
+            value: _needsRestock,
+            onChanged: (v) {
+              setState(() {
+                _needsRestock = v == true;
+                if (_needsRestock &&
+                    _restockQtyController.text.trim().isEmpty) {
+                  _restockQtyController.text = '1';
+                }
+              });
+            },
+          ),
+          const Text('Buy'),
+          const SizedBox(width: 8),
+          if (_needsRestock) ...[
+            SizedBox(
+              width: 80,
+              child: TextFormField(
+                controller: _restockQtyController,
+                decoration: const InputDecoration(
+                  labelText: 'Qty',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (!_needsRestock) return null;
+                  final v = int.tryParse((value ?? '').trim());
+                  if (v == null || v < 1) return '!';
+                  return null;
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _restockNotesController,
+                decoration: const InputDecoration(
+                  labelText: 'Notes',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                maxLines: 1,
+              ),
+            ),
+          ] else
+            const Spacer(),
+          IconButton(
+            onPressed: _showAddInventoryDialog,
+            icon: const Icon(Icons.add_circle),
+            color: Colors.blue,
+            tooltip: 'Add Inventory',
+          ),
+          if (!kIsWeb && _isEditMode && Platform.isAndroid)
+            IconButton(
+              onPressed: _showPrintLabelDialog,
+              icon: const Icon(Icons.print),
+              tooltip: _getBinToolLocations().isEmpty
+                  ? 'Print bin label (assign tool to a bin first)'
+                  : 'Print bin label',
+            ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      if (!_isEditMode && _inventoryToAdd != null)
         Container(
           padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.blue[50],
+            border: Border.all(color: Colors.blue[300]!),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Qty: ${_inventoryToAdd!['quantity']}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      _inventoryToAdd!['locationPath'],
+                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, size: 20),
+                onPressed: () {
+                  setState(() => _inventoryToAdd = null);
+                },
+              ),
+            ],
+          ),
+        ),
+      if (_isEditMode) ...[
+        if (_toolLocations.isEmpty)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                'No inventory',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+          )
+        else
+          ..._getSortedToolLocations().map((toolLocation) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: InventoryLocationTag(
+                tool: widget.tool!,
+                toolLocation: toolLocation,
+                allLocations: _allLocations,
+                onChanged: () {
+                  _loadToolLocations();
+                  _loadRecentHistory();
+                },
+              ),
+            );
+          }),
+      ],
+      if (_isEditMode) ...[
+        const SizedBox(height: 32),
+        const Divider(),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Recent History',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            if (_recentHistory.isNotEmpty)
+              TextButton.icon(
+                onPressed: _showAllHistory,
+                icon: const Icon(Icons.history, size: 18),
+                label: const Text('View All'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_loadingHistory)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (_recentHistory.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                'No history yet',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ),
+          )
+        else
+          ..._buildHistoryItems(_recentHistory),
+      ],
+      if (_isEditMode) ...[
+        const SizedBox(height: 32),
+        const Divider(),
+        const SizedBox(height: 16),
+        const Text(
+          'Price over time',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        if (_loadingPurchaseHistory)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (_purchaseHistoryRecords.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                'No purchase history',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ),
+          )
+        else
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor: WidgetStateProperty.all(Theme.of(context).colorScheme.surfaceContainerHighest),
+              columns: const [
+                DataColumn(label: Text('Date')),
+                DataColumn(label: Text('Supplier')),
+                DataColumn(label: Text('Unit cost'), numeric: true),
+                DataColumn(label: Text('Qty'), numeric: true),
+              ],
+              rows: _purchaseHistoryRecords.map((r) {
+                String dateStr = '';
+                String supplierName = '';
+                try {
+                  final purchase = r.expand?['purchase'];
+                  if (purchase != null) {
+                    final p = purchase is List ? purchase.isNotEmpty ? purchase[0] : null : purchase;
+                    if (p != null) {
+                      final d = p.data?['purchase_date'];
+                      if (d != null) dateStr = DateFormat.yMMMd().format(DateTime.parse(d.toString()));
+                      final sup = p.expand?['supplier'];
+                      if (sup != null) {
+                        final s = sup is List ? sup.isNotEmpty ? sup[0] : null : sup;
+                        if (s != null) supplierName = s.data?['company_name'] ?? '';
+                      }
+                    }
+                  }
+                } catch (_) {}
+                final data = r.data;
+                final unitCost = data['unit_cost']?.toDouble();
+                final qty = (data['quantity'] ?? 0).toInt();
+                return DataRow(
+                  cells: [
+                    DataCell(Text(dateStr)),
+                    DataCell(Text(supplierName)),
+                    DataCell(Text(unitCost != null ? '\$${unitCost.toStringAsFixed(2)}' : '—')),
+                    DataCell(Text('$qty')),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+      ],
+      if (_category.toLowerCase() == 'cutting tools') ...[
+        const SizedBox(height: 32),
+        const Divider(),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Performance Stats',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            Tooltip(
+              message: 'Performance tracking coming soon',
+              child: Icon(Icons.info_outline, color: Colors.grey[600], size: 20),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceVariant,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Theme.of(context).dividerColor),
           ),
-          child: const Text(
-            'Inventory & history are shown in the side panel on wider screens. '
-            'On mobile this area will be improved to show those details inline.',
-            style: TextStyle(fontSize: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildStatItem(
+                    icon: Icons.access_time,
+                    label: 'Avg Tool Life',
+                    value: '-- hrs',
+                    color: Colors.blue,
+                  ),
+                  _buildStatItem(
+                    icon: Icons.inventory_2,
+                    label: 'Total Used',
+                    value: '--',
+                    color: Colors.orange,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildStatItem(
+                    icon: Icons.trending_up,
+                    label: 'Best Location',
+                    value: '--',
+                    color: Colors.green,
+                  ),
+                  _buildStatItem(
+                    icon: Icons.trending_down,
+                    label: 'Worst Location',
+                    value: '--',
+                    color: Colors.red,
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ],
-    );
+    ];
   }
   
   // NEW: Get sorted tool locations by type order (matches location types order)
@@ -3176,6 +3167,85 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     });
     
     return sorted;
+  }
+
+  /// Tool locations that are bins: type is 'bin', or name/path contains "bin" (e.g. "bin 250", "row 1, bin 250").
+  List<ToolLocation> _getBinToolLocations() {
+    return _toolLocations.where((tl) {
+      final loc = tl.location;
+      if (loc == null) return false;
+      final type = (loc.type ?? '').toLowerCase();
+      final name = (loc.name ?? '').toLowerCase();
+      if (type == 'bin' || name.contains('bin')) return true;
+      final pathNames = LabelPrintService.getPathNames(loc, _allLocations);
+      final pathLower = pathNames.join(' ').toLowerCase();
+      return pathLower.contains('bin');
+    }).toList();
+  }
+
+  Future<void> _printLabelForBin(ToolLocation toolLocation) async {
+    final location = toolLocation.location;
+    if (location == null || widget.tool == null) return;
+    final binCode = LabelPrintService.getBinCodeForLocation(location, _allLocations);
+    try {
+      await LabelPrintService.printLabel(toolName: widget.tool!.toolName, binCode: binCode);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Label sent to printer'), backgroundColor: Colors.green),
+        );
+      }
+    } on PlatformException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Print failed: ${e.message ?? e.code}'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Print failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _showPrintLabelDialog() async {
+    if (widget.tool == null) return;
+    final bins = _getBinToolLocations();
+    if (bins.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Assign this tool to a bin location to print a label.'),
+          ),
+        );
+      }
+      return;
+    }
+    if (bins.length == 1) {
+      await _printLabelForBin(bins.first);
+      return;
+    }
+    final chosen = await showDialog<ToolLocation>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Print label for which bin?'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: bins.map((tl) {
+              final loc = tl.location!;
+              final binCode = LabelPrintService.getBinCodeForLocation(loc, _allLocations);
+              return ListTile(
+                title: Text('BIN: $binCode'),
+                onTap: () => Navigator.pop(context, tl),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+    if (chosen != null) await _printLabelForBin(chosen);
   }
   
   // NEW: Build history items with smart transfer pairing

@@ -12,9 +12,11 @@ import 'drawer_data_cache.dart';
 import 'drawer_behavior.dart';
 import 'models.dart';
 import 'pocketbase_service.dart';
+import 'http_client_factory.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await HttpClientFactory.init;
   await ThemeController.instance.load();
   await DrawerDataCache.preload();
   runApp(const CribhubApp());
@@ -78,7 +80,7 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   List<Tool>? _searchSuggestions;
-  List<Tool>? _cachedTools;
+  List<ToolWithLocations>? _cachedToolsWithLocations;
   Timer? _searchDebounce;
 
   @override
@@ -105,20 +107,89 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
     if (query.length < 2 || !mounted) return;
 
     try {
-      if (_cachedTools == null) {
+      if (_cachedToolsWithLocations == null) {
         final pb = PocketBaseService();
         final records = await pb.getTools();
         if (!mounted) return;
-        _cachedTools = records.map((r) => Tool.fromRecord(r)).toList();
+        final tools = records.map((r) => Tool.fromRecord(r)).toList();
+
+        final toolsWithLocs = <ToolWithLocations>[];
+        for (final tool in tools) {
+          final locRecords = await pb.pb
+              .collection('tool_locations')
+              .getFullList(
+                filter: 'tool = "${tool.id}"',
+                expand: 'location',
+              );
+          final toolLocations = locRecords.map((r) => ToolLocation.fromRecord(r)).toList();
+          toolsWithLocs.add(ToolWithLocations(tool: tool, locations: toolLocations));
+        }
+        _cachedToolsWithLocations = toolsWithLocs;
       }
-      final filtered = _cachedTools!
-          .where((t) =>
-              t.toolName.toLowerCase().contains(query) ||
-              (t.brand?.toLowerCase().contains(query) ?? false) ||
-              (t.modelNumber?.toLowerCase().contains(query) ?? false))
-          .toList();
-      // Sort by diameter (asc), then # flutes, then flute length. Nulls last.
-      filtered.sort((a, b) {
+
+      final rawInput = query;
+      final rawTokens = rawInput.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+
+      // Simple bin parsing: find numeric token after the word 'bin'
+      final requiredBinNumbers = <String>[];
+      for (var i = 0; i < rawTokens.length; i++) {
+        final t = rawTokens[i];
+        if (t == 'bin' && i + 1 < rawTokens.length) {
+          final next = rawTokens[i + 1];
+          if (RegExp(r'^\d+$').hasMatch(next)) {
+            requiredBinNumbers.add(next);
+            i++;
+            continue;
+          }
+        }
+      }
+      final tokens = rawTokens.where((t) => t != 'bin' && !RegExp(r'^\d+$').hasMatch(t)).toList();
+
+      final filteredTools = <Tool>[];
+      for (final twl in _cachedToolsWithLocations!) {
+        final tool = twl.tool;
+        final locationText = twl.locations
+            .map((tl) => tl.location?.name ?? '')
+            .where((s) => s.isNotEmpty)
+            .join(' | ')
+            .toLowerCase();
+
+        // Bin filter: all requested numbers must appear in some 'bin xx' name.
+        final binsOk = requiredBinNumbers.every((n) {
+          final re = RegExp(r'\bbin\s*' + RegExp.escape(n) + r'\b');
+          return re.hasMatch(locationText);
+        });
+        if (!binsOk) continue;
+
+        final fields = <String>[
+          tool.toolName,
+          tool.brand ?? '',
+          tool.modelNumber ?? '',
+          tool.category,
+          tool.subcategory ?? '',
+          locationText,
+        ].join(' ').toLowerCase();
+
+        if (tokens.isNotEmpty && !tokens.every(fields.contains)) continue;
+
+        // Also allow pure bin queries like "bin 16" (no extra tokens).
+        if (tokens.isEmpty && requiredBinNumbers.isEmpty) {
+          continue;
+        }
+
+        filteredTools.add(tool);
+      }
+
+      if (filteredTools.isEmpty && requiredBinNumbers.isEmpty) {
+        // Fallback to simple tool-only search if no bin terms.
+        final allTools = _cachedToolsWithLocations!.map((t) => t.tool).toList();
+        filteredTools.addAll(allTools.where((t) =>
+            t.toolName.toLowerCase().contains(query) ||
+            (t.brand?.toLowerCase().contains(query) ?? false) ||
+            (t.modelNumber?.toLowerCase().contains(query) ?? false)));
+      }
+
+      filteredTools.sort((a, b) {
         final diaA = a.diameterIn ?? (a.diameterMm != null ? (a.diameterMm! / 25.4) : double.infinity);
         final diaB = b.diameterIn ?? (b.diameterMm != null ? (b.diameterMm! / 25.4) : double.infinity);
         final cmpDia = diaA.compareTo(diaB);
@@ -131,7 +202,8 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
         final lenB = b.fluteLength ?? double.infinity;
         return lenA.compareTo(lenB);
       });
-      final matches = filtered.take(3).toList();
+
+      final matches = filteredTools.take(3).toList();
       if (mounted) setState(() => _searchSuggestions = matches);
     } catch (e) {
       if (mounted) setState(() => _searchSuggestions = null);
@@ -178,6 +250,9 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
     final isWide = MediaQuery.of(context).size.width >= 900;
     final usePermanentDrawer = isWide && DrawerDataCache.keepDrawerOpen;
 
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isNarrow = screenWidth < 600;
+
     final content = Center(
       child: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -187,9 +262,9 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
               const SizedBox(height: 80),
-              // Search bar with camera button (constrained width)
+              // Search bar: full width on narrow screens, max 500 on wide
               SizedBox(
-                width: 500,
+                width: isNarrow ? screenWidth - 48 : 500,
                 child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
@@ -203,13 +278,25 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
                     tooltip: 'Scan barcode/QR',
                   ),
                 ),
-                onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                onSubmitted: (_) {
+                  final q = _searchController.text.trim();
+                  if (q.isEmpty) {
+                    FocusScope.of(context).unfocus();
+                    return;
+                  }
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => InventoryScreen(initialSearchQuery: q),
+                    ),
+                  );
+                },
               ),
             ),
             if ((_searchSuggestions?.length ?? 0) > 0) ...[
               const SizedBox(height: 8),
               SizedBox(
-                width: 500,
+                width: isNarrow ? screenWidth - 48 : 500,
                 child: Card(
                   elevation: 4,
                   child: Builder(
@@ -238,59 +325,55 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
                 ),
               ],
               const SizedBox(height: 40),
-              // Action buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Add button
-                ElevatedButton(
-                  onPressed: _onAddTool,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    backgroundColor: Colors.grey[700],
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed: _onAddTool,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      backgroundColor: Colors.grey[700],
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add, size: 24),
+                        SizedBox(width: 8),
+                        Text('Add Tool', style: TextStyle(fontSize: 16)),
+                      ],
                     ),
                   ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add, size: 24),
-                      SizedBox(width: 8),
-                      Text('Add Tool', style: TextStyle(fontSize: 16)),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 20),
-                // Return button
-                ElevatedButton(
-                  onPressed: _onReturnTool,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    backgroundColor: Colors.grey[700],
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: _onReturnTool,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      backgroundColor: Colors.grey[700],
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.keyboard_return, size: 24),
+                        SizedBox(width: 8),
+                        Text('Return', style: TextStyle(fontSize: 16)),
+                      ],
                     ),
                   ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.keyboard_return, size: 24),
-                      SizedBox(width: 8),
-                      Text('Return Tool', style: TextStyle(fontSize: 16)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
 
     return Scaffold(
       key: _scaffoldKey,

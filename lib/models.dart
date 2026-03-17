@@ -308,6 +308,33 @@ class ToolWithLocations {
   }
 }
 
+class ManualBuyItem {
+  final String id;
+  final String description;
+  final int qty;
+  final String? supplier;
+  final String? notes;
+
+  ManualBuyItem({
+    required this.id,
+    required this.description,
+    required this.qty,
+    this.supplier,
+    this.notes,
+  });
+
+  factory ManualBuyItem.fromRecord(dynamic record) {
+    final data = record.data;
+    return ManualBuyItem(
+      id: record.id as String,
+      description: (data['description'] ?? '').toString(),
+      qty: (data['qty'] ?? 1).toInt(),
+      supplier: (data['supplier'] as String?)?.trim(),
+      notes: (data['notes'] as String?)?.trim(),
+    );
+  }
+}
+
 // NEW: Inventory History Model
 class InventoryHistory {
   final String id;

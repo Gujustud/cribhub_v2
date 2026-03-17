@@ -688,67 +688,72 @@ class ToolCard extends StatelessWidget {
               
               const SizedBox(width: 16),
               
-              // Right column: Action buttons + Location tags
+              // Right column: Action buttons + Location tags (constrained to avoid overflow)
               Expanded(
                 flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    // Action buttons
-                    Row(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final maxTagWidth = constraints.maxWidth;
+                    final visibleLocations = locations.where((loc) =>
+                        loc.location?.type.toLowerCase() != 'recycle').toList();
+                    return Column(
                       mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit, size: 18),
-                          onPressed: onEdit,
-                          tooltip: 'Edit',
-                          color: Colors.grey[700],
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
+                        // Action buttons
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit, size: 18),
+                              onPressed: onEdit,
+                              tooltip: 'Edit',
+                              color: Colors.grey[700],
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.copy, size: 18),
+                              onPressed: onDuplicate,
+                              tooltip: 'Duplicate',
+                              color: Colors.grey[700],
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.delete, size: 18),
+                              onPressed: onDelete,
+                              tooltip: 'Delete',
+                              color: Colors.grey[700],
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.copy, size: 18),
-                          onPressed: onDuplicate,
-                          tooltip: 'Duplicate',
-                          color: Colors.grey[700],
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.delete, size: 18),
-                          onPressed: onDelete,
-                          tooltip: 'Delete',
-                          color: Colors.grey[700],
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
+                        const SizedBox(height: 8),
+                        if (visibleLocations.isEmpty)
+                          const SizedBox.shrink()
+                        else
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            alignment: WrapAlignment.end,
+                            children: visibleLocations.map((toolLocation) {
+                              return ConstrainedBox(
+                                constraints: BoxConstraints(maxWidth: maxTagWidth),
+                                child: LocationTag(
+                                  toolLocation: toolLocation,
+                                  allLocations: allLocations,
+                                  onTap: () => onTransfer(toolLocation),
+                                ),
+                              );
+                            }).toList(),
+                          ),
                       ],
-                    ),
-                    const SizedBox(height: 8),
-                    
-                    // Location tags (wrap on narrow so they don't overflow)
-                    () {
-                      final visibleLocations = locations.where((loc) =>
-                          loc.location?.type.toLowerCase() != 'recycle').toList();
-                      if (visibleLocations.isEmpty) {
-                        return const SizedBox.shrink();
-                      }
-                      return Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        alignment: WrapAlignment.start,
-                        children: visibleLocations.map((toolLocation) {
-                          return LocationTag(
-                            toolLocation: toolLocation,
-                            allLocations: allLocations,
-                            onTap: () => onTransfer(toolLocation),
-                          );
-                        }).toList(),
-                      );
-                    }(),
-                  ],
+                    );
+                  },
                 ),
               ),
             ],

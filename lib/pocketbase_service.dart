@@ -3,6 +3,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
 import 'app_config.dart';
+import 'http_client_factory.dart';
+import 'models.dart';
 
 class PocketBaseService {
   static final PocketBaseService _instance = PocketBaseService._internal();
@@ -13,7 +15,14 @@ class PocketBaseService {
   }
 
   PocketBaseService._internal() {
-    pb = PocketBase(AppConfig.pocketBaseUrl);
+    final baseUrl = AppConfig.pocketBaseUrl;
+    pb = PocketBase(
+      baseUrl,
+      httpClientFactory: baseUrl.startsWith('https')
+          ? () => HttpClientFactory.getHttpClient()
+          : null,
+      reuseHTTPClient: true,
+    );
   }
 
   // Save a new tool
@@ -62,6 +71,51 @@ class PocketBaseService {
       print('Error getting tools: $e');
       rethrow;
     }
+  }
+
+  Future<List<ManualBuyItem>> getManualBuyItems() async {
+    try {
+      final records = await pb.collection('buy_list_manual').getFullList(
+        sort: 'description',
+      );
+      return records.map((r) => ManualBuyItem.fromRecord(r)).toList();
+    } catch (e) {
+      print('Error getting manual buy list items: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> createManualBuyItem({
+    required String description,
+    int qty = 1,
+    String? supplier,
+    String? notes,
+  }) async {
+    await pb.collection('buy_list_manual').create(body: {
+      'description': description,
+      'qty': qty,
+      'supplier': supplier,
+      'notes': notes,
+    });
+  }
+
+  Future<void> updateManualBuyItem({
+    required String id,
+    required String description,
+    required int qty,
+    String? supplier,
+    String? notes,
+  }) async {
+    await pb.collection('buy_list_manual').update(id, body: {
+      'description': description,
+      'qty': qty,
+      'supplier': supplier,
+      'notes': notes,
+    });
+  }
+
+  Future<void> deleteManualBuyItem(String id) async {
+    await pb.collection('buy_list_manual').delete(id);
   }
 
   // Create a new location
