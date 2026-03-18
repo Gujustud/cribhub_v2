@@ -33,6 +33,151 @@ class AddToolScreen extends StatefulWidget {
 class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin {
   // Cutting Tools category ID from PocketBase
   static const String CUTTING_TOOLS_CATEGORY_ID = '0ro99ktjwyl14dc';
+
+  // Wire + Letter drill equivalents for Drill Standard naming.
+  // Key is the formatted drill diameter string (per our drill-diameter rules in _formatDrillDiameterKey()).
+  static const Map<String, String> _LETTER_BY_INCH_DIAMETER = {
+    '.234': 'A',
+    '.238': 'B',
+    '.242': 'C',
+    '.246': 'D',
+    '.25': 'E',
+    '.257': 'F',
+    '.261': 'G',
+    '.266': 'H',
+    '.272': 'I',
+    '.277': 'J',
+    '.281': 'K',
+    '.29': 'L',
+    '.295': 'M',
+    '.302': 'N',
+    '.316': 'O',
+    '.323': 'P',
+    '.332': 'Q',
+    '.339': 'R',
+    '.348': 'S',
+    '.358': 'T',
+    '.368': 'U',
+    '.377': 'V',
+    '.386': 'W',
+    '.397': 'X',
+    '.404': 'Y',
+    '.413': 'Z',
+  };
+
+  // Note: For wire keys >= 0.125", the drill diameter formatter truncates to 3 decimals (no rounding),
+  // so the keys below reflect that canonical formatting.
+  static const Map<String, String> _WIRE_BY_INCH_DIAMETER = {
+    '.0019': '107',
+    '.0023': '106',
+    '.0027': '105',
+    '.0031': '104',
+    '.0035': '103',
+    '.0039': '102',
+    '.0043': '101',
+    '.0047': '100',
+    '.0051': '99',
+    '.0055': '98',
+    '.0059': '97',
+    '.0063': '96',
+    '.0067': '95',
+    '.0071': '94',
+    '.0075': '93',
+    '.0079': '92',
+    '.0083': '91',
+    '.0087': '90',
+    '.0091': '89',
+    '.0095': '88',
+    '.01': '87',
+    '.0105': '86',
+    '.011': '85',
+    '.0115': '84',
+    '.012': '83',
+    '.0125': '82',
+    '.013': '81',
+    '.0135': '80',
+    '.0145': '79',
+    '.016': '78',
+    '.018': '77',
+    '.02': '76',
+    '.021': '75',
+    '.0225': '74',
+    '.024': '73',
+    '.025': '72',
+    '.026': '71',
+    '.028': '70',
+    '.0292': '69',
+    '.031': '68',
+    '.032': '67',
+    '.033': '66',
+    '.035': '65',
+    '.036': '64',
+    '.037': '63',
+    '.038': '62',
+    '.039': '61',
+    '.04': '60',
+    '.041': '59',
+    '.042': '58',
+    '.043': '57',
+    '.0465': '56',
+    '.052': '55',
+    '.055': '54',
+    '.0595': '53',
+    '.0635': '52',
+    '.067': '51',
+    '.07': '50',
+    '.073': '49',
+    '.076': '48',
+    '.0785': '47',
+    '.081': '46',
+    '.082': '45',
+    '.086': '44',
+    '.089': '43',
+    '.0935': '42',
+    '.096': '41',
+    '.098': '40',
+    '.0995': '39',
+    '.1015': '38',
+    '.104': '37',
+    '.1065': '36',
+    '.11': '35',
+    '.111': '34',
+    '.113': '33',
+    '.116': '32',
+    '.12': '31',
+
+    // >= 0.125" keys (truncated to 3 decimals by _formatDrillDiameterKey()).
+    '.128': '30',
+    '.136': '29',
+    '.14': '28',
+    '.144': '27',
+    '.147': '26',
+    '.149': '25',
+    '.152': '24',
+    '.154': '23',
+    '.157': '22',
+    '.159': '21',
+    '.161': '20',
+    '.166': '19',
+    '.169': '18',
+    '.173': '17',
+    '.177': '16',
+    '.18': '15',
+    '.182': '14',
+    '.185': '13',
+    '.189': '12',
+    '.191': '11',
+    '.193': '10',
+    '.196': '9',
+    '.199': '8',
+    '.201': '7',
+    '.204': '6',
+    '.205': '5',
+    '.209': '4',
+    '.213': '3',
+    '.221': '2',
+    '.228': '1',
+  };
   
   final _formKey = GlobalKey<FormState>();
   
@@ -46,6 +191,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
   final _fluteLengthController = TextEditingController();
   final _cornerRadController = TextEditingController();
   final _neckController = TextEditingController();
+  final _drillIncludedAngleController = TextEditingController(); // Drills: Included angle (optional)
   final _tslotRadiusController = TextEditingController();  // NEW: T-slot radius
   final _chamferAngleController = TextEditingController();  // NEW: Chamfer angle
   final _chamferTipDiameterController = TextEditingController();  // NEW: Chamfer tip diameter
@@ -143,6 +289,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     _fluteLengthController.addListener(_scheduleToolNameUpdate);
     _cornerRadController.addListener(_scheduleToolNameUpdate);
     _neckController.addListener(_scheduleToolNameUpdate);
+    _drillIncludedAngleController.addListener(_scheduleToolNameUpdate);
     _tslotRadiusController.addListener(_scheduleToolNameUpdate);  // NEW
     _chamferAngleController.addListener(_scheduleToolNameUpdate);  // NEW
     _chamferTipDiameterController.addListener(_scheduleToolNameUpdate);  // NEW
@@ -702,6 +849,10 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     }
     // Load T-slot radius, chamfer angle, chamfer tip diameter
     if (tool.record != null && tool.record.data != null) {
+      final drillAngle = tool.record.data['drill_included_angle'];
+      if (drillAngle != null) {
+        _drillIncludedAngleController.text = drillAngle.toString();
+      }
       final tslotRadius = tool.record.data['tslot_radius'];
       if (tslotRadius != null) {
         _tslotRadiusController.text = tslotRadius.toString();
@@ -901,17 +1052,16 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       print('DEBUG _matchSubcategoryNamesToIds: Found first level subcategory "${firstLevelSub.data['name']}" with ID ${firstLevelSub.id}');
       print('DEBUG _matchSubcategoryNamesToIds: hasChildren = $hasChildren, hasAttributeList = $hasAttributeList, parts.length = ${parts.length}');
       
-      // IMPORTANT: If this subcategory has an attribute_list, store the VALUE, not the ID
-      if (hasAttributeList && parts.length > 1) {
-        // Store the attribute value (e.g., "PLA" from "Filament Type > PLA")
-        _selectedSubcategoryIds.add(parts[1]);
+      // Leaf subcategory with attribute_list (e.g. Drills > SC): keep subcategory ID + attribute
+      if (hasAttributeList && !hasChildren && parts.length > 1) {
+        _selectedSubcategoryIds.add(firstLevelSub.id);
         _selectedAttributeValue = parts[1];
-        print('DEBUG _matchSubcategoryNamesToIds: Set attribute value at level 0: "${parts[1]}"');
-      } else if (hasAttributeList && parts.length == 1) {
-        // Subcategory has attribute_list but no value was saved (old data format)
-        // Add null placeholder so the dropdown appears but nothing is selected
-        _selectedSubcategoryIds.add(null);
-        print('DEBUG _matchSubcategoryNamesToIds: Subcategory has attribute_list but no value saved - adding null placeholder');
+        print(
+            'DEBUG _matchSubcategoryNamesToIds: Leaf+attr level 0: id=${firstLevelSub.id}, attr="${parts[1]}"');
+      } else if (hasAttributeList && !hasChildren && parts.length == 1) {
+        _selectedSubcategoryIds.add(firstLevelSub.id);
+        print(
+            'DEBUG _matchSubcategoryNamesToIds: Leaf+attr, subcategory only (attribute from record)');
       } else if (!hasChildren && !hasAttributeList && parts.length > 1) {
         // This is a dynamic text value (like "Black" in "Color > Black" when Color has no attribute list)
         _selectedSubcategoryIds.add(firstLevelSub.id);
@@ -1158,45 +1308,218 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     return s;
   }
 
+  /// Canonical diameter key used for Drill Standard lookup + naming.
+  /// Rules (no rounding):
+  /// - < 0.125"  => truncate to 4 decimals
+  /// - >= 0.125" => truncate to 3 decimals
+  /// Then: trim trailing zeros and strip leading `0` for values < 1.
+  String _formatDrillDiameterKey(double valueInInches) {
+    // Small epsilon to reduce cases where binary floating error makes values
+    // like 0.0100 turn into 0.009999... during multiplication+floor.
+    const double epsilon = 1e-9;
+    final bool under125 = valueInInches < 0.125;
+    final double factor = under125 ? 10000.0 : 1000.0;
+    final int decimals = under125 ? 4 : 3;
+
+    final double truncated =
+        ((valueInInches * factor) + epsilon).floorToDouble() / factor;
+
+    String s = truncated.toStringAsFixed(decimals); // includes leading 0 for < 1
+    if (s.contains('.')) {
+      s = s.replaceFirst(RegExp(r'0+$'), '');
+      if (s.endsWith('.')) {
+        s = s.substring(0, s.length - 1);
+      }
+    }
+    if (s.startsWith('0.')) {
+      s = s.substring(1);
+    }
+    // If it became an integer (e.g. "1"), keep one decimal place for naming consistency.
+    if (!s.contains('.')) {
+      s = '${s}.0';
+    }
+    return s;
+  }
+
+  /// Flute length formatting for drills.
+  /// - truncate (no rounding) to max 2 decimals
+  /// - trim trailing zeros
+  /// - keep at least one decimal digit (so 1.00 => 1.0)
+  /// - strip leading `0` for values < 1
+  String _formatDrillFluteLength(double valueInInches) {
+    const double epsilon = 1e-9;
+    final double truncated = ((valueInInches * 100.0) + epsilon).floorToDouble() / 100.0;
+
+    String s = truncated.toStringAsFixed(2); // always has 2 decimals first
+    if (s.contains('.')) {
+      s = s.replaceFirst(RegExp(r'0+$'), '');
+      if (s.endsWith('.')) {
+        s = s.substring(0, s.length - 1);
+      }
+    }
+
+    // Ensure we still show a decimal point for whole numbers (1.0FL requirement).
+    if (!s.contains('.')) {
+      s = '${s}.0';
+    }
+
+    if (s.startsWith('0.')) {
+      s = s.substring(1);
+    }
+    return s;
+  }
+
+  /// Metric token (in->mm) for Drill Standard naming.
+  /// - round to 2 decimals
+  /// - trim trailing zeros
+  /// - append `MM`
+  String _formatDrillMetricToken(double diameterInInches) {
+    final mm = diameterInInches * 25.4;
+    final rounded = (mm * 100.0).roundToDouble() / 100.0;
+    String mmStr = rounded.toStringAsFixed(2);
+
+    if (mmStr.contains('.')) {
+      mmStr = mmStr.replaceFirst(RegExp(r'0+$'), '');
+      if (mmStr.endsWith('.')) {
+        mmStr = mmStr.substring(0, mmStr.length - 1);
+      }
+    }
+
+    return '${mmStr}MM';
+  }
+
+  /// Extract selected Drill Standard type from the built subcategory chain.
+  /// Expected values: Fractional, Metric, Wire, Letter.
+  String? _getSelectedDrillStandardType() {
+    if (_subcategoryText.isEmpty) return null;
+
+    final parts = _subcategoryText
+        .split(' > ')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty);
+
+    for (final part in parts) {
+      final p = part.toLowerCase();
+      if (p == 'fractional') return 'Fractional';
+      if (p == 'metric') return 'Metric';
+      if (p == 'wire') return 'Wire';
+      if (p == 'letter') return 'Letter';
+    }
+    return null;
+  }
+
+  /// Extract selected Drill Style token from the built subcategory chain.
+  /// UI shows "Carbide" or "HSS".
+  /// Naming token expects "SC" for solid carbide, otherwise "HSS".
+  String? _getSelectedDrillStyleToken() {
+    if (_subcategoryText.isEmpty) return null;
+
+    final parts = _subcategoryText
+        .split(' > ')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty);
+
+    for (final part in parts) {
+      final p = part.toLowerCase();
+      if (p == 'carbide') return 'SC';
+      if (p == 'hss') return 'HSS';
+    }
+    return null;
+  }
+
+  /// Top-level Cutting Tools type is "Drills" (leaf + SC/HSS attribute).
+  bool _isDrillsToolType() {
+    if (_category != 'Cutting Tools' || _selectedSubcategoryIds.isEmpty) {
+      return false;
+    }
+    final first = _selectedSubcategoryIds[0];
+    if (first == null || first.isEmpty) return false;
+    try {
+      final sub = _allSubcategories.firstWhere((s) => s.id == first);
+      return sub.data['name'] == 'Drills';
+    } catch (_) {
+      return false;
+    }
+  }
+
   String _generateToolName() {
     // Only auto-generate names for Cutting Tools category
     if (_category != 'Cutting Tools') {
       return '';
     }
-    
+
     final diaIn = double.tryParse(_diameterInController.text);
-    final flutes = int.tryParse(_flutesController.text);
     final fluteLen = double.tryParse(_fluteLengthController.text);
+
+    // Drills: DIA_FLUTELENGTHFL_MATERIAL e.g. .125_.75FL_SC
+    if (_isDrillsToolType()) {
+      final style = _getSelectedDrillStyleToken() ?? '';
+      if (diaIn == null || fluteLen == null || style.isEmpty) {
+        return '';
+      }
+
+      final String diaStr = _formatDrillDiameterKey(diaIn);
+      final String flStr = _formatDrillFluteLength(fluteLen);
+
+      final standardType = _getSelectedDrillStandardType();
+      if (standardType == null) return '';
+
+      // Build: {dia}_{optionalStandard}_{fluteLen}FL_{style}
+      if (standardType == 'Fractional') {
+        return '${diaStr}_${flStr}FL_$style';
+      }
+
+      late final String standardToken;
+      switch (standardType) {
+        case 'Metric':
+          standardToken = _formatDrillMetricToken(diaIn);
+          break;
+        case 'Wire':
+          standardToken = _WIRE_BY_INCH_DIAMETER[diaStr] ?? '';
+          break;
+        case 'Letter':
+          standardToken = _LETTER_BY_INCH_DIAMETER[diaStr] ?? '';
+          break;
+        case 'Fractional':
+          // handled above
+          standardToken = '';
+          break;
+        default:
+          standardToken = '';
+          break;
+      }
+
+      if (standardToken.isEmpty) return '';
+      return '${diaStr}_${standardToken}_${flStr}FL_$style';
+    }
+
+    final flutes = int.tryParse(_flutesController.text);
     final cornerRad = double.tryParse(_cornerRadController.text);
     final neck = double.tryParse(_neckController.text);
-    
+
     if (diaIn == null || flutes == null || fluteLen == null) {
       return '';
     }
     
-    String diaStr = diaIn.toStringAsFixed(3);  // Max 3 decimals
-    if (diaIn < 1 && diaStr.startsWith('0.')) {
-      diaStr = diaStr.substring(1);
-    }
+    final String diaStr = _formatDrillDiameterKey(diaIn);
     
     // Format flute length: up to 3 decimals, but drop trailing zero
-    // so .010 => .01, .140 => .14, .105 stays .105.
-    String flStr = _formatThreeDecimal(fluteLen);
+    // so 1.00 => 1.0, .030 => .03
+    final String flStr = _formatDrillFluteLength(fluteLen);
     
     String name = '${diaStr}_${flutes}F_${flStr}FL';
     
-    // Only include corner radius if the subcategory is CR
-    if (cornerRad != null && cornerRad > 0 && _subSubcategory == 'CR') {
-      String crStr = cornerRad.toStringAsFixed(3);  // Max 3 decimals
-      if (cornerRad < 1 && crStr.startsWith('0.')) {
-        crStr = crStr.substring(1);
-      }
+    // Corner radius in name: required semantics for CR; optional for Special
+    if (cornerRad != null &&
+        cornerRad > 0 &&
+        (_subSubcategory == 'CR' || _subSubcategory == 'Special')) {
+      final String crStr = _formatDrillDiameterKey(cornerRad);
       name += '_${crStr}CR';
     }
     
     // Only include neck radius if there's a value (independent of type)
     if (neck != null && neck > 0) {
-      String neckStr = _formatThreeDecimal(neck);
+      final String neckStr = _formatDrillDiameterKey(neck);
       name += '_${neckStr}NR';
     }
     
@@ -1204,8 +1527,9 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     if (_subSubcategory == 'Tslot') {
       final tslotRadius = double.tryParse(_tslotRadiusController.text);
       if (tslotRadius != null && tslotRadius > 0) {
-        String tsrStr = _formatThreeDecimal(tslotRadius);
-        name += '_${tsrStr}R';
+        final String tsrStr = _formatDrillDiameterKey(tslotRadius);
+        // Use CR suffix for the T-slot radius to match naming semantics.
+        name += '_${tsrStr}CR';
       }
     }
     
@@ -1220,18 +1544,21 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       }
       
       if (chamferTip != null && chamferTip > 0) {
-        String tipStr = _formatThreeDecimal(chamferTip);
+        final String tipStr = _formatDrillDiameterKey(chamferTip);
         name += '_${tipStr}TIP';
       }
     }
     
-    // Add type suffix for Ball, Tslot, and Chamfer
+    // Add type suffix for Ball, Tslot, Chamfer, Special
     if (_subSubcategory == 'Ball') {
       name += '_BALL';
     } else if (_subSubcategory == 'Tslot') {
-      name += '_TSLOT';
+      // Use shortened T-slot suffix.
+      name += '_TS';
     } else if (_subSubcategory == 'Chamfer') {
       name += '_CHAMFER';
+    } else if (_subSubcategory == 'Special') {
+      name += '_SPECIAL';
     }
     
     return name;
@@ -2072,9 +2399,16 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     
     print('DEBUG _updateSubcategoryText: Built subcategoryText = "$_subcategoryText"');
     
-    // Clear corner radius field if not CR type (prevents stale CR values in tool name)
-    if (_subSubcategory != 'CR' && _cornerRadController.text.isNotEmpty) {
+    // Clear corner radius when leaving CR and Special (both can use the field)
+    if (_subSubcategory != 'CR' &&
+        _subSubcategory != 'Special' &&
+        _cornerRadController.text.isNotEmpty) {
       _cornerRadController.clear();
+    }
+
+    // Clear drill included angle if not Drills type
+    if (!_isDrillsToolType() && _drillIncludedAngleController.text.isNotEmpty) {
+      _drillIncludedAngleController.clear();
     }
     
     // Clear T-slot radius if not Tslot type
@@ -2102,7 +2436,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     // Ensure dynamic subcategory text vars are up to date before validation checks.
     _updateSubcategoryText();
 
-    // Cutting Tools: require Tool Type, then Style.
+    // Cutting Tools: require Tool Type; End mills need Style; Drills need material (SC/HSS).
     if (_category == 'Cutting Tools') {
       if (_subcategory == null || _subcategory!.trim().isEmpty) {
         if (mounted) {
@@ -2112,7 +2446,18 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
         }
         return;
       }
-      if (_subSubcategory == null || _subSubcategory!.trim().isEmpty) {
+      if (_isDrillsToolType()) {
+        final m = (_selectedAttributeValue ?? '').trim();
+        if (m.isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text('Please select drill material (SC or HSS)')),
+            );
+          }
+          return;
+        }
+      } else if (_subSubcategory == null || _subSubcategory!.trim().isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Please select a Style')),
@@ -2185,6 +2530,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
           'flute_length': double.tryParse(_fluteLengthController.text),
           'corner_rad': double.tryParse(_cornerRadController.text),
           'neck': double.tryParse(_neckController.text),
+          'drill_included_angle': double.tryParse(_drillIncludedAngleController.text),
           'tslot_radius': double.tryParse(_tslotRadiusController.text),  // NEW
           'chamfer_angle': double.tryParse(_chamferAngleController.text),  // NEW
           'chamfer_tip_diameter': double.tryParse(_chamferTipDiameterController.text),  // NEW
@@ -2675,20 +3021,31 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
             ),
             const SizedBox(height: 16),
 
-            // Flutes, Flute Length, Neck, and Corner Radius (same row when CR)
+            // Flutes, Flute Length, Neck, and Corner Radius (CR or Special)
             Row(
               children: [
                 Expanded(
                   child: TextFormField(
                     controller: _flutesController,
-                    decoration: const InputDecoration(
-                      labelText: 'Number of Flutes',
+                    decoration: InputDecoration(
+                      labelText: _isDrillsToolType()
+                          ? 'Flutes (optional)'
+                          : 'Number of Flutes',
                       floatingLabelBehavior: FloatingLabelBehavior.always,
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                     keyboardType: TextInputType.number,
                     validator: (value) {
+                      if (_isDrillsToolType()) {
+                        if (value == null || value.isEmpty) {
+                          return null;
+                        }
+                        if (int.tryParse(value) == null) {
+                          return 'Must be a whole number';
+                        }
+                        return null;
+                      }
                       if (value == null || value.isEmpty) {
                         return 'Required';
                       }
@@ -2703,10 +3060,12 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                 Expanded(
                   child: TextFormField(
                     controller: _fluteLengthController,
-                    decoration: const InputDecoration(
-                      labelText: 'Flute Length',
+                    decoration: InputDecoration(
+                      labelText: _isDrillsToolType()
+                          ? 'Flute length (in)'
+                          : 'Flute Length',
                       floatingLabelBehavior: FloatingLabelBehavior.always,
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                     keyboardType:
@@ -2736,13 +3095,13 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                         const TextInputType.numberWithOptions(decimal: true),
                   ),
                 ),
-                if (_subSubcategory == 'CR') ...[
+                if (_isDrillsToolType()) ...[
                   const SizedBox(width: 12),
                   Expanded(
                     child: TextFormField(
-                      controller: _cornerRadController,
+                      controller: _drillIncludedAngleController,
                       decoration: const InputDecoration(
-                        labelText: 'Corner Radius',
+                        labelText: 'Included Angle (°)',
                         floatingLabelBehavior: FloatingLabelBehavior.always,
                         border: OutlineInputBorder(),
                         isDense: true,
@@ -2750,9 +3109,49 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
                       validator: (value) {
-                        if (_subSubcategory != 'CR') return null;
+                        if (!_isDrillsToolType()) return null;
+                        if (value == null || value.trim().isEmpty) return null;
+                        if (double.tryParse(value) == null) {
+                          return 'Invalid number';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+                if (_subSubcategory == 'CR' ||
+                    _subSubcategory == 'Special') ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _cornerRadController,
+                      decoration: InputDecoration(
+                        labelText: _subSubcategory == 'Special'
+                            ? 'Corner Radius (optional)'
+                            : 'Corner Radius',
+                        floatingLabelBehavior: FloatingLabelBehavior.always,
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      validator: (value) {
+                        if (_subSubcategory != 'CR' &&
+                            _subSubcategory != 'Special') {
+                          return null;
+                        }
+                        if (_subSubcategory == 'CR') {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Required';
+                          }
+                          if (double.tryParse(value) == null) {
+                            return 'Invalid number';
+                          }
+                          return null;
+                        }
+                        // Special: optional; if filled must be valid
                         if (value == null || value.trim().isEmpty) {
-                          return 'Required';
+                          return null;
                         }
                         if (double.tryParse(value) == null) {
                           return 'Invalid number';
@@ -2769,7 +3168,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                     child: TextFormField(
                       controller: _tslotRadiusController,
                       decoration: const InputDecoration(
-                        labelText: 'T-Slot Radius (optional)',
+                        labelText: 'T-Slot Radius',
                         floatingLabelBehavior: FloatingLabelBehavior.always,
                         border: OutlineInputBorder(),
                         isDense: true,
@@ -3738,6 +4137,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     _fluteLengthController.dispose();
     _cornerRadController.dispose();
     _neckController.dispose();
+    _drillIncludedAngleController.dispose();
     _tslotRadiusController.dispose();  // NEW
     _chamferAngleController.dispose();  // NEW
     _chamferTipDiameterController.dispose();  // NEW
