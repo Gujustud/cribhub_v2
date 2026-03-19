@@ -75,12 +75,25 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
+class _ToolSearchIndexEntry {
+  final ToolWithLocations toolWithLocations;
+  final String locationTextLower;
+  final String fieldsLower;
+
+  _ToolSearchIndexEntry({
+    required this.toolWithLocations,
+    required this.locationTextLower,
+    required this.fieldsLower,
+  });
+}
+
 class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   List<Tool>? _searchSuggestions;
-  List<ToolWithLocations>? _cachedToolsWithLocations;
+  List<_ToolSearchIndexEntry>? _cachedSearchEntries;
+  bool _loadingSearchCache = false;
   Timer? _searchDebounce;
 
   @override
@@ -107,25 +120,68 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
     if (query.length < 2 || !mounted) return;
 
     try {
-      if (_cachedToolsWithLocations == null) {
+      if (_cachedSearchEntries == null && !_loadingSearchCache) {
+        _loadingSearchCache = true;
+
         final pb = PocketBaseService();
         final records = await pb.getTools();
         if (!mounted) return;
         final tools = records.map((r) => Tool.fromRecord(r)).toList();
 
-        final toolsWithLocs = <ToolWithLocations>[];
-        for (final tool in tools) {
-          final locRecords = await pb.pb
-              .collection('tool_locations')
-              .getFullList(
-                filter: 'tool = "${tool.id}"',
-                expand: 'location',
-              );
-          final toolLocations = locRecords.map((r) => ToolLocation.fromRecord(r)).toList();
-          toolsWithLocs.add(ToolWithLocations(tool: tool, locations: toolLocations));
+        // One request for all tool_locations (avoid N+1 requests),
+        // then group by tool id in Dart.
+        final allToolLocationRecords = await pb.getAllToolLocations();
+        final locationsByToolId = <String, List<ToolLocation>>{};
+        for (final r in allToolLocationRecords) {
+          final toolId = r.data['tool']?.toString();
+          if (toolId == null || toolId.isEmpty) continue;
+          (locationsByToolId[toolId] ??= <ToolLocation>[]).add(
+            ToolLocation.fromRecord(r),
+          );
         }
-        _cachedToolsWithLocations = toolsWithLocs;
+
+        final entries = <_ToolSearchIndexEntry>[];
+        for (final tool in tools) {
+          final twl = ToolWithLocations(
+            tool: tool,
+            locations: locationsByToolId[tool.id] ?? const <ToolLocation>[],
+          );
+
+          // Precompute the search strings so we don't rebuild them on every keystroke.
+          final locationTextLower = twl.locations
+              .map((tl) => tl.location?.name ?? '')
+              .where((s) => s.isNotEmpty)
+              .join(' | ')
+              .toLowerCase();
+
+          final fieldsLower = [
+            tool.toolName,
+            tool.brand ?? '',
+            tool.modelNumber ?? '',
+            tool.category,
+            tool.subcategory ?? '',
+            locationTextLower,
+          ].join(' ').toLowerCase();
+
+          entries.add(
+            _ToolSearchIndexEntry(
+              toolWithLocations: twl,
+              locationTextLower: locationTextLower,
+              fieldsLower: fieldsLower,
+            ),
+          );
+        }
+
+        if (!mounted) return;
+        _cachedSearchEntries = entries;
+        _loadingSearchCache = false;
       }
+
+      // If cache is still building, just wait for the next debounce tick.
+      if (_cachedSearchEntries == null) return;
+
+      // Don't show results for a stale query.
+      if (query != _searchController.text.trim().toLowerCase()) return;
 
       final rawInput = query;
       final rawTokens = rawInput.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
@@ -146,13 +202,9 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
       final tokens = rawTokens.where((t) => t != 'bin' && !RegExp(r'^\d+$').hasMatch(t)).toList();
 
       final filteredTools = <Tool>[];
-      for (final twl in _cachedToolsWithLocations!) {
-        final tool = twl.tool;
-        final locationText = twl.locations
-            .map((tl) => tl.location?.name ?? '')
-            .where((s) => s.isNotEmpty)
-            .join(' | ')
-            .toLowerCase();
+      for (final entry in _cachedSearchEntries!) {
+        final tool = entry.toolWithLocations.tool;
+        final locationText = entry.locationTextLower;
 
         // Bin filter: all requested numbers must appear in some 'bin xx' name.
         final binsOk = requiredBinNumbers.every((n) {
@@ -161,14 +213,7 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
         });
         if (!binsOk) continue;
 
-        final fields = <String>[
-          tool.toolName,
-          tool.brand ?? '',
-          tool.modelNumber ?? '',
-          tool.category,
-          tool.subcategory ?? '',
-          locationText,
-        ].join(' ').toLowerCase();
+        final fields = entry.fieldsLower;
 
         if (tokens.isNotEmpty && !tokens.every(fields.contains)) continue;
 
@@ -182,7 +227,7 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
 
       if (filteredTools.isEmpty && requiredBinNumbers.isEmpty) {
         // Fallback to simple tool-only search if no bin terms.
-        final allTools = _cachedToolsWithLocations!.map((t) => t.tool).toList();
+        final allTools = _cachedSearchEntries!.map((e) => e.toolWithLocations.tool).toList();
         filteredTools.addAll(allTools.where((t) =>
             t.toolName.toLowerCase().contains(query) ||
             (t.brand?.toLowerCase().contains(query) ?? false) ||
@@ -204,8 +249,11 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
       });
 
       final matches = filteredTools.take(3).toList();
-      if (mounted) setState(() => _searchSuggestions = matches);
+      if (mounted && query == _searchController.text.trim().toLowerCase()) {
+        setState(() => _searchSuggestions = matches);
+      }
     } catch (e) {
+      _loadingSearchCache = false;
       if (mounted) setState(() => _searchSuggestions = null);
     }
   }
