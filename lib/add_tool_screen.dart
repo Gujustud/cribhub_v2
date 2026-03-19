@@ -1089,9 +1089,12 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
             
             // If child has attribute_list and there's a value, store the VALUE
             if (hasAttributeList2 && parts.length > 2) {
-              _selectedSubcategoryIds.add(parts[2]);
+              // The attribute value (e.g., "Fractional") should be stored in _selectedAttributeValue,
+              // while the deepest selected subcategory at this level should remain the subcategory ID.
+              // Otherwise, edit-mode rehydration breaks attribute selectors (deepestValue isn't a subcategory ID).
+              _selectedSubcategoryIds.add(secondLevelSub.id);
               _selectedAttributeValue = parts[2];
-              print('DEBUG _matchSubcategoryNamesToIds: Set attribute value at level 1: "${parts[2]}"');
+              print('DEBUG _matchSubcategoryNamesToIds: Set attribute value at level 1: "${parts[2]}" (subcategory id: ${secondLevelSub.id})');
             } else if (hasAttributeList2 && parts.length == 2) {
               // Child has attribute_list but no value saved (old data format)
               _selectedSubcategoryIds.add(null);
