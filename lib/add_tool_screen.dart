@@ -270,6 +270,19 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
   // Purchase history (price over time)
   List<dynamic> _purchaseHistoryRecords = [];
   bool _loadingPurchaseHistory = false;
+
+  // Tool usage (performance stats)
+  List<dynamic> _toolUsageRecords = [];
+  bool _loadingToolUsage = false;
+
+  static const List<String> _toolUsageMaterials = [
+    'Aluminum',
+    'Mild Steel',
+    'Stainless',
+    'Titanium',
+    'Plastic',
+    '17-4PH',
+  ];
   
   // Manual buy list (restock)
   bool _needsRestock = false;
@@ -322,6 +335,9 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       // Now that subcategories are loaded, match them
       if (_allSubcategories.isNotEmpty) {
         _matchSubcategoryNamesToIds();
+        // Ensure attribute-value based selectors (button-style) highlight immediately
+        // by aligning the saved last subcategory part with _selectedAttributeValue.
+        _syncAttributeValueIntoSelectionChain();
       }
     }
     
@@ -336,12 +352,344 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       _loadToolLocations();
       _loadRecentHistory();
       _loadPurchaseHistory();
+      _loadToolUsage();
     }
     
     // Mark initialization as complete and trigger UI update
     setState(() {
       _isInitialized = true;
     });
+  }
+
+  Future<void> _loadToolUsage() async {
+    if (!_isEditMode) return;
+    setState(() {
+      _loadingToolUsage = true;
+    });
+    try {
+      final pbService = PocketBaseService();
+      final records = await pbService.getToolUsage(toolId: widget.tool!.id);
+      setState(() {
+        _toolUsageRecords = records;
+        _loadingToolUsage = false;
+      });
+    } catch (e) {
+      setState(() {
+        _loadingToolUsage = false;
+      });
+    }
+  }
+
+  Map<String, dynamic> _computeToolUsageStats() {
+    // Defensive: hot reload / JS interop can sometimes surface unexpected shapes.
+    final items = _toolUsageRecords;
+    if (items.isEmpty) {
+      return {
+        'avgMinutes': null,
+        'count': 0,
+        'bestMaterial': null,
+        'worstMaterial': null,
+      };
+    }
+
+    int count = 0;
+    int totalMinutes = 0;
+    int wornCount = 0;
+    int brokenCount = 0;
+
+    // last logged usage (newest) - rely on service sort '-used_at' (fallback to created)
+    Map<String, dynamic>? lastUsage;
+
+    for (final r in items) {
+      try {
+        // PocketBase returns RecordModel; but be defensive if we ever get a raw map.
+        final dynamic dataDynamic = (r is Map) ? r : r.data;
+        if (dataDynamic == null) continue;
+        final Map data = (dataDynamic is Map) ? dataDynamic : <String, dynamic>{};
+        final mins = (data['minutes_used'] as num?)?.toInt();
+        if (mins == null || mins <= 0) continue;
+        final materialRaw = data['material'];
+        final material = (materialRaw == null) ? '' : materialRaw.toString().trim();
+        final outcomeRaw = data['outcome'];
+        final outcome = (outcomeRaw == null) ? '' : outcomeRaw.toString().trim().toLowerCase();
+
+        count += 1;
+        totalMinutes += mins;
+        if (outcome == 'broken') {
+          brokenCount += 1;
+        } else if (outcome == 'worn') {
+          wornCount += 1;
+        }
+
+        // First valid record becomes "last usage" (records are already sorted newest->oldest).
+        lastUsage ??= {
+          'minutes': mins,
+          'material': material,
+          'outcome': outcome,
+          'usedAt': data['used_at'],
+          'notes': data['notes'],
+        };
+      } catch (_) {
+        // ignore malformed record
+      }
+    }
+
+    if (count == 0) {
+      return {
+        'avgMinutes': null,
+        'count': 0,
+        'bestMaterial': null,
+        'worstMaterial': null,
+      };
+    }
+
+    final avgMinutes = totalMinutes / count;
+
+    return {
+      'avgMinutes': avgMinutes,
+      'count': count,
+      'wornCount': wornCount,
+      'brokenCount': brokenCount,
+      'lastUsage': lastUsage,
+    };
+  }
+
+  Future<void> _showToolUsageHistoryDialog() async {
+    if (!_isEditMode) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Tool usage history'),
+          content: SizedBox(
+            width: 600,
+            child: _toolUsageRecords.isEmpty
+                ? const Text('No usage logged yet.')
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _toolUsageRecords.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final r = _toolUsageRecords[index];
+                      dynamic data;
+                      try {
+                        data = r.data;
+                      } catch (_) {
+                        data = (r is Map) ? r : null;
+                      }
+                      final mins = (data?['minutes_used'] as num?)?.toInt();
+                      final outcome = (data?['outcome'] ?? '').toString();
+                      final material = (data?['material'] ?? '').toString();
+                      final usedAtRaw = data?['used_at'];
+                      String usedAtStr = '';
+                      try {
+                        if (usedAtRaw != null && usedAtRaw.toString().isNotEmpty) {
+                          usedAtStr = DateFormat.yMMMd().add_jm().format(DateTime.parse(usedAtRaw.toString()));
+                        }
+                      } catch (_) {}
+
+                      final notes = (data?['notes'] ?? '').toString();
+                      return ListTile(
+                        title: Text('${mins ?? '—'} mins • $material • ${outcome.isEmpty ? '—' : outcome}'),
+                        subtitle: (usedAtStr.isNotEmpty || notes.isNotEmpty)
+                            ? Text([usedAtStr, if (notes.isNotEmpty) notes].where((s) => s.isNotEmpty).join(' • '))
+                            : null,
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showLogToolUsageDialog() async {
+    if (!_isEditMode) return;
+
+    final minutesController = TextEditingController();
+    final notesController = TextEditingController();
+    String outcome = 'worn';
+    String material = _toolUsageMaterials.first;
+    String? machineId;
+
+    final machines = _allLocations.where((l) => l.type.toLowerCase() == 'machine').toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Log tool usage'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: minutesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Minutes used',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: outcome,
+                  decoration: const InputDecoration(
+                    labelText: 'Outcome',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'worn', child: Text('Worn')),
+                    DropdownMenuItem(value: 'broken', child: Text('Broken')),
+                  ],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    outcome = v;
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: material,
+                  decoration: const InputDecoration(
+                    labelText: 'Material',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _toolUsageMaterials
+                      .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                      .toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    material = v;
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: machineId,
+                  decoration: const InputDecoration(
+                    labelText: 'Machine (optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: null,
+                      child: Text('—'),
+                    ),
+                    ...machines.map((m) => DropdownMenuItem<String>(
+                          value: m.id,
+                          child: Text(m.name),
+                        )),
+                  ],
+                  onChanged: (v) {
+                    machineId = v;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: notesController,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (optional)',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final mins = int.tryParse(minutesController.text.trim());
+                if (mins == null || mins <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Enter minutes used')),
+                  );
+                  return;
+                }
+                try {
+                  final pbService = PocketBaseService();
+                  await pbService.createToolUsage(
+                    toolId: widget.tool!.id,
+                    minutesUsed: mins,
+                    outcome: outcome,
+                    material: material,
+                    usedAt: DateTime.now(),
+                    notes: notesController.text,
+                    machineLocationId: machineId,
+                  );
+                  if (context.mounted) Navigator.pop(context, true);
+                } catch (e) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e')),
+                  );
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    minutesController.dispose();
+    notesController.dispose();
+
+    if (saved == true) {
+      await _loadToolUsage();
+    }
+  }
+
+  /// Some categories store the deepest selection both as:
+  /// - `subcategory` string (e.g. "Threading > Dixi > M1.0x0.25")
+  /// - `attribute_value` field (e.g. "M1.0x0.25")
+  ///
+  /// The UI button selectors use `_selectedSubcategoryIds[level]` to decide which
+  /// button is selected. During edit-mode rehydration, `_selectedSubcategoryIds`
+  /// may not always include the deepest `attribute_value` yet.
+  ///
+  /// This sync ensures the last chain element matches `_selectedAttributeValue`
+  /// so the correct button is selected immediately when the attribute list loads.
+  void _syncAttributeValueIntoSelectionChain() {
+    final tool = widget.tool;
+    if (tool == null) return;
+    if (_selectedAttributeValue == null) return;
+
+    final subcategoryText = tool.record.data['subcategory']?.toString() ?? '';
+    if (subcategoryText.trim().isEmpty) return;
+
+    final parts = subcategoryText
+        .split(' > ')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) return;
+
+    final attr = _selectedAttributeValue!.trim();
+    final lastPart = parts.last.trim();
+    if (attr.isEmpty || lastPart != attr) return;
+
+    final targetIndex = parts.length - 1;
+    while (_selectedSubcategoryIds.length <= targetIndex) {
+      _selectedSubcategoryIds.add(null);
+    }
+
+    _selectedSubcategoryIds[targetIndex] = attr;
+    _updateSubcategoryText();
   }
   
   Future<void> _loadSettings() async {
@@ -1018,6 +1366,53 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       final attrList = sub.data['attribute_list'];
       return attrList != null && attrList.toString().isNotEmpty;
     });
+
+    // Special-case: drills are selected as:
+    //   Drills (type) > Carbide/HSS (style) > Fractional/Metric/Wire/Letter (standard as attribute value)
+    //
+    // The "multiple independent subcategories" logic below incorrectly treats the last part
+    // ("Fractional", etc.) as if it were a *subcategory id*, which breaks edit-mode
+    // rehydration of the Standard selector.
+    final normalized0 = parts.isNotEmpty ? parts[0].trim().toLowerCase() : '';
+    final normalized1 = parts.length > 1 ? parts[1].trim().toLowerCase() : '';
+    if (normalized0 == 'drills' &&
+        (normalized1 == 'carbide' || normalized1 == 'hss') &&
+        parts.length >= 3) {
+      dynamic firstLevelSub;
+      for (final s in topLevel) {
+        final n = (s.data['name'] ?? '').toString().trim().toLowerCase();
+        if (n == normalized0) {
+          firstLevelSub = s;
+          break;
+        }
+      }
+
+      if (firstLevelSub != null) {
+        dynamic secondLevelSub;
+        for (final s in _allSubcategories) {
+          final parentOk = s.data['parent_subcategory'] == firstLevelSub.id;
+          final n = (s.data['name'] ?? '').toString().trim().toLowerCase();
+          if (parentOk && n == normalized1) {
+            secondLevelSub = s;
+            break;
+          }
+        }
+
+        if (secondLevelSub != null) {
+          _selectedSubcategoryIds.add(firstLevelSub.id);
+          _selectedSubcategoryIds.add(secondLevelSub.id);
+          _selectedAttributeValue = parts[2]; // Fractional/Metric/Wire/Letter
+          // Attribute-value selectors (Wire/Letter/Fractional/Metric) render "isSelected"
+          // by comparing _selectedSubcategoryIds[level] to the attribute value.
+          // If we don't also place the attribute value into the selector stack,
+          // the Standard buttons won't appear selected on edit—even though it will
+          // still save correctly via _selectedAttributeValue/_subcategoryText.
+          _selectedSubcategoryIds.add(parts[2]);
+          _updateSubcategoryText();
+          return;
+        }
+      }
+    }
     
     if (allHaveAttributeLists && topLevel.length > 1 && parts.length >= topLevel.length) {
       // Multiple independent subcategories - map each part to corresponding subcategory
@@ -3524,10 +3919,15 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             if (_recentHistory.isNotEmpty)
-              TextButton.icon(
+              ElevatedButton(
                 onPressed: _showAllHistory,
-                icon: const Icon(Icons.history, size: 18),
-                label: const Text('View All'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text('View All'),
               ),
           ],
         ),
@@ -3633,60 +4033,97 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
               'Performance Stats',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            Tooltip(
-              message: 'Performance tracking coming soon',
-              child: Icon(Icons.info_outline, color: Colors.grey[600], size: 20),
-            ),
+            if (_isEditMode)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton(
+                    onPressed: _showLogToolUsageDialog,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text('Log usage'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _showToolUsageHistoryDialog,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text('History'),
+                  ),
+                ],
+              ),
           ],
         ),
         const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceVariant,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Theme.of(context).dividerColor),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+        Builder(
+          builder: (context) {
+            final stats = _computeToolUsageStats();
+            final last = stats['lastUsage'] as Map<String, dynamic>?;
+            String lastUsageText = '—';
+            if (last != null) {
+              final mins = last['minutes'];
+              if (mins != null) lastUsageText = '${mins}m';
+            }
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceVariant,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Theme.of(context).dividerColor),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildStatItem(
-                    icon: Icons.access_time,
-                    label: 'Avg Tool Life',
-                    value: '-- hrs',
-                    color: Colors.blue,
+                  if (_loadingToolUsage)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildStatItem(
+                        icon: Icons.access_time,
+                        label: 'Avg Tool Life',
+                        value: (stats['avgMinutes'] == null)
+                            ? '—'
+                            : '${(stats['avgMinutes'] as double).round()} mins',
+                        color: Colors.blue,
+                      ),
+                      _buildStatItem(
+                        icon: Icons.history_toggle_off,
+                        label: 'Last usage',
+                        value: lastUsageText,
+                        color: Colors.orange,
+                      ),
+                    ],
                   ),
-                  _buildStatItem(
-                    icon: Icons.inventory_2,
-                    label: 'Total Used',
-                    value: '--',
-                    color: Colors.orange,
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildStatItem(
+                        icon: Icons.check_circle_outline,
+                        label: 'Worn / Broken',
+                        value: '${stats['wornCount'] ?? 0} / ${stats['brokenCount'] ?? 0}',
+                        color: Colors.green,
+                      ),
+                      _buildStatItem(
+                        icon: Icons.inventory_2,
+                        label: 'Tools Used',
+                        value: '${stats['count'] ?? 0}',
+                        color: Colors.red,
+                      ),
+                    ],
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStatItem(
-                    icon: Icons.trending_up,
-                    label: 'Best Location',
-                    value: '--',
-                    color: Colors.green,
-                  ),
-                  _buildStatItem(
-                    icon: Icons.trending_down,
-                    label: 'Worst Location',
-                    value: '--',
-                    color: Colors.red,
-                  ),
-                ],
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ],
     ];

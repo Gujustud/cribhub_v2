@@ -195,6 +195,19 @@ class PocketBaseService {
     }
   }
 
+  /// Get all tool_locations in one request (expanded location).
+  Future<List<dynamic>> getAllToolLocations() async {
+    try {
+      final records = await pb.collection('tool_locations').getFullList(
+        expand: 'location',
+      );
+      return records;
+    } catch (e) {
+      print('Error getting all tool locations: $e');
+      rethrow;
+    }
+  }
+
   // Get tool locations at a specific location (includes 0-qty so "home bin" stays visible)
   Future<List<dynamic>> getToolLocationsAtLocation(String locationId) async {
     try {
@@ -923,6 +936,56 @@ class PocketBaseService {
     } catch (e) {
       print('Error getting inventory history: $e');
       return [];
+    }
+  }
+
+  // ============================================================================
+  // TOOL USAGE (performance stats)
+  // ============================================================================
+
+  /// Get all tool_usage records for a tool (newest first).
+  Future<List<dynamic>> getToolUsage({
+    required String toolId,
+    String sort = '-used_at',
+  }) async {
+    try {
+      final records = await pb.collection('tool_usage').getFullList(
+        filter: 'tool = "$toolId"',
+        sort: sort,
+        expand: 'machine',
+      );
+      return records;
+    } catch (e) {
+      print('Error getting tool usage: $e');
+      return [];
+    }
+  }
+
+  Future<void> createToolUsage({
+    required String toolId,
+    required int minutesUsed,
+    required String outcome, // worn | broken
+    required String material,
+    DateTime? usedAt,
+    String? notes,
+    String? machineLocationId,
+  }) async {
+    try {
+      await pb.collection('tool_usage').create(
+        body: {
+          'tool': toolId,
+          'minutes_used': minutesUsed,
+          'outcome': outcome,
+          'material': material,
+          if (usedAt != null) 'used_at': usedAt.toIso8601String(),
+          if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+          if (machineLocationId != null && machineLocationId.trim().isNotEmpty)
+            'machine': machineLocationId.trim(),
+        },
+      );
+    } catch (e) {
+      print('Error creating tool usage: $e');
+      rethrow;
     }
   }
 

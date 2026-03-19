@@ -85,23 +85,34 @@ class LabelPrintService {
     final black = img.ColorRgba8(0, 0, 0, 255);
     img.fill(image, color: white);
 
-    // Fonts: make BIN slightly larger than tool name.
+    // Fonts: use arial24 for both, but scale BIN slightly larger via bitmap scaling.
     final binFont = img.arial24;
-    final toolFont = img.arial14;
-    const binLineHeight = 30;
-    const toolLineHeight = 22;
+    final toolFont = img.arial24;
+    const targetBinHeight = 32; // approx "30px" visual height after scaling
+    const toolLineHeight = 28;
     const toolMaxCharsPerLine = 26;
 
-    // BIN at top: bin number only (e.g. BIN: 250)
+    // BIN at top: bin number only (e.g. BIN: 250), scaled slightly larger.
     final binLine = 'BIN: $binNumber';
-    const binY = 6;
+    const binY = 14; // a bit more breathing room from the top
+    // Render BIN into a temporary image with the base font, then scale it UP.
+    // Height of temp image (24) is smaller than targetBinHeight (32) so we enlarge.
+    final binTemp = img.Image(width: imageWidth, height: 24);
+    img.fill(binTemp, color: white);
     img.drawString(
-      image,
+      binTemp,
       binLine,
       font: binFont,
-      x: leftMargin,
-      y: binY,
+      x: 0,
+      y: 0,
       color: black,
+    );
+    final binScaled = img.copyResize(binTemp, height: targetBinHeight);
+    img.compositeImage(
+      image,
+      binScaled,
+      dstX: leftMargin,
+      dstY: binY,
     );
 
     // Tool name near bottom: wrap to 2 lines if too long (split at last space).
@@ -121,7 +132,7 @@ class LabelPrintService {
     }
 
     final toolBlockHeight = nameLines.length * toolLineHeight;
-    final toolStartY = imageHeight - toolBlockHeight - 8;
+    final toolStartY = imageHeight - toolBlockHeight - 8; // 8px bottom margin
     for (var i = 0; i < nameLines.length; i++) {
       img.drawString(
         image,

@@ -270,23 +270,20 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
         }).toList();
       }
 
-      // For each tool, load its locations with expand
+      // Load all tool_locations once (avoid N+1 requests), then group by tool id.
+      final allToolLocationRecords = await _pbService.getAllToolLocations();
+      final locationsByToolId = <String, List<ToolLocation>>{};
+      for (final r in allToolLocationRecords) {
+        final toolId = r.data['tool']?.toString();
+        if (toolId == null || toolId.isEmpty) continue;
+        (locationsByToolId[toolId] ??= []).add(ToolLocation.fromRecord(r));
+      }
+
       final toolsWithLocs = <ToolWithLocations>[];
       for (final tool in tools) {
-        final toolLocationRecords = await _pbService.pb
-            .collection('tool_locations')
-            .getFullList(
-              filter: 'tool = "${tool.id}"',
-              expand: 'location',
-            );
-
-        final toolLocations = toolLocationRecords
-            .map((r) => ToolLocation.fromRecord(r))
-            .toList();
-
         toolsWithLocs.add(ToolWithLocations(
           tool: tool,
-          locations: toolLocations,
+          locations: locationsByToolId[tool.id] ?? const [],
         ));
       }
 
