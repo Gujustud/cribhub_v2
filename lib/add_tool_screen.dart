@@ -2297,6 +2297,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                     onPressed: () {
                       setState(() {
                         _selectedAttributeValue = value.data['value'];
+                        _updateSubcategoryText();
                         _updateToolName();
                       });
                     },
@@ -2326,6 +2327,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
             onChanged: (value) {
               setState(() {
                 _selectedAttributeValue = value;
+                _updateSubcategoryText();
                 _updateToolName();
               });
             },
@@ -2392,6 +2394,16 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       }
     });
 
+    // Drills: include selected Drill Standard (Fractional/Metric/Wire/Letter)
+    // chosen from the attribute selector so it persists in the saved subcategory chain.
+    if (_isDrillsToolType()) {
+      final std = (_selectedAttributeValue ?? '').trim();
+      final isStandard = std == 'Fractional' || std == 'Metric' || std == 'Wire' || std == 'Letter';
+      if (isStandard && !subcategoryNames.contains(std)) {
+        subcategoryNames.add(std);
+      }
+    }
+
     // Update backward compatibility variables
     _subcategory = subcategoryNames.isNotEmpty ? subcategoryNames[0] : null;
     _subSubcategory = subcategoryNames.length > 1 ? subcategoryNames[1] : null;
@@ -2447,12 +2459,21 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
         return;
       }
       if (_isDrillsToolType()) {
-        final m = (_selectedAttributeValue ?? '').trim();
-        if (m.isEmpty) {
+        final style = _getSelectedDrillStyleToken();
+        final standard = _getSelectedDrillStandardType();
+        if (style == null || style.isEmpty) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                  content: Text('Please select drill material (SC or HSS)')),
+                  content: Text('Please select drill style (Carbide or HSS)')),
+            );
+          }
+          return;
+        }
+        if (standard == null || standard.isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Please select drill standard')),
             );
           }
           return;
