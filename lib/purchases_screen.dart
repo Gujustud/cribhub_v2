@@ -70,6 +70,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
   @override
   Widget build(BuildContext context) {
     maybeAutoOpenDrawer();
+    final isNarrow = MediaQuery.of(context).size.width < 700;
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
@@ -87,54 +88,164 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: TextField(
-                    controller: _purchaseSearchController,
-                    onChanged: (v) {
-                      setState(() {
-                        _purchaseSearchQuery = v;
-                        _filteredPurchases = _applyPurchaseSearchFilter(_purchases);
-                      });
-                    },
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _purchaseSearchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                _purchaseSearchController.clear();
-                                setState(() {
-                                  _purchaseSearchQuery = '';
-                                  _filteredPurchases = _purchases;
-                                });
-                              },
-                            )
-                          : null,
-                      hintText: 'Search supplier or invoice #',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Theme.of(context).dividerColor,
+                        width: 1,
                       ),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1200),
+                      child: isNarrow
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                TextField(
+                                  controller: _purchaseSearchController,
+                                  onChanged: (v) {
+                                    setState(() {
+                                      _purchaseSearchQuery = v;
+                                      _filteredPurchases = _applyPurchaseSearchFilter(_purchases);
+                                    });
+                                  },
+                                  decoration: InputDecoration(
+                                    hintText: 'Search supplier or invoice #...',
+                                    prefixIcon: const Icon(Icons.search),
+                                    suffixIcon: _purchaseSearchController.text.isNotEmpty
+                                        ? IconButton(
+                                            icon: const Icon(Icons.clear),
+                                            onPressed: () {
+                                              _purchaseSearchController.clear();
+                                              setState(() {
+                                                _purchaseSearchQuery = '';
+                                                _filteredPurchases = _purchases;
+                                              });
+                                            },
+                                          )
+                                        : null,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                ElevatedButton(
+                                  onPressed: () async {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => const AddPurchaseScreen(),
+                                      ),
+                                    );
+                                    _loadPurchases();
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 22,
+                                      vertical: 14,
+                                    ),
+                                    backgroundColor: Colors.grey[700],
+                                    foregroundColor: Colors.white,
+                                    minimumSize: const Size(0, 52),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.add, size: 24),
+                                      SizedBox(width: 8),
+                                      Text('Add Purchase', style: TextStyle(fontSize: 16)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _purchaseSearchController,
+                                    onChanged: (v) {
+                                      setState(() {
+                                        _purchaseSearchQuery = v;
+                                        _filteredPurchases = _applyPurchaseSearchFilter(_purchases);
+                                      });
+                                    },
+                                    decoration: InputDecoration(
+                                      hintText: 'Search supplier or invoice #...',
+                                      prefixIcon: const Icon(Icons.search),
+                                      suffixIcon: _purchaseSearchController.text.isNotEmpty
+                                          ? IconButton(
+                                              icon: const Icon(Icons.clear),
+                                              onPressed: () {
+                                                _purchaseSearchController.clear();
+                                                setState(() {
+                                                  _purchaseSearchQuery = '';
+                                                  _filteredPurchases = _purchases;
+                                                });
+                                              },
+                                            )
+                                          : null,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                ElevatedButton(
+                                  onPressed: () async {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => const AddPurchaseScreen(),
+                                      ),
+                                    );
+                                    _loadPurchases();
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 22,
+                                      vertical: 14,
+                                    ),
+                                    backgroundColor: Colors.grey[700],
+                                    foregroundColor: Colors.white,
+                                    minimumSize: const Size(0, 52),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.add, size: 24),
+                                      SizedBox(width: 8),
+                                      Text('Add Purchase', style: TextStyle(fontSize: 16)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const AddPurchaseScreen()),
-                      );
-                      _loadPurchases();
-                    },
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add Purchase'),
-                  ),
-                ),
-                const Divider(height: 1),
                 Expanded(
                   child: _filteredPurchases.isEmpty
                       ? Center(
@@ -158,30 +269,92 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
                           itemCount: _filteredPurchases.length,
                           itemBuilder: (context, index) {
                             final p = _filteredPurchases[index];
+                            final supplier = p.supplierName ?? 'No supplier';
+                            final dateText = DateFormat.yMMMd().format(p.purchaseDate);
+                            final refText = (p.orderReference != null && p.orderReference!.isNotEmpty)
+                                ? 'Ref: ${p.orderReference}'
+                                : null;
+                            final totalText =
+                                p.total != null ? 'Total: \$${p.total!.toStringAsFixed(2)}' : null;
+
                             return Card(
-                              child: ListTile(
-                                title: Text(
-                                  p.supplierName ?? 'No supplier',
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(DateFormat.yMMMd().format(p.purchaseDate)),
-                                    if (p.orderReference != null && p.orderReference!.isNotEmpty)
-                                      Text('Ref: ${p.orderReference}'),
-                                    if (p.total != null) Text('Total: \$${p.total!.toStringAsFixed(2)}'),
-                                  ],
-                                ),
-                                trailing: const Icon(Icons.chevron_right),
-                                onTap: () async {
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => AddPurchaseScreen(purchase: p),
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final isWideCard = constraints.maxWidth >= 560;
+                                  return InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => AddPurchaseScreen(purchase: p),
+                                        ),
+                                      );
+                                      _loadPurchases();
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                      child: isWideCard
+                                          ? Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    supplier,
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 18,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 16),
+                                                Text(
+                                                  dateText,
+                                                  style: TextStyle(color: Colors.grey[700]),
+                                                ),
+                                                if (refText != null) ...[
+                                                  const SizedBox(width: 20),
+                                                  Text(
+                                                    refText,
+                                                    style: TextStyle(color: Colors.grey[700]),
+                                                  ),
+                                                ],
+                                                if (totalText != null) ...[
+                                                  const SizedBox(width: 20),
+                                                  Text(
+                                                    totalText,
+                                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                                  ),
+                                                ],
+                                                const SizedBox(width: 10),
+                                                const Icon(Icons.chevron_right),
+                                              ],
+                                            )
+                                          : Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        supplier,
+                                                        style: const TextStyle(
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 18,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 6),
+                                                      Text(dateText),
+                                                      if (refText != null) Text(refText),
+                                                      if (totalText != null) Text(totalText),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const Icon(Icons.chevron_right),
+                                              ],
+                                            ),
                                     ),
                                   );
-                                  _loadPurchases();
                                 },
                               ),
                             );

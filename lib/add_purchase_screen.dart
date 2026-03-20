@@ -159,11 +159,10 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
               'toolName': item.toolName ?? '',
               'quantity': item.quantity,
               'unitCost': item.unitCost,
-              'description': item.description ?? '',
-              // Text shown in the Item field; prefer saved description, else tool name.
-              'itemText': (item.description?.isNotEmpty == true)
-                  ? item.description
-                  : (item.toolName ?? ''),
+              // Keep shipping text, but never reuse stale item descriptions like "Shipping".
+              'description': type == 'shipping' ? (item.description ?? '') : '',
+              // Item lines should display from the linked tool (name + model when available).
+              'itemText': type == 'item' ? (item.toolName ?? '') : (item.description ?? ''),
             });
           }
           _gstChecked = gst;
@@ -360,7 +359,9 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
           quantity: type == 'item' ? (line['quantity'] as int) : 1,
           unitCost: line['unitCost'] as double?,
           lineType: type,
-          description: desc?.isEmpty == true ? 'Shipping' : desc,
+          description: type == 'shipping'
+              ? ((desc == null || desc.isEmpty) ? 'Shipping' : desc)
+              : null,
         );
       }
       if (gstAmt > 0) {

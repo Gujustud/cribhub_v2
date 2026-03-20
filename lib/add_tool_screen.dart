@@ -1972,7 +1972,13 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
   void _onDiameterMmChanged(String value) {
     final diaMm = double.tryParse(value);
     if (diaMm != null) {
-      _diameterInController.text = (diaMm / 25.4).toStringAsFixed(3);
+      // Metric-to-inch conversion is used for drill naming too.
+      // We want "no rounding" and more precision than 3 decimals.
+      // Example: 2mm => 0.0787... (not 0.079).
+      final diaIn = diaMm / 25.4;
+      const epsilon = 1e-9;
+      final truncated = ((diaIn * 10000.0) + epsilon).floorToDouble() / 10000.0;
+      _diameterInController.text = truncated.toStringAsFixed(4);
     }
   }
   

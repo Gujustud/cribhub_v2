@@ -531,10 +531,18 @@ class PurchaseItem {
     try {
       if (record.expand != null && record.expand['tool'] != null) {
         final t = record.expand['tool'];
+        String? name;
+        String? model;
         if (t is List && t.isNotEmpty) {
-          toolName = t[0].data?['tool_name'];
+          name = t[0].data?['tool_name']?.toString();
+          model = t[0].data?['model_number']?.toString();
         } else {
-          toolName = t.data?['tool_name'];
+          name = t.data?['tool_name']?.toString();
+          model = t.data?['model_number']?.toString();
+        }
+        if (name != null && name.isNotEmpty) {
+          final hasModel = model != null && model.trim().isNotEmpty;
+          toolName = hasModel ? '$name (${model!.trim()})' : name;
         }
       }
     } catch (_) {}
