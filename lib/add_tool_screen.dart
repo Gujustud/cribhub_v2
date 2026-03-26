@@ -1446,6 +1446,42 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       
       print('DEBUG _matchSubcategoryNamesToIds: Found first level subcategory "${firstLevelSub.data['name']}" with ID ${firstLevelSub.id}');
       print('DEBUG _matchSubcategoryNamesToIds: hasChildren = $hasChildren, hasAttributeList = $hasAttributeList, parts.length = ${parts.length}');
+
+      // Special-case: parent has multiple leaf children where each leaf has an
+      // attribute_list. In this case, saved `subcategory` may look like:
+      //   "PLA > <childAttrValue1> > <childAttrValue2>"
+      // so we map parts[1..] directly into `_selectedSubcategoryIds`
+      // slots (attribute values), rather than trying to match subcategory names.
+      if (hasChildren) {
+        final childCandidates = _allSubcategories
+            .where((s) => s.data['parent_subcategory'] == firstLevelSub.id)
+            .toList()
+          ..sort((a, b) => (a.data['sort_order'] ?? 0).compareTo(b.data['sort_order'] ?? 0));
+
+        final leafChildren = childCandidates.where((child) {
+          final hasKids = _allSubcategories.any((s) => s.data['parent_subcategory'] == child.id);
+          return !hasKids;
+        }).toList()
+          ..sort((a, b) => (a.data['sort_order'] ?? 0).compareTo(b.data['sort_order'] ?? 0));
+
+        final allLeafChildrenHaveAttributeLists = leafChildren.isNotEmpty &&
+            leafChildren.every((child) {
+              final attrListId = child.data['attribute_list'];
+              return attrListId != null && attrListId.toString().isNotEmpty;
+            });
+
+        if (leafChildren.length > 1 &&
+            allLeafChildrenHaveAttributeLists &&
+            parts.length == 1 + leafChildren.length) {
+          _selectedSubcategoryIds.add(firstLevelSub.id);
+          for (int j = 0; j < leafChildren.length; j++) {
+            final attrValue = parts[j + 1];
+            _selectedSubcategoryIds.add(attrValue);
+            _selectedAttributeValue = attrValue; // keep last selected
+          }
+          return;
+        }
+      }
       
       // Leaf subcategory with attribute_list (e.g. Drills > SC): keep subcategory ID + attribute
       if (hasAttributeList && !hasChildren && parts.length > 1) {
@@ -2208,8 +2244,28 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
       ).toList();
 
       if (children.isNotEmpty) {
-        widgets.add(const SizedBox(height: 16));
-        widgets.add(_buildSubcategorySelector(children, i + 1));
+        // If multiple child subcategories under this parent each have their own
+        // attribute_list and are leaf nodes, render an attribute selector for
+        // each child. (Existing logic only used `options.first`.)
+        final allChildrenHaveAttributeLists = children.every((sub) {
+          final attrListId = sub.data['attribute_list'];
+          return attrListId != null && attrListId.toString().isNotEmpty;
+        });
+
+        final allChildrenAreLeafNodes = children.every((sub) {
+          final hasChildren = _allSubcategories.any((s) => s.data['parent_subcategory'] == sub.id);
+          return !hasChildren;
+        });
+
+        if (children.length > 1 && allChildrenHaveAttributeLists && allChildrenAreLeafNodes) {
+          for (int childIndex = 0; childIndex < children.length; childIndex++) {
+            if (childIndex > 0) widgets.add(const SizedBox(height: 16));
+            widgets.add(_buildSubcategorySelector([children[childIndex]], i + 1 + childIndex));
+          }
+        } else {
+          widgets.add(const SizedBox(height: 16));
+          widgets.add(_buildSubcategorySelector(children, i + 1));
+        }
       }
     }
 
