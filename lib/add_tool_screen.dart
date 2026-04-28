@@ -13,6 +13,7 @@ import 'transfer_dialog.dart';
 import 'drawer_behavior.dart';
 import 'label_print_service.dart';
 import 'package:intl/intl.dart'; // For date formatting in history
+import 'package:url_launcher/url_launcher.dart';
 
 class AddToolScreen extends StatefulWidget {
   final Tool? tool; // If provided, we're in edit mode
@@ -281,6 +282,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     'Stainless',
     'Titanium',
     'Plastic',
+    'Nylon',
     '17-4PH',
   ];
   
@@ -2037,14 +2039,186 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     }
   }
   
-  void _extractFromUrl() {
-    // Placeholder for future implementation
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-        content: Text('Extract from URL feature coming soon!'),
-            backgroundColor: Colors.orange,
+  Future<void> _extractFromUrl() async {
+    final pageUrl = _urlController.text.trim();
+    if (pageUrl.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a product URL in the URL field first.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    final lower = pageUrl.toLowerCase();
+    if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('URL must start with http:// or https://'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Loading images from page…'),
+                  const SizedBox(height: 16),
+                  const CircularProgressIndicator(),
+                ],
+              ),
+            ),
           ),
-        );
+        ),
+      ),
+    );
+
+    final pb = PocketBaseService();
+    late final Map<String, dynamic> result;
+    try {
+      result = await pb.extractPageImages(pageUrl);
+    } finally {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+
+    if (!mounted) return;
+    if (result['success'] != true) {
+      final err = result['error']?.toString() ?? 'Could not load images.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    final raw = result['images'];
+    if (raw is! List || raw.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No images found on this page.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final imageUrls = raw.map((e) => e.toString()).toList();
+
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _PageImagePickerDialog(imageUrls: imageUrls),
+    );
+
+    if (!mounted || selected == null) return;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Downloading image…'),
+                  const SizedBox(height: 16),
+                  const CircularProgressIndicator(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Uint8List? bytes;
+    try {
+      bytes = await pb.fetchImageBytesViaMcp(selected);
+    } finally {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+
+    if (!mounted) return;
+    if (bytes == null || bytes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not download that image. Try another.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _photoBytes = bytes;
+      _photoChanged = true;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Image selected. Save the tool to keep it.'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  Future<void> _openCurrentUrl() async {
+    final raw = _urlController.text.trim();
+    if (raw.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a URL first.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final uri = Uri.tryParse(raw);
+    if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('URL must start with http:// or https://'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final launched = await launchUrl(uri, mode: LaunchMode.platformDefault);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open URL.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
   
   Future<void> _showAddInventoryDialog() async {
@@ -3453,10 +3627,15 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                   // URL
                   TextFormField(
                     controller: _urlController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'URL',
                       floatingLabelBehavior: FloatingLabelBehavior.always,
                       border: OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        tooltip: 'Open URL',
+                        onPressed: _openCurrentUrl,
+                        icon: const Icon(Icons.open_in_new),
+                      ),
                     ),
                   ),
             const SizedBox(height: 16),
@@ -3801,9 +3980,9 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
                     ),
                     const SizedBox(height: 8),
                     
-                    // Extract from URL button (placeholder)
+                    // Extract from URL — uses URL field; lists images via MCP server
                     ElevatedButton.icon(
-                      onPressed: _extractFromUrl,
+                      onPressed: () => _extractFromUrl(),
                       icon: const Icon(Icons.link),
                       label: const Text('Extract from URL'),
                       style: ElevatedButton.styleFrom(
@@ -4899,5 +5078,116 @@ class InventoryLocationTag extends StatelessWidget {
     if (result == true) {
       onChanged();
     }
+  }
+}
+
+/// Dialog: scrollable grid of image URLs from a product page; user picks one for the tool photo.
+class _PageImagePickerDialog extends StatefulWidget {
+  final List<String> imageUrls;
+
+  const _PageImagePickerDialog({required this.imageUrls});
+
+  @override
+  State<_PageImagePickerDialog> createState() => _PageImagePickerDialogState();
+}
+
+class _PageImagePickerDialogState extends State<_PageImagePickerDialog> {
+  String? _selectedUrl;
+  final PocketBaseService _pb = PocketBaseService();
+  final Map<String, Future<Uint8List?>> _thumbFutures = {};
+
+  Future<Uint8List?> _thumbFor(String url) {
+    return _thumbFutures.putIfAbsent(url, () => _pb.fetchImageBytesViaMcp(url));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dialogWidth = (MediaQuery.of(context).size.width * 0.82).clamp(
+      720.0,
+      1100.0,
+    );
+    return AlertDialog(
+      title: const Text('Choose image from page'),
+      content: SizedBox(
+        width: dialogWidth,
+        height: 360,
+        child: GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 1,
+          ),
+          itemCount: widget.imageUrls.length,
+          itemBuilder: (context, index) {
+            final u = widget.imageUrls[index];
+            final sel = _selectedUrl == u;
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => setState(() => _selectedUrl = u),
+                borderRadius: BorderRadius.circular(8),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: sel
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).dividerColor,
+                      width: sel ? 3 : 1,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: ColoredBox(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest
+                          .withValues(alpha: 0.65),
+                      child: SizedBox.expand(
+                        child: FutureBuilder<Uint8List?>(
+                          future: _thumbFor(u),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState !=
+                                ConnectionState.done) {
+                              return const Center(
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              );
+                            }
+                            final bytes = snapshot.data;
+                            if (bytes == null || bytes.isEmpty) {
+                              return const Center(
+                                child: Icon(Icons.broken_image_outlined),
+                              );
+                            }
+                            return Image.memory(
+                              bytes,
+                              fit: BoxFit.contain,
+                              alignment: Alignment.center,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _selectedUrl == null
+              ? null
+              : () => Navigator.pop(context, _selectedUrl),
+          child: const Text('Use this image'),
+        ),
+      ],
+    );
   }
 }

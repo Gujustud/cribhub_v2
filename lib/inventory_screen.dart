@@ -34,6 +34,15 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // Active filter selections
+  String? _selectedBrandFilter;
+  String? _selectedSubcatFilter;
+  String? _selectedSubSubcatFilter;
+
+  // Available filter options (derived from loaded tools)
+  List<String> _availableBrands = [];
+  List<String> _availableSubcats = [];
+
   @override
   GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
 
@@ -53,13 +62,13 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
     super.dispose();
   }
 
-  void _onSearchChanged() {
-    final query = _searchController.text.toLowerCase().trim();
+  void _onSearchChanged() => _applyFilters();
+
+  void _applyFilters() {
     final rawInput = _searchController.text.toLowerCase();
     final rawTokens = rawInput.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
 
     // Special-case: treat "bin <number>" as a phrase match against location paths.
-    // This prevents "bin 1" from matching "row 1 / bin 2" just because it contains "1".
     final requiredBinNumbers = <String>[];
     final exactBinNumbers = <String>{};
     final tokens = <String>[];
@@ -69,31 +78,48 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
         final next = rawTokens[i + 1];
         if (RegExp(r'^\d+$').hasMatch(next)) {
           requiredBinNumbers.add(next);
-          // If the user types a space after the number (e.g. "bin 1 "),
-          // treat it as an exact bin match; otherwise allow prefix (bin 1 matches bin 16).
           final isLastPair = i + 1 == rawTokens.length - 1;
           if (isLastPair && rawInput.endsWith(' ')) {
             exactBinNumbers.add(next);
           }
-          i++; // skip number token
+          i++;
           continue;
         }
       }
       tokens.add(t);
     }
+
     setState(() {
-      if (rawInput.trim().isEmpty) {
-        _filteredTools = _toolsWithLocations;
-      } else {
-        _filteredTools = _toolsWithLocations.where((toolWithLoc) {
-          final tool = toolWithLoc.tool;
+      _filteredTools = _toolsWithLocations.where((toolWithLoc) {
+        final tool = toolWithLoc.tool;
+
+        // Brand filter
+        if (_selectedBrandFilter != null) {
+          final toolBrand = (tool.brand ?? '').trim().toLowerCase();
+          if (toolBrand != _selectedBrandFilter!.toLowerCase()) return false;
+        }
+
+        // Subcategory filter (match on first segment, e.g. "End Mills")
+        if (_selectedSubcatFilter != null) {
+          final toolSubcat = (tool.subcategory ?? '').trim().toLowerCase();
+          if (!toolSubcat.startsWith(_selectedSubcatFilter!.toLowerCase())) return false;
+        }
+
+        // Sub-subcategory filter (match on second segment, e.g. "Ball")
+        if (_selectedSubSubcatFilter != null) {
+          final parts = (tool.subcategory ?? '').split(' > ');
+          final second = parts.length > 1 ? parts[1].trim().toLowerCase() : '';
+          if (second != _selectedSubSubcatFilter!.toLowerCase()) return false;
+        }
+
+        // Text search
+        if (rawInput.trim().isNotEmpty) {
           final locationText = toolWithLoc.locations
               .map((tl) => _buildLocationPathFromToolLocation(tl))
               .where((s) => s.isNotEmpty)
               .join(' | ')
               .toLowerCase();
 
-          // Require all requested bin phrases to match location paths.
           final binsOk = requiredBinNumbers.every((n) {
             final re = exactBinNumbers.contains(n)
                 ? RegExp(r'\bbin\s*' + RegExp.escape(n) + r'\b')
@@ -108,14 +134,14 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
             tool.modelNumber ?? '',
             tool.category,
             tool.subcategory ?? '',
-            // Location path(s): allows searching for "bin 5", "toolbox a", etc.
             locationText,
           ].join(' ').toLowerCase();
 
-          // Token-based matching so multi-word queries like "toolbox a bin 5" work well.
-          return tokens.every(fields.contains);
-        }).toList();
-      }
+          if (!tokens.every(fields.contains)) return false;
+        }
+
+        return true;
+      }).toList();
     });
   }
 
@@ -305,14 +331,32 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
         return a.tool.toolName.compareTo(b.tool.toolName);
       });
 
+      // Build available filter options from the loaded tools
+      final brands = toolsWithLocs
+          .map((t) => t.tool.brand ?? '')
+          .where((b) => b.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+
+      // Use only the first segment of subcategory (e.g. "End Mills" from "End Mills > Ball")
+      final subcats = toolsWithLocs
+          .map((t) => (t.tool.subcategory ?? '').split(' > ').first.trim())
+          .where((s) => s.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+
       setState(() {
         _toolsWithLocations = toolsWithLocs;
         _filteredTools = toolsWithLocs;
         _showToolDetails = showDetails;
+        _availableBrands = brands;
+        _availableSubcats = subcats;
         _isLoading = false;
       });
-      // Re-apply search filter when opening with initialSearchQuery (e.g. from main page)
-      _onSearchChanged();
+      // Re-apply search/filter when opening with initialSearchQuery (e.g. from main page)
+      _applyFilters();
     } catch (e, stackTrace) {
       setState(() {
         _errorMessage = e.toString();
@@ -498,6 +542,125 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
             ),
           ),
         ),
+
+        // Filter dropdowns (brand + subcategory)
+        if (!_isLoading && (_availableBrands.isNotEmpty || _availableSubcats.isNotEmpty))
+          Container(
+            color: Theme.of(context).cardColor,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                // Brand dropdown
+                if (_availableBrands.isNotEmpty) ...[
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedBrandFilter,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        isDense: true,
+                      ),
+                      items: [
+                        const DropdownMenuItem<String>(value: null, child: Text('All brands')),
+                        ..._availableBrands.map((b) => DropdownMenuItem<String>(value: b, child: Text(b))),
+                      ],
+                      onChanged: (v) {
+                        setState(() => _selectedBrandFilter = v);
+                        _applyFilters();
+                      },
+                    ),
+                  ),
+                ],
+                if (_availableBrands.isNotEmpty && _availableSubcats.isNotEmpty)
+                  const SizedBox(width: 12),
+                // Subcategory dropdown
+                if (_availableSubcats.isNotEmpty) ...[
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedSubcatFilter,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        isDense: true,
+                      ),
+                      items: [
+                        const DropdownMenuItem<String>(value: null, child: Text('All types')),
+                        ..._availableSubcats.map((s) => DropdownMenuItem<String>(value: s, child: Text(s))),
+                      ],
+                      onChanged: (v) {
+                        setState(() {
+                          _selectedSubcatFilter = v;
+                          _selectedSubSubcatFilter = null; // reset sub-sub when type changes
+                        });
+                        _applyFilters();
+                      },
+                    ),
+                  ),
+                ],
+                // Sub-subcategory dropdown (only shown when a type is selected and has sub-options)
+                if (_selectedSubcatFilter != null) ...[
+                  Builder(builder: (context) {
+                    final subSubOptions = _toolsWithLocations
+                        .where((t) {
+                          final parts = (t.tool.subcategory ?? '').split(' > ');
+                          return parts.isNotEmpty &&
+                              parts[0].trim().toLowerCase() == _selectedSubcatFilter!.toLowerCase() &&
+                              parts.length > 1 &&
+                              parts[1].trim().isNotEmpty;
+                        })
+                        .map((t) => (t.tool.subcategory ?? '').split(' > ')[1].trim())
+                        .toSet()
+                        .toList()
+                      ..sort();
+
+                    if (subSubOptions.isEmpty) return const SizedBox.shrink();
+
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 160,
+                          child: DropdownButtonFormField<String>(
+                            value: _selectedSubSubcatFilter,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              isDense: true,
+                            ),
+                            items: [
+                              const DropdownMenuItem<String>(value: null, child: Text('All styles')),
+                              ...subSubOptions.map((s) => DropdownMenuItem<String>(value: s, child: Text(s))),
+                            ],
+                            onChanged: (v) {
+                              setState(() => _selectedSubSubcatFilter = v);
+                              _applyFilters();
+                            },
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                ],
+                // Clear button (only when a filter is active)
+                if (_selectedBrandFilter != null || _selectedSubcatFilter != null || _selectedSubSubcatFilter != null) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Clear filters',
+                    onPressed: () {
+                      setState(() {
+                        _selectedBrandFilter = null;
+                        _selectedSubcatFilter = null;
+                        _selectedSubSubcatFilter = null;
+                      });
+                      _applyFilters();
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
 
         // Tool list (takes remaining space)
         Expanded(
