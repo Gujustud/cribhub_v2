@@ -33,6 +33,8 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
   Timer? _searchDebounce;
   static const int _maxSuggestions = 5;
   static const int _minSearchLength = 2;
+  final GlobalKey<MultiStepLocationPickerState> _locationPickerKey =
+      GlobalKey<MultiStepLocationPickerState>();
 
   void _submit() {
     if (_selectedLocationId == null) return;
@@ -327,11 +329,22 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
               const SizedBox(height: 16),
             ],
 
-            if (!hasExistingLocations && !hasHistoricalLocations)
-              const Text(
-                'Select Location:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
+            Row(
+              children: [
+                const Text(
+                  'Select Location:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () {
+                    _locationPickerKey.currentState?.openCreateNew();
+                  },
+                  icon: const Icon(Icons.add_circle_outline, size: 18),
+                  label: const Text('Create New'),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             Container(
               constraints: const BoxConstraints(maxHeight: 400),
@@ -339,18 +352,17 @@ class _AddInventoryDialogState extends State<AddInventoryDialog> {
                 border: Border.all(color: Colors.grey[300]!),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: SingleChildScrollView(
-                child: MultiStepLocationPicker(
-                  allLocations: _currentLocations,
-                  onLocationSelected: (locationId) {
-                    final path = _buildLocationPath(locationId);
-                    setState(() {
-                      _selectedLocationId = locationId;
-                      _selectedLocationPath = path;
-                    });
-                  },
-                  onRefreshLocations: _refreshLocations,
-                ),
+              child: MultiStepLocationPicker(
+                key: _locationPickerKey,
+                allLocations: _currentLocations,
+                onLocationSelected: (locationId) {
+                  final path = _buildLocationPath(locationId);
+                  setState(() {
+                    _selectedLocationId = locationId;
+                    _selectedLocationPath = path;
+                  });
+                },
+                onRefreshLocations: _refreshLocations,
               ),
             ),
               ],

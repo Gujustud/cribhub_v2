@@ -16,10 +16,10 @@ class MultiStepLocationPicker extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<MultiStepLocationPicker> createState() => _MultiStepLocationPickerState();
+  State<MultiStepLocationPicker> createState() => MultiStepLocationPickerState();
 }
 
-class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
+class MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
   final _pbService = PocketBaseService();
   
   String? _selectedType;
@@ -28,6 +28,7 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
   List<dynamic> _locationHierarchy = []; // Current locations to choose from
   bool _creatingNew = false;
   final _newNameController = TextEditingController();
+  static final RegExp _trailingNumberRegex = RegExp(r'^(.*?)(\d+)\s*$');
   // When at a leaf location, cache which tools are there (for inline warning)
   String? _toolsAtLocationId;
   List<String> _toolsAtLocationNames = [];
@@ -282,10 +283,82 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
       );
     }
   }
+
+  List<String> _buildSuggestedLocationNames() {
+    if (_selectedType == null) return const [];
+
+    final siblings = widget.allLocations.where((loc) {
+      if (loc.data['type'] != _selectedType) return false;
+      final parent = loc.data['parent']?.toString() ?? '';
+      final selectedParent = _selectedParentId ?? '';
+      return parent == selectedParent;
+    }).toList();
+
+    if (siblings.isEmpty) return const [];
+
+    final parsed = <({String prefix, int number, String originalName})>[];
+    for (final loc in siblings) {
+      final name = (loc.data['name']?.toString() ?? '').trim();
+      if (name.isEmpty) continue;
+      final match = _trailingNumberRegex.firstMatch(name);
+      if (match == null) continue;
+      final prefix = (match.group(1) ?? '').trimRight();
+      final number = int.tryParse(match.group(2) ?? '');
+      if (number == null) continue;
+      parsed.add((prefix: prefix, number: number, originalName: name));
+    }
+
+    if (parsed.isEmpty) return const [];
+
+    final seenNamesLower = siblings
+        .map((loc) => (loc.data['name']?.toString() ?? '').trim().toLowerCase())
+        .where((name) => name.isNotEmpty)
+        .toSet();
+
+    final suggestions = <({String name, int number})>[];
+    final added = <String>{};
+
+    String composeName(String prefix, int nextNumber) {
+      if (prefix.isEmpty) return '$nextNumber';
+      return '$prefix $nextNumber';
+    }
+
+    for (final item in parsed) {
+      final candidate = composeName(item.prefix, item.number + 1).trim();
+      final candidateLower = candidate.toLowerCase();
+      if (candidate.isEmpty) continue;
+      if (seenNamesLower.contains(candidateLower)) continue;
+      if (added.add(candidateLower)) {
+        suggestions.add((name: candidate, number: item.number + 1));
+      }
+    }
+
+    // Prefer lowest-number next bins first (e.g. Bin 2 before Bin 26).
+    suggestions.sort((a, b) {
+      if (a.number != b.number) return a.number.compareTo(b.number);
+      return a.name.compareTo(b.name);
+    });
+
+    return suggestions.take(4).map((s) => s.name).toList();
+  }
   
   Future<void> _reloadLocations() async {
     // This would need to be passed from parent to refresh the locations list
     // For now, just close the dialog
+  }
+
+  /// Opens the inline "Create New Location" form for the current level.
+  /// If no type has been selected yet, asks user to select one first.
+  void openCreateNew() {
+    if (_selectedType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a location type first')),
+      );
+      return;
+    }
+    setState(() {
+      _creatingNew = true;
+    });
   }
   
   @override
@@ -321,7 +394,7 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
               const Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Text(
-                  'No sub-locations yet. Create one below or select this location.',
+                  'No sub-locations yet. Create one from the top-right button or select this location.',
                   style: TextStyle(color: Colors.grey),
                 ),
               ),
@@ -375,45 +448,42 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
                 ),
             ],
           )
-        else if (!_creatingNew)
-          ...(_locationHierarchy.map((item) {
-            if (item is Map && item['isType'] == true) {
-              // This is a type selection
-              return ListTile(
-                leading: Icon(_getIconForType(item['type'])),
-                title: Text(item['type'].toString().toUpperCase()),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _selectType(item['type']),
+        else if (!_creatingNew) ...[
+          Builder(
+            builder: (context) {
+              const tileHeight = 56.0;
+              final visibleRows = _locationHierarchy.length.clamp(1, 5);
+              final listHeight = visibleRows * tileHeight;
+              return SizedBox(
+                height: listHeight,
+                child: ListView.builder(
+                  itemExtent: tileHeight,
+                  itemCount: _locationHierarchy.length,
+                  itemBuilder: (context, index) {
+                    final item = _locationHierarchy[index];
+                    if (item is Map && item['isType'] == true) {
+                      return ListTile(
+                        leading: Icon(_getIconForType(item['type'])),
+                        title: Text(item['type'].toString().toUpperCase()),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _selectType(item['type']),
+                      );
+                    }
+                    return ListTile(
+                      title: Text(item.data['name']),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _selectLocation(item), // Always drill into location
+                    );
+                  },
+                ),
               );
-            } else {
-              // This is a location
-              final hasChildren = widget.allLocations
-                  .any((loc) => loc.data['parent'] == item.id);
-              
-              return ListTile(
-                title: Text(item.data['name']),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _selectLocation(item), // Always drill into location
-              );
-            }
-          }).toList()),
-        
-        const Divider(),
-        
-        // Create new option
-        if (_selectedType != null) ...[
-          if (!_creatingNew)
-            ListTile(
-              leading: const Icon(Icons.add_circle, color: Colors.blue),
-              title: const Text('Create New Location'),
-              onTap: () {
-                setState(() {
-                  _creatingNew = true;
-                });
-              },
-            )
-          else ...[
-            Padding(
+            },
+          ),
+        ],
+
+        if (_creatingNew && _selectedType != null) ...[
+          const Divider(),
+          Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -426,6 +496,45 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
                       hintText: 'e.g., Bin 5, Drawer A, Row 3',
                     ),
                     autofocus: true,
+                  ),
+                  const SizedBox(height: 10),
+                  Builder(
+                    builder: (context) {
+                      final suggestions = _buildSuggestedLocationNames();
+                      if (suggestions.isEmpty) return const SizedBox.shrink();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Suggested next locations:',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: suggestions.map((name) {
+                              return ActionChip(
+                                avatar: const Icon(Icons.auto_fix_high, size: 16),
+                                label: Text(name),
+                                onPressed: () {
+                                  setState(() {
+                                    _newNameController.text = name;
+                                    _newNameController.selection = TextSelection.fromPosition(
+                                      TextPosition(offset: name.length),
+                                    );
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -450,7 +559,6 @@ class _MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
                 ],
               ),
             ),
-          ],
         ],
       ],
     );

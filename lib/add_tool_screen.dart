@@ -458,6 +458,23 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
 
   Future<void> _showToolUsageHistoryDialog() async {
     if (!_isEditMode) return;
+    final materials = _toolUsageRecords
+        .map((r) {
+          dynamic data;
+          try {
+            data = r.data;
+          } catch (_) {
+            data = (r is Map) ? r : null;
+          }
+          return (data?['material'] ?? '').toString().trim();
+        })
+        .where((m) => m.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    const allMaterialsValue = '__all_materials__';
+    String selectedMaterial = allMaterialsValue;
+
     await showDialog<void>(
       context: context,
       builder: (context) {
@@ -465,40 +482,128 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
           title: const Text('Tool usage history'),
           content: SizedBox(
             width: 600,
-            child: _toolUsageRecords.isEmpty
-                ? const Text('No usage logged yet.')
-                : ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: _toolUsageRecords.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final r = _toolUsageRecords[index];
+            child: StatefulBuilder(
+              builder: (context, setDialogState) {
+                final filteredUsage = _toolUsageRecords.where((r) {
+                  if (selectedMaterial == allMaterialsValue) return true;
+                  dynamic data;
+                  try {
+                    data = r.data;
+                  } catch (_) {
+                    data = (r is Map) ? r : null;
+                  }
+                  final material = (data?['material'] ?? '').toString().trim();
+                  return material == selectedMaterial;
+                }).toList();
+                final validMinutes = filteredUsage
+                    .map((r) {
                       dynamic data;
                       try {
                         data = r.data;
                       } catch (_) {
                         data = (r is Map) ? r : null;
                       }
-                      final mins = (data?['minutes_used'] as num?)?.toInt();
-                      final outcome = (data?['outcome'] ?? '').toString();
-                      final material = (data?['material'] ?? '').toString();
-                      final usedAtRaw = data?['used_at'];
-                      String usedAtStr = '';
-                      try {
-                        if (usedAtRaw != null && usedAtRaw.toString().isNotEmpty) {
-                          usedAtStr = DateFormat.yMMMd().add_jm().format(DateTime.parse(usedAtRaw.toString()));
-                        }
-                      } catch (_) {}
+                      return (data?['minutes_used'] as num?)?.toDouble();
+                    })
+                    .whereType<double>()
+                    .where((m) => m > 0)
+                    .toList();
+                final avgMinutes = validMinutes.isEmpty
+                    ? null
+                    : (validMinutes.reduce((a, b) => a + b) / validMinutes.length);
+                final avgHours = avgMinutes == null ? null : (avgMinutes / 60.0);
 
-                      final notes = (data?['notes'] ?? '').toString();
-                      return ListTile(
-                        title: Text('${mins ?? '—'} mins • $material • ${outcome.isEmpty ? '—' : outcome}'),
-                        subtitle: (usedAtStr.isNotEmpty || notes.isNotEmpty)
-                            ? Text([usedAtStr, if (notes.isNotEmpty) notes].where((s) => s.isNotEmpty).join(' • '))
-                            : null,
-                      );
-                    },
-                  ),
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (materials.isNotEmpty) ...[
+                      DropdownButtonFormField<String>(
+                        value: selectedMaterial,
+                        decoration: const InputDecoration(
+                          labelText: 'Filter by material',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: allMaterialsValue,
+                            child: Text('All materials'),
+                          ),
+                          ...materials.map(
+                            (m) => DropdownMenuItem<String>(
+                              value: m,
+                              child: Text(m),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setDialogState(() {
+                            selectedMaterial = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (filteredUsage.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          avgHours == null
+                              ? 'Average tool life: —'
+                              : 'Average tool life: ${avgHours.toStringAsFixed(2)} hr (${avgMinutes!.toStringAsFixed(1)} min)',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_toolUsageRecords.isEmpty)
+                      const Text('No usage logged yet.')
+                    else if (filteredUsage.isEmpty)
+                      const Text('No usage records match this material filter.')
+                    else
+                      Flexible(
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: filteredUsage.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final r = filteredUsage[index];
+                            dynamic data;
+                            try {
+                              data = r.data;
+                            } catch (_) {
+                              data = (r is Map) ? r : null;
+                            }
+                            final mins = (data?['minutes_used'] as num?)?.toInt();
+                            final outcome = (data?['outcome'] ?? '').toString();
+                            final material = (data?['material'] ?? '').toString();
+                            final usedAtRaw = data?['used_at'];
+                            String usedAtStr = '';
+                            try {
+                              if (usedAtRaw != null && usedAtRaw.toString().isNotEmpty) {
+                                usedAtStr = DateFormat.yMMMd().add_jm().format(DateTime.parse(usedAtRaw.toString()));
+                              }
+                            } catch (_) {}
+
+                            final notes = (data?['notes'] ?? '').toString();
+                            return ListTile(
+                              title: Text('${mins ?? '—'} mins • $material • ${outcome.isEmpty ? '—' : outcome}'),
+                              subtitle: (usedAtStr.isNotEmpty || notes.isNotEmpty)
+                                  ? Text([usedAtStr, if (notes.isNotEmpty) notes].where((s) => s.isNotEmpty).join(' • '))
+                                  : null,
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
           ),
           actions: [
             TextButton(
@@ -4193,76 +4298,6 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
         else
           ..._buildHistoryItems(_recentHistory),
       ],
-      if (_isEditMode) ...[
-        const SizedBox(height: 32),
-        const Divider(),
-        const SizedBox(height: 16),
-        const Text(
-          'Price over time',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        if (_loadingPurchaseHistory)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: CircularProgressIndicator(),
-            ),
-          )
-        else if (_purchaseHistoryRecords.isEmpty)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                'No purchase history',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            ),
-          )
-        else
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              headingRowColor: WidgetStateProperty.all(Theme.of(context).colorScheme.surfaceContainerHighest),
-              columns: const [
-                DataColumn(label: Text('Date')),
-                DataColumn(label: Text('Supplier')),
-                DataColumn(label: Text('Unit cost'), numeric: true),
-                DataColumn(label: Text('Qty'), numeric: true),
-              ],
-              rows: _purchaseHistoryRecords.map((r) {
-                String dateStr = '';
-                String supplierName = '';
-                try {
-                  final purchase = r.expand?['purchase'];
-                  if (purchase != null) {
-                    final p = purchase is List ? purchase.isNotEmpty ? purchase[0] : null : purchase;
-                    if (p != null) {
-                      final d = p.data?['purchase_date'];
-                      if (d != null) dateStr = DateFormat.yMMMd().format(DateTime.parse(d.toString()));
-                      final sup = p.expand?['supplier'];
-                      if (sup != null) {
-                        final s = sup is List ? sup.isNotEmpty ? sup[0] : null : sup;
-                        if (s != null) supplierName = s.data?['company_name'] ?? '';
-                      }
-                    }
-                  }
-                } catch (_) {}
-                final data = r.data;
-                final unitCost = data['unit_cost']?.toDouble();
-                final qty = (data['quantity'] ?? 0).toInt();
-                return DataRow(
-                  cells: [
-                    DataCell(Text(dateStr)),
-                    DataCell(Text(supplierName)),
-                    DataCell(Text(unitCost != null ? '\$${unitCost.toStringAsFixed(2)}' : '—')),
-                    DataCell(Text('$qty')),
-                  ],
-                );
-              }).toList(),
-            ),
-          ),
-      ],
       if (_category.toLowerCase() == 'cutting tools') ...[
         const SizedBox(height: 32),
         const Divider(),
@@ -4366,6 +4401,76 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
             );
           },
         ),
+      ],
+      if (_isEditMode) ...[
+        const SizedBox(height: 32),
+        const Divider(),
+        const SizedBox(height: 16),
+        const Text(
+          'Price History',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        if (_loadingPurchaseHistory)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (_purchaseHistoryRecords.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                'No purchase history',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ),
+          )
+        else
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor: WidgetStateProperty.all(Theme.of(context).colorScheme.surfaceContainerHighest),
+              columns: const [
+                DataColumn(label: Text('Date')),
+                DataColumn(label: Text('Supplier')),
+                DataColumn(label: Text('Unit cost'), numeric: true),
+                DataColumn(label: Text('Qty'), numeric: true),
+              ],
+              rows: _purchaseHistoryRecords.map((r) {
+                String dateStr = '';
+                String supplierName = '';
+                try {
+                  final purchase = r.expand?['purchase'];
+                  if (purchase != null) {
+                    final p = purchase is List ? purchase.isNotEmpty ? purchase[0] : null : purchase;
+                    if (p != null) {
+                      final d = p.data?['purchase_date'];
+                      if (d != null) dateStr = DateFormat.yMMMd().format(DateTime.parse(d.toString()));
+                      final sup = p.expand?['supplier'];
+                      if (sup != null) {
+                        final s = sup is List ? sup.isNotEmpty ? sup[0] : null : sup;
+                        if (s != null) supplierName = s.data?['company_name'] ?? '';
+                      }
+                    }
+                  }
+                } catch (_) {}
+                final data = r.data;
+                final unitCost = data['unit_cost']?.toDouble();
+                final qty = (data['quantity'] ?? 0).toInt();
+                return DataRow(
+                  cells: [
+                    DataCell(Text(dateStr)),
+                    DataCell(Text(supplierName)),
+                    DataCell(Text(unitCost != null ? '\$${unitCost.toStringAsFixed(2)}' : '—')),
+                    DataCell(Text('$qty')),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
       ],
     ];
   }
