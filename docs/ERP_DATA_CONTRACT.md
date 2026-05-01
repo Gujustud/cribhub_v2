@@ -1,0 +1,31 @@
+# Shop ERP data contract (CribHub + DharmaCore direction)
+
+This document freezes **ownership** and **naming** so Flutter and PocketBase stay aligned while ERP features grow.
+
+## Source of truth (by domain)
+
+| Domain | Owner (PocketBase) | Notes |
+|--------|--------------------|--------|
+| Tool catalog, stock by location, transfers, movement history | Existing CribHub collections (`inventory`, `locations`, `tool_locations`, `movement_history`, …) | Do not rename without a migration plan. |
+| Purchase orders / buy list | Existing CribHub (`purchases`, `purchase_items`, …) | Keep separate from customer quotes. |
+| Brands, suppliers (vendors for tooling) | Existing `brands`, `suppliers` | “Vendor” for **materials/tooling** lives here unless we later split a dedicated `vendors` collection. |
+| **Customers** (people/companies you quote) | **New** `customers` collection (Week 1) | Not the same as `suppliers` unless you explicitly merge workflows. |
+| **Quotes** and **quote line items** | **New** `quotes`, `quote_items` (Week 2) | Links to `customers`; totals snapshotted on the quote where possible. |
+| **Jobs** (shop work from won quotes) | **New** `jobs` (Week 2+) | Optional relation `quote` → `quotes`; optional link fields to CribHub `inventory` later for tooling kits. |
+
+## Cross-app references
+
+- Store **PocketBase record ids** (`id` strings) on relations; avoid duplicating whole objects on quotes/jobs.
+- DharmaCore (React) remains read-only reference until Flutter parity; **ids** in new collections should be native to this PocketBase instance (no assumed overlap with another DB).
+
+## Quote / job status enums (draft)
+
+- Quotes: `draft` | `sent` | `won` | `lost`
+- Jobs: `planning` | `in_progress` | `done` | `cancelled`
+
+Adjust in one place (contract + PB select fields + Flutter) when you lock real shop wording.
+
+## Dev vs prod
+
+- **`erp-dev`** uses a **copy** of data and its own URL/port; schema experiments happen there first.
+- Production changes only after migrations are in `pb_migrations/` and tested on dev.

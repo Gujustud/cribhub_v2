@@ -10,6 +10,7 @@ import 'settings_screen.dart';
 import 'about_screen.dart';
 import 'main.dart';
 import 'drawer_data_cache.dart';
+import 'erp_home_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   /// If true, this widget is used in `Scaffold.drawer` and will
@@ -104,6 +105,30 @@ class AppDrawer extends StatelessWidget {
                     );
                   },
                 )),
+        const Divider(),
+        const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Text(
+            'Shop ERP',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.business_center),
+          title: const Text('ERP overview'),
+          onTap: () {
+            maybeCloseDrawer(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (context) => const ErpHomeScreen(),
+              ),
+            );
+          },
+        ),
         const Divider(),
         const Padding(
           padding: EdgeInsets.all(16.0),
