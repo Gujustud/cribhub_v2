@@ -284,9 +284,58 @@ class MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
     }
   }
 
+  /// Walks up from [_selectedParentId] to the root location under this type
+  /// (e.g. "Toolbox A": parent is null). Used so bin suggestions consider the
+  /// whole toolbox branch, not only the current row.
+  String? _branchRootLocationId() {
+    if (_selectedType == null) return null;
+    final start = _selectedParentId;
+    if (start == null || start.isEmpty) return null;
+
+    String? id = start;
+    while (id != null && id.isNotEmpty) {
+      try {
+        final loc = widget.allLocations.firstWhere((l) => l.id == id);
+        if (loc.data['type'] != _selectedType) return null;
+        final parent = loc.data['parent']?.toString() ?? '';
+        if (parent.isEmpty) return id;
+        id = parent;
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /// All location ids in the subtree rooted at [rootId] (including root).
+  Set<String> _descendantIdsIncluding(String rootId) {
+    final ids = <String>{rootId};
+    var frontier = <String>[rootId];
+    while (frontier.isNotEmpty) {
+      final next = <String>[];
+      for (final pid in frontier) {
+        for (final loc in widget.allLocations) {
+          final p = loc.data['parent']?.toString() ?? '';
+          if (p == pid) {
+            final cid = loc.id.toString();
+            if (ids.add(cid)) next.add(cid);
+          }
+        }
+      }
+      frontier = next;
+    }
+    return ids;
+  }
+
   List<String> _buildSuggestedLocationNames() {
     if (_selectedType == null) return const [];
 
+    String composeName(String prefix, int nextNumber) {
+      if (prefix.isEmpty) return '$nextNumber';
+      return '$prefix $nextNumber';
+    }
+
+    // Direct children of current parent (row): used for row-local gap suggestions.
     final siblings = widget.allLocations.where((loc) {
       if (loc.data['type'] != _selectedType) return false;
       final parent = loc.data['parent']?.toString() ?? '';
@@ -294,9 +343,74 @@ class MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
       return parent == selectedParent;
     }).toList();
 
-    if (siblings.isEmpty) return const [];
+    // Entire toolbox (or branch root) subtree: max bin numbers across rows/drawers.
+    final branchRootId = _branchRootLocationId();
+    final Set<String> scopeIds;
+    if (branchRootId != null) {
+      scopeIds = _descendantIdsIncluding(branchRootId);
+    } else {
+      scopeIds = siblings.map((l) => l.id.toString()).toSet();
+    }
 
-    final parsed = <({String prefix, int number, String originalName})>[];
+    final scopedLocations = widget.allLocations.where((loc) {
+      if (loc.data['type'] != _selectedType) return false;
+      return scopeIds.contains(loc.id.toString());
+    }).toList();
+
+    if (scopedLocations.isEmpty && siblings.isEmpty) return const [];
+
+    final seenNamesLower = scopedLocations
+        .map((loc) => (loc.data['name']?.toString() ?? '').trim().toLowerCase())
+        .where((name) => name.isNotEmpty)
+        .toSet();
+
+    // Per-prefix: all trailing numbers in toolbox (e.g. every "Bin N" under Toolbox A).
+    final numbersByPrefix = <String, Set<int>>{};
+    for (final loc in scopedLocations) {
+      final name = (loc.data['name']?.toString() ?? '').trim();
+      if (name.isEmpty) continue;
+      final match = _trailingNumberRegex.firstMatch(name);
+      if (match == null) continue;
+      final prefix = (match.group(1) ?? '').trimRight();
+      final number = int.tryParse(match.group(2) ?? '');
+      if (number == null) continue;
+      (numbersByPrefix[prefix] ??= {}).add(number);
+    }
+
+    final suggestions = <({String name, int number})>[];
+    final added = <String>{};
+
+    // If numbers jump (e.g. ...421 then 500...), suggest the first free number after the
+    // low block (422) AND after the high block (535). Small single-number gaps are ignored
+    // so we do not suggest dozens of fillers for random holes.
+    const minGapForBridgeSuggestion = 8;
+
+    void tryAddSuggestion(String prefix, int nextNumber) {
+      final candidate = composeName(prefix, nextNumber).trim();
+      final candidateLower = candidate.toLowerCase();
+      if (candidate.isEmpty) return;
+      if (seenNamesLower.contains(candidateLower)) return;
+      if (added.add(candidateLower)) {
+        suggestions.add((name: candidate, number: nextNumber));
+      }
+    }
+
+    for (final entry in numbersByPrefix.entries) {
+      final prefix = entry.key;
+      final nums = entry.value.toList()..sort();
+      if (nums.isEmpty) continue;
+
+      for (var i = 0; i < nums.length - 1; i++) {
+        final gap = nums[i + 1] - nums[i];
+        if (gap >= minGapForBridgeSuggestion) {
+          tryAddSuggestion(prefix, nums[i] + 1);
+        }
+      }
+      // Always offer next after the highest number for this prefix (e.g. Bin 535 after ...534).
+      tryAddSuggestion(prefix, nums.last + 1);
+    }
+
+    // Secondary: row-local n+1 gaps (only for siblings at current level; still unique in subtree).
     for (final loc in siblings) {
       final name = (loc.data['name']?.toString() ?? '').trim();
       if (name.isEmpty) continue;
@@ -305,35 +419,18 @@ class MultiStepLocationPickerState extends State<MultiStepLocationPicker> {
       final prefix = (match.group(1) ?? '').trimRight();
       final number = int.tryParse(match.group(2) ?? '');
       if (number == null) continue;
-      parsed.add((prefix: prefix, number: number, originalName: name));
-    }
-
-    if (parsed.isEmpty) return const [];
-
-    final seenNamesLower = siblings
-        .map((loc) => (loc.data['name']?.toString() ?? '').trim().toLowerCase())
-        .where((name) => name.isNotEmpty)
-        .toSet();
-
-    final suggestions = <({String name, int number})>[];
-    final added = <String>{};
-
-    String composeName(String prefix, int nextNumber) {
-      if (prefix.isEmpty) return '$nextNumber';
-      return '$prefix $nextNumber';
-    }
-
-    for (final item in parsed) {
-      final candidate = composeName(item.prefix, item.number + 1).trim();
+      final candidate = composeName(prefix, number + 1).trim();
       final candidateLower = candidate.toLowerCase();
       if (candidate.isEmpty) continue;
       if (seenNamesLower.contains(candidateLower)) continue;
       if (added.add(candidateLower)) {
-        suggestions.add((name: candidate, number: item.number + 1));
+        suggestions.add((name: candidate, number: number + 1));
       }
     }
 
-    // Prefer lowest-number next bins first (e.g. Bin 2 before Bin 26).
+    if (suggestions.isEmpty) return const [];
+
+    // Prefer lowest suggested number first (e.g. gap Bin 5 before Bin 139).
     suggestions.sort((a, b) {
       if (a.number != b.number) return a.number.compareTo(b.number);
       return a.name.compareTo(b.name);

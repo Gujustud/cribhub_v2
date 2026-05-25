@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'drawer_data_cache.dart';
+import 'ui_breakpoints.dart';
 
 /// Shared behavior for screens that use `AppDrawer`.
 /// When the "keep drawer open" setting is enabled and the screen is wide
@@ -16,7 +17,7 @@ mixin AutoOpenDrawerMixin<T extends StatefulWidget> on State<T> {
     if (!DrawerDataCache.keepDrawerOpen) return;
 
     final width = MediaQuery.of(context).size.width;
-    if (width < 900) return;
+    if (width < kWorkspaceWideBreakpointPx) return;
 
     _openedDrawerInitially = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {

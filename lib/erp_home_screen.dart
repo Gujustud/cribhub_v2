@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'customers_screen.dart';
+import 'jobs_screen.dart';
+import 'quotes_screen.dart';
 import 'suppliers_screen.dart';
 
 /// Entry point for shop ERP features (quotes, jobs, customers).
@@ -28,23 +31,47 @@ class ErpHomeScreen extends StatelessWidget {
                 ),
           ),
           const SizedBox(height: 24),
-          _placeholderTile(
-            context,
-            icon: Icons.people_outline,
-            title: 'Customers',
-            subtitle: 'Coming next — PocketBase `customers` collection.',
+          ListTile(
+            leading: const Icon(Icons.people_outline),
+            title: const Text('Customers'),
+            subtitle: const Text('People and companies you quote.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (context) => const CustomersScreen(),
+                ),
+              );
+            },
           ),
-          _placeholderTile(
-            context,
-            icon: Icons.request_quote_outlined,
-            title: 'Quotes',
-            subtitle: 'Week 2 — list, line items, totals.',
+          ListTile(
+            leading: const Icon(Icons.request_quote_outlined),
+            title: const Text('Quotes'),
+            subtitle: const Text('View quotes and line items.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (context) => const QuotesScreen(),
+                ),
+              );
+            },
           ),
-          _placeholderTile(
-            context,
-            icon: Icons.work_outline,
-            title: 'Jobs',
-            subtitle: 'After quotes — link won quotes to shop jobs.',
+          ListTile(
+            leading: const Icon(Icons.work_outline),
+            title: const Text('Jobs'),
+            subtitle: const Text('Shop work — add, edit, and link to quotes.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (context) => const JobsScreen(),
+                ),
+              );
+            },
           ),
           ListTile(
             leading: const Icon(Icons.store_outlined),

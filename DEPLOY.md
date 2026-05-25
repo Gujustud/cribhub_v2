@@ -50,6 +50,8 @@ Zip the **contents** of `build\web`, not the `web` folder itself:
 
 You should have `deploy\dist.zip`. Unzipped, it must give `index.html` at the top level, not `web/index.html`. If you see `web/index.html`, you zipped the folder; use `build\web\*` instead.
 
+**Automated laptop script:** `.\scripts\deployweb.bat` runs the build, creates `deploy\dist.zip`, **validates** the zip (size, required root files, `main.dart.js` sanity, rejects `web/index.html` layout mistakes), prints a **SHA256** you can compare after `curl`, then starts the HTTP server. It prefers **`tar`** for the zip step when available (often more reliable than `Compress-Archive` for large Flutter web output).
+
 **Step 3 – Serve the zip**
 
 On the laptop, serve the deploy folder so the server can download the zip:
@@ -58,6 +60,25 @@ On the laptop, serve the deploy folder so the server can download the zip:
     python -m http.server 8888
 
 Leave this running. Get your laptop’s LAN IP with `ipconfig` (e.g. 192.168.1.247). The server will use `http://<LAPTOP_IP>:8888/dist.zip`.
+
+---
+
+## Android APK (production)
+
+To avoid localhost config in tablet builds, always use the production APK script:
+
+    cd c:\cribhub
+    .\scripts\buildapk.bat
+
+This runs:
+
+    flutter build apk --release --dart-define=POCKETBASE_URL=https://cribhub.sscadcam.com/ --dart-define=MCP_URL=https://cribhub.sscadcam.com/mcp
+
+Output:
+
+    build\app\outputs\flutter-apk\app-release.apk
+
+Note: Release builds now have a startup guard. If an APK is built with localhost URLs, the app shows a configuration error screen with rebuild instructions instead of silently failing API calls.
 
 ---
 
@@ -139,6 +160,11 @@ The Add/Edit Tool screen saves a **Notes** field on the `inventory` collection. 
     Compress-Archive -Path build\web\* -DestinationPath deploy\dist.zip -Force
     cd deploy
     python -m http.server 8888
+
+**Android APK**
+
+    cd c:\cribhub
+    .\scripts\buildapk.bat
 
 **Server**
 

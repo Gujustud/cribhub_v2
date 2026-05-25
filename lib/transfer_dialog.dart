@@ -21,6 +21,12 @@ class TransferDialog extends StatefulWidget {
 }
 
 class _TransferDialogState extends State<TransferDialog> {
+  /// Exact [Location.name] values for machine shortcuts (one icon each). Edit to match PocketBase.
+  static const List<String> _machineShortcutNames = ['DMU65'];
+
+  /// Exact [Location.name] for the recycle / trash destination shortcut.
+  static const String _trashShortcutName = 'Trash';
+
   int _quantity = 1;
   String? _selectedDestination;
   bool _isSubmitting = false;
@@ -63,6 +69,46 @@ class _TransferDialogState extends State<TransferDialog> {
     return widget.allLocations
         .where((loc) => loc.id != widget.sourceLocation.locationId)
         .toList();
+  }
+
+  /// First destination whose leaf [Location.name] equals [exactName], or null.
+  Location? _locationForExactName(String exactName) {
+    if (exactName.isEmpty) return null;
+    try {
+      return _destinationLocations.firstWhere((l) => l.name == exactName);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _greyDestinationShortcut({
+    required String label,
+    required IconData icon,
+    required Location? location,
+  }) {
+    final loc = location;
+    final enabled = !_isSubmitting && loc != null;
+    final tooltip = loc != null
+        ? label
+        : 'No destination named "$label" (or same as source)';
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: IconButton(
+        tooltip: tooltip,
+        icon: Icon(icon, size: 22),
+        onPressed: enabled ? () => _selectDestination(loc) : null,
+        style: IconButton.styleFrom(
+          foregroundColor: enabled ? Colors.grey[700] : Colors.grey[400],
+          backgroundColor: Colors.grey[200],
+          disabledForegroundColor: Colors.grey[400],
+          disabledBackgroundColor: Colors.grey[100],
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
+    );
   }
 
   void _onSearchChanged() {
@@ -453,7 +499,27 @@ class _TransferDialogState extends State<TransferDialog> {
               tooltip: 'Remove from location',
               onPressed: _isSubmitting ? null : _handleDelete,
             ),
-            const Spacer(),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    for (final name in _machineShortcutNames)
+                      _greyDestinationShortcut(
+                        label: name,
+                        icon: Icons.precision_manufacturing,
+                        location: _locationForExactName(name),
+                      ),
+                    _greyDestinationShortcut(
+                      label: _trashShortcutName,
+                      icon: Icons.recycling,
+                      location: _locationForExactName(_trashShortcutName),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             TextButton(
               onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(false),
               child: const Text(

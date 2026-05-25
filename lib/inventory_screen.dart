@@ -1037,18 +1037,14 @@ class LocationTag extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           border: Border.all(color: borderColor, width: 1.5),
         ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: 280),
-          child: Text(
-            'Qty: $quantity • $locationPath',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: textColor,
-            ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
+        child: Text(
+          'Qty: $quantity • $locationPath',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: textColor,
           ),
+          overflow: TextOverflow.visible,
         ),
       ),
     );

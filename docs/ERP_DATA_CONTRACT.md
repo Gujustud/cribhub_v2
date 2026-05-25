@@ -10,7 +10,7 @@ This document freezes **ownership** and **naming** so Flutter and PocketBase sta
 | Purchase orders / buy list | Existing CribHub (`purchases`, `purchase_items`, …) | Keep separate from customer quotes. |
 | Brands, suppliers (vendors for tooling) | Existing `brands`, `suppliers` | “Vendor” for **materials/tooling** lives here unless we later split a dedicated `vendors` collection. |
 | **Customers** (people/companies you quote) | **New** `customers` collection (Week 1) | Not the same as `suppliers` unless you explicitly merge workflows. |
-| **Quotes** and **quote line items** | **New** `quotes`, `quote_items` (Week 2) | Links to `customers`; totals snapshotted on the quote where possible. |
+| **Quotes** and **quote line items** | **New** `quotes`, `quote_line_items` (Week 2) | Links to `customers`; totals snapshotted on the quote where possible. Line-item relations `material_vendor`, `subcontractor_1`, `subcontractor_2` use **CribHub `suppliers`** (DharmaCore used `vendors`). |
 | **Jobs** (shop work from won quotes) | **New** `jobs` (Week 2+) | Optional relation `quote` → `quotes`; optional link fields to CribHub `inventory` later for tooling kits. |
 
 ## Cross-app references

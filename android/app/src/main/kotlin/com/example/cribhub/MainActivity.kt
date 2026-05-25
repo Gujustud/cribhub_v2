@@ -143,8 +143,6 @@ class MainActivity : FlutterActivity() {
                 isAutoCut = true
                 // Match 18mm TZe tape (PT-P710BT) to avoid ERROR_WRONG_LABEL
                 labelNameIndex = LabelInfo.PT.W18.ordinal
-                // Rotate 90° so label runs lengthwise along the tape (not vertically)
-                rotation = PrinterInfo.Rotation.Rotate90
                 printQuality = PrinterInfo.PrintQuality.HIGH_RESOLUTION
             }
 

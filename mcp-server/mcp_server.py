@@ -10,8 +10,10 @@ from pydantic import BaseModel
 import httpx
 import json
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import re
+import base64
+from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
 app = FastAPI(title="CribHub Tool Import MCP Server")
@@ -39,6 +41,34 @@ class ToolSpecsResponse(BaseModel):
     error: Optional[str] = None
     source_url: Optional[str] = None
 
+class PageUrlRequest(BaseModel):
+    url: str
+
+class PageImagesListResponse(BaseModel):
+    success: bool
+    images: Optional[List[str]] = None
+    error: Optional[str] = None
+    source_url: Optional[str] = None
+
+class ImageUrlRequest(BaseModel):
+    url: str
+
+class ImageBytesResponse(BaseModel):
+    success: bool
+    content_base64: Optional[str] = None
+    content_type: Optional[str] = None
+    error: Optional[str] = None
+
+MAX_FETCH_IMAGE_BYTES = 15 * 1024 * 1024
+
+BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+}
+
 async def fetch_webpage(url: str) -> str:
     """Fetch webpage content"""
     try:
@@ -49,22 +79,200 @@ async def fetch_webpage(url: str) -> str:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch webpage: {str(e)}")
 
+async def fetch_webpage_browser_like(url: str) -> str:
+    """Fetch HTML with a browser User-Agent (better for vendor product pages)."""
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+            response = await client.get(url, headers=BROWSER_HEADERS)
+            response.raise_for_status()
+            return response.text
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch page ({e.response.status_code}): {url}",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch webpage: {str(e)}")
+
+def extract_deboer_model_from_url(url: str) -> Optional[str]:
+    """Extract model number from DeBoer product URLs."""
+    match = re.search(r"/products/([^/?#]+)", url)
+    return match.group(1) if match else None
+
+def _looks_like_image_url(value: str) -> bool:
+    low = value.lower()
+    image_exts = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".svg")
+    if any(low.endswith(ext) for ext in image_exts):
+        return True
+    return "/image" in low or "/images/" in low or "thumbnail" in low
+
+def _collect_image_urls_from_data(
+    node: Any,
+    base_url: str,
+    out: List[str],
+    seen: set,
+    max_images: int = 50,
+) -> None:
+    """Recursively collect likely image URLs from unknown JSON structures."""
+    if len(out) >= max_images:
+        return
+    if isinstance(node, str):
+        candidate = node.strip()
+        if candidate and _looks_like_image_url(candidate):
+            normalized = _normalize_image_url(base_url, candidate)
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                out.append(normalized)
+        return
+    if isinstance(node, list):
+        for item in node:
+            _collect_image_urls_from_data(item, base_url, out, seen, max_images=max_images)
+            if len(out) >= max_images:
+                return
+        return
+    if isinstance(node, dict):
+        for value in node.values():
+            _collect_image_urls_from_data(value, base_url, out, seen, max_images=max_images)
+            if len(out) >= max_images:
+                return
+
+async def fetch_deboer_product_data(model_number: str) -> Dict[str, Any]:
+    """Fetch DeBoer product payload from API and return nested product data."""
+    api_url = f"https://deboertool.com/api/products/{model_number}"
+    print(f"🔍 Fetching DeBoer API: {api_url}")
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(api_url)
+        response.raise_for_status()
+        data = response.json()
+
+    print("✅ Got DeBoer API response")
+    product_data = data.get("data", {})
+    if not isinstance(product_data, dict):
+        raise HTTPException(status_code=500, detail="Unexpected DeBoer API response format")
+    return product_data
+
+def _normalize_image_url(base_url: str, raw: Optional[str]) -> Optional[str]:
+    if not raw or not str(raw).strip():
+        return None
+    raw = str(raw).strip()
+    if raw.startswith("data:") or raw.startswith("javascript:"):
+        return None
+    # srcset: "https://a.jpg 1x, https://b.jpg 2x" -> first URL
+    first = raw.split(",")[0].strip().split()
+    candidate = first[0] if first else ""
+    if not candidate:
+        return None
+    try:
+        abs_url = urljoin(base_url, candidate)
+    except Exception:
+        return None
+    parsed = urlparse(abs_url)
+    if parsed.scheme not in ("http", "https"):
+        return None
+    low = abs_url.lower()
+    if any(x in low for x in ("favicon", "pixel.gif", "spacer.gif", "1x1.", "tracking")):
+        return None
+    return abs_url
+
+def _image_rank(url: str) -> int:
+    """Higher rank means show earlier in picker."""
+    low = url.lower()
+    score = 0
+
+    # Strong positive signals for product/tool imagery.
+    for token, pts in (
+        ("product-images", 120),
+        ("/product/", 90),
+        ("tool", 60),
+        ("series", 30),
+        ("detail", 20),
+        ("dimension", 10),
+    ):
+        if token in low:
+            score += pts
+
+    # Prefer full-size images over thumbnails.
+    if "thumb" in low or "thumbnail" in low or "small" in low:
+        score -= 40
+    if "1024x287" in low or "banner" in low or "hero" in low:
+        score -= 80
+
+    # Penalize common non-product assets.
+    for token, pts in (
+        ("logo", 200),
+        ("icon", 120),
+        ("sprite", 120),
+        ("nav", 80),
+        ("header", 70),
+        ("footer", 70),
+        ("cart", 70),
+        ("social", 60),
+        ("facebook", 60),
+        ("instagram", 60),
+        ("linkedin", 60),
+    ):
+        if token in low:
+            score -= pts
+
+    # SVGs are frequently logos/icons on vendor pages.
+    if low.endswith(".svg"):
+        score -= 120
+
+    return score
+
+def extract_image_urls_from_html(html: str, base_url: str, max_images: int = 50) -> List[str]:
+    """Collect likely product/content image URLs (og/twitter first, then <img>, <source>)."""
+    soup = BeautifulSoup(html, "html.parser")
+    seen: set = set()
+    ordered: List[str] = []
+
+    def add(u: Optional[str]) -> None:
+        if len(ordered) >= max_images:
+            return
+        nu = _normalize_image_url(base_url, u)
+        if nu and nu not in seen:
+            seen.add(nu)
+            ordered.append(nu)
+
+    for og_prop in ("og:image", "og:image:url", "og:image:secure_url"):
+        for tag in soup.find_all("meta", property=og_prop):
+            add(tag.get("content"))
+
+    for tag in soup.find_all("meta"):
+        name = (tag.get("name") or "").lower()
+        if name in ("twitter:image", "twitter:image:src"):
+            add(tag.get("content"))
+
+    for tag in soup.find_all("link", rel=lambda x: x and "image_src" in str(x).lower()):
+        add(tag.get("href"))
+
+    for img in soup.find_all("img"):
+        add(img.get("src"))
+        add(img.get("data-src"))
+        add(img.get("data-lazy-src"))
+        add(img.get("data-original"))
+        ds = img.get("data-srcset")
+        if ds:
+            add(ds.split(",")[0].strip().split()[0] if ds.strip() else None)
+        ss = img.get("srcset")
+        if ss:
+            add(ss.split(",")[0].strip().split()[0] if ss.strip() else None)
+
+    for src in soup.find_all("source"):
+        ss = src.get("srcset")
+        if ss:
+            add(ss.split(",")[0].strip().split()[0] if ss.strip() else None)
+
+    ranked = sorted(ordered, key=_image_rank, reverse=True)
+    return ranked[:max_images]
+
 async def extract_deboer_specs(model_number: str) -> Dict[str, Any]:
     """Extract specs from DeBoer Tool API (direct JSON, no AI needed!)"""
     try:
-        api_url = f"https://deboertool.com/api/products/{model_number}"
-        print(f"🔍 Fetching DeBoer API: {api_url}")
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(api_url)
-            response.raise_for_status()
-            data = response.json()
-        
-        print(f"✅ Got DeBoer API response")
-        
         # The response has structure: { "data": { "spec": {...} }, "user": {...} }
         # We need to get the product data from inside "data"
-        product_data = data.get('data', {})
+        product_data = await fetch_deboer_product_data(model_number)
         
         # DEBUG: Print the structure
         print(f"🔍 DEBUG - Product data keys: {list(product_data.keys())[:10]}")
@@ -688,6 +896,98 @@ async def extract_tool_specs(request: ToolImportRequest):
             error=str(e),
             source_url=url if 'url' in locals() else None
         )
+
+@app.post("/api/extract-page-images", response_model=PageImagesListResponse)
+async def extract_page_images(request: PageUrlRequest):
+    """
+    Fetch a page and return absolute image URLs for UI selection (og:image, img tags, etc.).
+    """
+    url = (request.url or "").strip()
+    if not url:
+        return PageImagesListResponse(success=False, error="URL is required")
+    if not url.lower().startswith(("http://", "https://")):
+        return PageImagesListResponse(
+            success=False,
+            error="URL must start with http:// or https://",
+        )
+    try:
+        print(f"🖼️ Extracting image URLs from: {url}")
+        if "deboertool.com" in url.lower():
+            model_number = extract_deboer_model_from_url(url)
+            if not model_number:
+                return PageImagesListResponse(
+                    success=False,
+                    error="Could not extract model number from DeBoer URL.",
+                    source_url=url,
+                )
+            try:
+                product_data = await fetch_deboer_product_data(model_number)
+                api_images: List[str] = []
+                seen: set = set()
+                _collect_image_urls_from_data(
+                    product_data,
+                    "https://deboertool.com",
+                    api_images,
+                    seen,
+                    max_images=50,
+                )
+                # Prefer primary/product assets over thumbs and logos.
+                api_images = sorted(api_images, key=_image_rank, reverse=True)
+                if api_images:
+                    print(f"✅ Found {len(api_images)} DeBoer image URL(s) from API")
+                    return PageImagesListResponse(
+                        success=True,
+                        images=api_images,
+                        source_url=url,
+                    )
+                print("⚠️ No DeBoer images found in API payload; falling back to HTML scrape")
+            except Exception as e:
+                print(f"⚠️ DeBoer API image extraction failed: {e}; falling back to HTML scrape")
+
+        html_content = await fetch_webpage_browser_like(url)
+        images = extract_image_urls_from_html(html_content, url)
+        if not images:
+            return PageImagesListResponse(
+                success=False,
+                error="No suitable images found on this page.",
+                source_url=url,
+            )
+        print(f"✅ Found {len(images)} image URL(s)")
+        return PageImagesListResponse(success=True, images=images, source_url=url)
+    except HTTPException as e:
+        detail = e.detail
+        msg = detail if isinstance(detail, str) else str(detail)
+        return PageImagesListResponse(success=False, error=msg, source_url=url)
+    except Exception as e:
+        return PageImagesListResponse(success=False, error=str(e), source_url=url)
+
+@app.post("/api/fetch-image", response_model=ImageBytesResponse)
+async def fetch_image_bytes(request: ImageUrlRequest):
+    """
+    Download an image server-side (avoids browser CORS when saving in Flutter web).
+    """
+    url = (request.url or "").strip()
+    if not url:
+        return ImageBytesResponse(success=False, error="URL is required")
+    if not url.lower().startswith(("http://", "https://")):
+        return ImageBytesResponse(success=False, error="Invalid image URL")
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=45.0) as client:
+            response = await client.get(url, headers=BROWSER_HEADERS)
+            response.raise_for_status()
+            body = response.content
+            ct = (response.headers.get("content-type") or "").split(";")[0].strip()
+        if len(body) > MAX_FETCH_IMAGE_BYTES:
+            return ImageBytesResponse(success=False, error="Image is too large (max 15 MB)")
+        b64 = base64.b64encode(body).decode("ascii")
+        return ImageBytesResponse(success=True, content_base64=b64, content_type=ct or "application/octet-stream")
+    except httpx.HTTPStatusError as e:
+        return ImageBytesResponse(
+            success=False,
+            error=f"Could not download image (HTTP {e.response.status_code})",
+        )
+    except Exception as e:
+        return ImageBytesResponse(success=False, error=str(e))
 
 if __name__ == "__main__":
     import uvicorn

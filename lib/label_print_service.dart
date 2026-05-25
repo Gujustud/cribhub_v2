@@ -69,7 +69,10 @@ class LabelPrintService {
         : binCode;
     // QR encodes tool name + bin number so a scan shows both.
     final qrData = '$toolName\nBIN: $binNumber';
-    final qrCode = QrCode.fromData(data: qrData, errorCorrectLevel: QrErrorCorrectLevel.L);
+    final qrCode = QrCode(
+      payload: QrPayload.fromString(qrData),
+      errorCorrectLevel: QrErrorCorrectLevel.low,
+    );
     final qrImage = QrImage(qrCode);
     final qrModuleCount = qrImage.moduleCount;
     final qrModulePixel = (qrMaxSide / qrModuleCount).floor().clamp(1, 20);

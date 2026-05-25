@@ -2,6 +2,7 @@ import 'package:pocketbase/pocketbase.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
+import 'dart:typed_data';
 import 'app_config.dart';
 import 'http_client_factory.dart';
 import 'models.dart';
@@ -614,6 +615,287 @@ class PocketBaseService {
       return records;
     } catch (e) {
       print('Error getting suppliers: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<dynamic>> getCustomers() async {
+    try {
+      return await pb.collection('customers').getFullList(sort: 'name');
+    } catch (e) {
+      print('Error getting customers: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> createCustomer({
+    required String name,
+    String? company,
+    String? address,
+    String? email,
+    String? phone,
+  }) async {
+    try {
+      await pb.collection('customers').create(body: {
+        'name': name,
+        'company': company,
+        'address': address,
+        'email': email,
+        'phone': phone,
+      });
+    } catch (e) {
+      print('Error creating customer: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateCustomer({
+    required String id,
+    required String name,
+    String? company,
+    String? address,
+    String? email,
+    String? phone,
+  }) async {
+    try {
+      await pb.collection('customers').update(id, body: {
+        'name': name,
+        'company': company,
+        'address': address,
+        'email': email,
+        'phone': phone,
+      });
+    } catch (e) {
+      print('Error updating customer: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteCustomer(String id) async {
+    try {
+      await pb.collection('customers').delete(id);
+    } catch (e) {
+      print('Error deleting customer: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<dynamic>> getJobs() async {
+    try {
+      return await pb.collection('jobs').getFullList(
+        sort: '-updated',
+        expand: 'quote,customer,material_source_vendor',
+      );
+    } catch (e) {
+      print('Error getting jobs: $e');
+      rethrow;
+    }
+  }
+
+  /// Single job for detail view (same expands as list).
+  Future<dynamic> getJob(String id) async {
+    try {
+      return await pb.collection('jobs').getOne(
+        id,
+        expand: 'quote,customer,material_source_vendor',
+      );
+    } catch (e) {
+      print('Error getting job: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> createJob(Map<String, dynamic> body) async {
+    try {
+      await pb.collection('jobs').create(body: body);
+    } catch (e) {
+      print('Error creating job: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateJob(String id, Map<String, dynamic> body) async {
+    try {
+      await pb.collection('jobs').update(id, body: body);
+    } catch (e) {
+      print('Error updating job: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteJob(String id) async {
+    try {
+      await pb.collection('jobs').delete(id);
+    } catch (e) {
+      print('Error deleting job: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<dynamic>> getQuotes() async {
+    try {
+      return await pb.collection('quotes').getFullList(
+        sort: '-updated',
+        expand: 'customer',
+      );
+    } catch (e) {
+      print('Error getting quotes: $e');
+      rethrow;
+    }
+  }
+
+  Future<dynamic> getQuote(String id) async {
+    try {
+      return await pb.collection('quotes').getOne(
+        id,
+        expand: 'customer',
+      );
+    } catch (e) {
+      print('Error getting quote: $e');
+      rethrow;
+    }
+  }
+
+  /// Lightweight rows for quotes list search by part number.
+  Future<List<dynamic>> getAllQuoteLineItemsForSearch() async {
+    try {
+      return await pb.collection('quote_line_items').getFullList(
+        fields: 'quote,part_number',
+      );
+    } catch (e) {
+      print('Error getting quote line items for search: $e');
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getQuoteLineItems(String quoteId) async {
+    try {
+      return await pb.collection('quote_line_items').getFullList(
+        filter: 'quote = "$quoteId"',
+        sort: 'line_number',
+        expand: 'material_vendor,subcontractor_1,subcontractor_2',
+      );
+    } catch (e) {
+      print('Error getting quote line items: $e');
+      rethrow;
+    }
+  }
+
+  Future<dynamic?> getJobByQuoteId(String quoteId) async {
+    try {
+      final list = await pb.collection('jobs').getFullList(
+        filter: 'quote = "$quoteId"',
+      );
+      return list.isEmpty ? null : list.first;
+    } catch (e) {
+      print('Error getting job by quote: $e');
+      return null;
+    }
+  }
+
+  Future<dynamic> createQuote(Map<String, dynamic> body) async {
+    try {
+      return await pb.collection('quotes').create(body: body);
+    } catch (e) {
+      print('Error creating quote: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateQuote(String id, Map<String, dynamic> body) async {
+    try {
+      await pb.collection('quotes').update(id, body: body);
+    } catch (e) {
+      print('Error updating quote: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteQuote(String id) async {
+    try {
+      await pb.collection('quotes').delete(id);
+    } catch (e) {
+      print('Error deleting quote: $e');
+      rethrow;
+    }
+  }
+
+  Future<dynamic> createQuoteLineItemRaw(Map<String, dynamic> body) async {
+    try {
+      return await pb.collection('quote_line_items').create(body: body);
+    } catch (e) {
+      print('Error creating quote line item: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateQuoteLineItemRaw(String id, Map<String, dynamic> body) async {
+    try {
+      await pb.collection('quote_line_items').update(id, body: body);
+    } catch (e) {
+      print('Error updating quote line item: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> createQuoteLineItem({
+    required String quoteId,
+    required String lineNumber,
+    required double partQuantity,
+    String? description,
+    double? unitPrice,
+    double? lineTotal,
+  }) async {
+    try {
+      final unit = unitPrice ?? 0;
+      final total = lineTotal ?? (partQuantity * unit);
+      final body = <String, dynamic>{
+        'quote': quoteId,
+        'line_number': int.tryParse(lineNumber) ?? double.tryParse(lineNumber) ?? lineNumber,
+        'part_quantity': partQuantity,
+        'unit_price': unit,
+        'line_total': total,
+      };
+      if (description != null && description.isNotEmpty) {
+        body['description'] = description;
+      }
+      await pb.collection('quote_line_items').create(body: body);
+    } catch (e) {
+      print('Error creating quote line item: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateQuoteLineItem({
+    required String id,
+    required String lineNumber,
+    required double partQuantity,
+    String? description,
+    double? unitPrice,
+    double? lineTotal,
+  }) async {
+    try {
+      final unit = unitPrice ?? 0;
+      final total = lineTotal ?? (partQuantity * unit);
+      final body = <String, dynamic>{
+        'line_number': int.tryParse(lineNumber) ?? double.tryParse(lineNumber) ?? lineNumber,
+        'part_quantity': partQuantity,
+        'unit_price': unit,
+        'line_total': total,
+        'description': description,
+      };
+      await pb.collection('quote_line_items').update(id, body: body);
+    } catch (e) {
+      print('Error updating quote line item: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteQuoteLineItem(String id) async {
+    try {
+      await pb.collection('quote_line_items').delete(id);
+    } catch (e) {
+      print('Error deleting quote line item: $e');
       rethrow;
     }
   }
@@ -1496,6 +1778,78 @@ class PocketBaseService {
         'success': false,
         'error': 'Unexpected error: $e',
       };
+    }
+  }
+
+  /// Lists image URLs found on a product page (via MCP server HTML parse).
+  Future<Map<String, dynamic>> extractPageImages(String pageUrl) async {
+    const mcpServerUrl = AppConfig.mcpUrl;
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$mcpServerUrl/api/extract-page-images'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({'url': pageUrl}),
+          )
+          .timeout(const Duration(seconds: 45));
+
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      if (response.statusCode != 200) {
+        return {
+          'success': false,
+          'error': data['error']?.toString() ??
+              'Server returned status ${response.statusCode}',
+        };
+      }
+      if (data['success'] == true) {
+        return {
+          'success': true,
+          'images': data['images'],
+          'source_url': data['source_url'],
+        };
+      }
+      return {
+        'success': false,
+        'error': data['error']?.toString() ?? 'Unknown error',
+        'source_url': data['source_url'],
+      };
+    } on TimeoutException {
+      return {'success': false, 'error': 'Timed out while loading page images.'};
+    } on http.ClientException catch (e) {
+      return {
+        'success': false,
+        'error': 'Cannot connect to import server. Make sure it is running. ($e)',
+      };
+    } catch (e) {
+      return {'success': false, 'error': 'Unexpected error: $e'};
+    }
+  }
+
+  /// Downloads image bytes via MCP (avoids CORS when running on web).
+  Future<Uint8List?> fetchImageBytesViaMcp(String imageUrl) async {
+    const mcpServerUrl = AppConfig.mcpUrl;
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$mcpServerUrl/api/fetch-image'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({'url': imageUrl}),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      if (response.statusCode != 200 || data['success'] != true) {
+        print(
+          '❌ fetch-image failed: ${data['error'] ?? response.statusCode}',
+        );
+        return null;
+      }
+      final b64 = data['content_base64'] as String?;
+      if (b64 == null || b64.isEmpty) return null;
+      return base64Decode(b64);
+    } catch (e) {
+      print('❌ fetchImageBytesViaMcp: $e');
+      return null;
     }
   }
 

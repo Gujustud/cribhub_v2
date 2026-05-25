@@ -8,9 +8,12 @@ import 'purchases_screen.dart';
 import 'buy_list_screen.dart';
 import 'settings_screen.dart';
 import 'about_screen.dart';
-import 'main.dart';
+import 'customers_screen.dart';
+import 'jobs_screen.dart';
+import 'combined_home_screen.dart';
+import 'inventory_home_screen.dart';
+import 'quotes_screen.dart';
 import 'drawer_data_cache.dart';
-import 'erp_home_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   /// If true, this widget is used in `Scaffold.drawer` and will
@@ -59,20 +62,39 @@ class AppDrawer extends StatelessWidget {
             ),
           ),
         ),
+        const Divider(),
+        const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Text(
+            'Inventory',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
+          ),
+        ),
         ListTile(
           leading: const Icon(Icons.home),
-          title: const Text('Home'),
+          title: const Text('Dashboard'),
           onTap: () {
             maybeCloseDrawer(context);
-            // Navigate to home, replacing current screen
             Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const CombinedHomeScreen()),
+            );
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.search),
+          title: const Text('Inventory home'),
+          onTap: () {
+            maybeCloseDrawer(context);
+            Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const MainScreen()),
             );
           },
         ),
-        const Divider(),
-        // All Inventory (if enabled)
         if (showAllInventory)
           ListTile(
             leading: const Icon(Icons.inventory),
@@ -117,14 +139,27 @@ class AppDrawer extends StatelessWidget {
           ),
         ),
         ListTile(
-          leading: const Icon(Icons.business_center),
-          title: const Text('ERP overview'),
+          leading: const Icon(Icons.request_quote_outlined),
+          title: const Text('Quotes'),
           onTap: () {
             maybeCloseDrawer(context);
             Navigator.push(
               context,
               MaterialPageRoute<void>(
-                builder: (context) => const ErpHomeScreen(),
+                builder: (context) => const QuotesScreen(),
+              ),
+            );
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.work_outline),
+          title: const Text('Jobs'),
+          onTap: () {
+            maybeCloseDrawer(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (context) => const JobsScreen(),
               ),
             );
           },
@@ -139,6 +174,19 @@ class AppDrawer extends StatelessWidget {
               color: Colors.grey,
             ),
           ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.people_outline),
+          title: const Text('Customers'),
+          onTap: () {
+            maybeCloseDrawer(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (context) => const CustomersScreen(),
+              ),
+            );
+          },
         ),
         ListTile(
           leading: const Icon(Icons.label),

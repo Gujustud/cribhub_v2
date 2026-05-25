@@ -2127,17 +2127,23 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
   
   Future<void> _pickPhoto() async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.image,
+        allowMultiple: false,
+        withData: true,
       );
-      
-      if (result != null) {
-        setState(() {
-          _photoBytes = result.files.first.bytes;
-          _photoChanged = true;
-        });
-      }
+      if (result == null || result.files.isEmpty) return;
+
+      final picked = result.files.first;
+      final bytes = picked.bytes ?? await picked.readAsBytes();
+      if (!mounted || bytes.isEmpty) return;
+
+      setState(() {
+        _photoBytes = bytes;
+        _photoChanged = true;
+      });
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error picking photo: $e')),
       );
