@@ -7,7 +7,8 @@ import 'package:http/http.dart' as http;
 import 'pocketbase_service.dart';
 import 'models.dart';
 import 'add_inventory_dialog.dart';
-import 'app_drawer.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 import 'inventory_screen.dart';
 import 'transfer_dialog.dart';
 import 'drawer_behavior.dart';
@@ -3417,34 +3418,28 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
   Widget build(BuildContext context) {
     // Show loading indicator while initializing
     if (!_isInitialized) {
-      return Scaffold(
-        key: _scaffoldKey,
+      return WorkspaceScaffold(
+        scaffoldKey: _scaffoldKey,
         appBar: AppBar(
           title: Text(_isEditMode ? 'Edit Tool' : widget.isDuplicate ? 'Duplicate Tool' : 'Add Tool'),
           backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          leading: workspaceMenuLeading(context),
         ),
         body: const Center(
           child: CircularProgressIndicator(),
         ),
       );
     }
-    
-    maybeAutoOpenDrawer();
+
     final isNarrow = MediaQuery.of(context).size.width < 800;
 
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: Text(_isEditMode ? 'Edit Tool' : widget.isDuplicate ? 'Duplicate Tool' : 'Add Tool'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+        leading: workspaceMenuLeading(context),
       ),
-        ),
-      ),
-      drawer: const AppDrawer(),
       body: Form(
         key: _formKey,
         child: Row(

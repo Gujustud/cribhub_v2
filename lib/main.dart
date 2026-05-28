@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'auth_gate.dart' show AuthGate, dharmaCoreNavigatorKey;
 import 'combined_home_screen.dart';
 import 'drawer_data_cache.dart';
 import 'http_client_factory.dart';
@@ -18,7 +19,7 @@ Future<void> main() async {
     runApp(const _MisconfiguredReleaseApp());
     return;
   }
-  runApp(const CribhubApp());
+  runApp(const DharmaCoreApp());
 }
 
 bool _isLocalhostEndpoint(String rawUrl) {
@@ -36,9 +37,9 @@ class _MisconfiguredReleaseApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Cribhub',
+      title: 'DharmaCore',
       home: Scaffold(
-        appBar: AppBar(title: const Text('Cribhub configuration error')),
+        appBar: AppBar(title: const Text('DharmaCore configuration error')),
         body: Padding(
           padding: const EdgeInsets.all(20),
           child: SelectableText(
@@ -58,8 +59,8 @@ class _MisconfiguredReleaseApp extends StatelessWidget {
   }
 }
 
-class CribhubApp extends StatelessWidget {
-  const CribhubApp({super.key});
+class DharmaCoreApp extends StatelessWidget {
+  const DharmaCoreApp({super.key});
 
   ThemeData _buildLightTheme() {
     return ThemeData(
@@ -93,11 +94,12 @@ class CribhubApp extends StatelessWidget {
       valueListenable: ThemeController.instance.themeMode,
       builder: (context, mode, _) {
         return MaterialApp(
-          title: 'Cribhub',
+          navigatorKey: dharmaCoreNavigatorKey,
+          title: 'DharmaCore',
           theme: _buildLightTheme(),
           darkTheme: _buildDarkTheme(),
           themeMode: mode,
-          home: const CombinedHomeScreen(),
+          home: const AuthGate(child: CombinedHomeScreen()),
         );
       },
     );

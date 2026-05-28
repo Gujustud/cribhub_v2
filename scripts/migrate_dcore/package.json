@@ -1,0 +1,13 @@
+{
+  "name": "cribhub-migrate-dcore",
+  "private": true,
+  "type": "module",
+  "description": "Copy DharmaCore PocketBase ERP data into erp-dev Cribhub PocketBase",
+  "scripts": {
+    "migrate": "node migrate.js",
+    "dry-run": "node migrate.js --dry-run"
+  },
+  "dependencies": {
+    "pocketbase": "^0.21.5"
+  }
+}

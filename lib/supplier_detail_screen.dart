@@ -3,7 +3,8 @@ import 'package:intl/intl.dart';
 import 'pocketbase_service.dart';
 import 'models.dart';
 import 'add_purchase_screen.dart';
-import 'app_drawer.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 import 'drawer_behavior.dart';
 
 class SupplierDetailScreen extends StatefulWidget {
@@ -251,20 +252,13 @@ class _SupplierDetailScreenState extends State<SupplierDetailScreen> with AutoOp
 
   @override
   Widget build(BuildContext context) {
-    maybeAutoOpenDrawer();
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: Text(_isNew ? 'Add Supplier' : _companyNameController.text.isEmpty ? 'Supplier' : _companyNameController.text),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
+        leading: workspaceMenuLeading(context),
       ),
-      drawer: const AppDrawer(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(

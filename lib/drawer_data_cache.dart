@@ -9,6 +9,14 @@ class DrawerDataCache {
 
   static bool get isLoaded => _loaded;
 
+  /// Clear in-memory cache (e.g. on sign-out) so the next session reloads from PB.
+  static void reset() {
+    categories = [];
+    showAllInventory = true;
+    keepDrawerOpen = false;
+    _loaded = false;
+  }
+
   /// Preload categories and app settings. Call from main() so drawer opens with data ready.
   static Future<void> preload() async {
     if (_loaded) return;

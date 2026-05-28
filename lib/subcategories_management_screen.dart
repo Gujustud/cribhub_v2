@@ -1,7 +1,8 @@
 // lib/subcategories_management_screen.dart
 import 'package:flutter/material.dart';
 import 'pocketbase_service.dart';
-import 'app_drawer.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 import 'settings_screen.dart'; // NEW: For back button navigation
 import 'drawer_behavior.dart';
 
@@ -111,17 +112,12 @@ class _SubcategoriesManagementScreenState extends State<SubcategoriesManagementS
   Widget build(BuildContext context) {
     maybeAutoOpenDrawer();
 
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Subcategories & Attributes'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
+        leading: workspaceMenuLeading(context),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -130,7 +126,6 @@ class _SubcategoriesManagementScreenState extends State<SubcategoriesManagementS
           ],
         ),
       ),
-      drawer: const AppDrawer(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(

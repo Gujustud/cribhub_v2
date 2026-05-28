@@ -160,3 +160,20 @@ If you hit that after a correct deploy, fix CORS on the dev PocketBase instance 
 | Laptop zip | `deploy\erp-dev-web.zip` |
 
 Production CribHub deploy is unchanged: **`DEPLOY.md`** and **`.\scripts\build_web.ps1`**.
+
+---
+
+## 9. Copy DharmaCore ERP data into erp-dev PocketBase
+
+The web deploy does **not** copy quote/customer/job data. Use the migration script:
+
+```powershell
+cd c:\cribhub\scripts\migrate_dcore
+copy .env.example .env
+# Edit .env (source DharmaCore PB + target erp-dev admin credentials)
+npm install
+npm run dry-run
+npm run migrate
+```
+
+See **`scripts/migrate_dcore/README.md`** for details (`vendors` → `suppliers`, relation remapping, optional wipe).

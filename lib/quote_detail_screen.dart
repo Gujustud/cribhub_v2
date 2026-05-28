@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'app_drawer.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 import 'drawer_behavior.dart';
+import 'job_detail_screen.dart';
+import 'jobs_only_guard.dart';
+import 'erp_quote_defaults.dart';
 import 'exchange_rate.dart';
 import 'pocketbase_service.dart';
 import 'quote_calculations.dart';
@@ -51,6 +55,7 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
   @override
   void initState() {
     super.initState();
+    guardQuotesAccess(context);
     _settingsOpen = widget.quote == null;
     _load();
   }
@@ -76,18 +81,11 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
     return m;
   }
 
-  Map<String, dynamic> _defaultQuote() => {
+  Map<String, dynamic> _defaultQuoteFromShop(Map<String, dynamic> shopFields) => {
         'job_number': generateJobNumber(),
         'engineer': '',
         'status': 'draft',
-        'shipping_markup_percent': 30,
-        'final_markup_percent': 0,
-        'subcontractor_markup_percent': 0,
-        'exchange_rate_usd_to_cad': 1.3,
-        'hourly_rate_programming': 350,
-        'hourly_rate_setup': 350,
-        'hourly_rate_first_run': 350,
-        'hourly_rate_production': 269,
+        ...shopFields,
       };
 
   Future<void> _load() async {
@@ -108,7 +106,9 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
         final job = await pb.getJobByQuoteId(widget.quote.id as String);
         _jobId = job?.id as String?;
       } else {
-        quote = _defaultQuote();
+        final shop = await pb.getShopSettings();
+        final shopData = shop.data as Map<String, dynamic>? ?? {};
+        quote = _defaultQuoteFromShop(newQuoteFieldsFromShopSettings(shopData));
         lines = [
           {'line_number': 1, 'part_quantity': 1},
         ];
@@ -132,7 +132,7 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
     } catch (e) {
       if (mounted) {
         setState(() {
-          _quote ??= _defaultQuote();
+          _quote ??= _defaultQuoteFromShop(newQuoteFieldsFromShopSettings(null));
           _lineItems = [
             {'line_number': 1, 'part_quantity': 1},
           ];
@@ -147,6 +147,25 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
 
   void _patchQuote(Map<String, dynamic> updates) {
     setState(() => _quote = {...?_quote, ...updates});
+  }
+
+  Future<void> _openLinkedJob() async {
+    final id = _jobId;
+    if (id == null || id.isEmpty) return;
+    try {
+      final job = await PocketBaseService().getJob(id);
+      if (!mounted) return;
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(builder: (context) => JobDetailScreen(job: job)),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open job: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   List<Map<String, dynamic>> get _calculatedLines {
@@ -264,13 +283,14 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
         }
       }
 
+      var jobCreated = false;
       if ('${quote['status']}' == 'won' && _jobId == null) {
         String? firstVendor;
         for (final i in _lineItems) {
           firstVendor = _relationId(i['material_vendor']);
           if (firstVendor != null) break;
         }
-        await pb.createJob({
+        final job = await pb.createJob({
           'quote': quoteId,
           'job_number': quote['job_number'],
           'customer': customerId,
@@ -280,13 +300,16 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
           'po_number': quote['po_number'] ?? '',
           if (firstVendor != null) 'material_source_vendor': firstVendor,
         });
+        _jobId = job.id as String?;
+        jobCreated = true;
       }
 
       if (mounted) {
+        final messenger = ScaffoldMessenger.of(context);
         Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Quote saved'),
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(jobCreated ? 'Quote saved — job created' : 'Quote saved'),
             backgroundColor: Colors.green,
           ),
         );
@@ -536,14 +559,26 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
                   child: Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: _statusOptions.map((o) {
-                      final selected = (q['status'] ?? 'draft') == o.$1;
-                      return ChoiceChip(
-                        label: Text(o.$2),
-                        selected: selected,
-                        onSelected: (_) => _patchQuote({'status': o.$1}),
-                      );
-                    }).toList(),
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      ..._statusOptions.map((o) {
+                        final selected = (q['status'] ?? 'draft') == o.$1;
+                        return ChoiceChip(
+                          label: Text(o.$2),
+                          selected: selected,
+                          onSelected: (_) => _patchQuote({'status': o.$1}),
+                        );
+                      }),
+                      if ((q['status'] ?? 'draft') == 'won' && _jobId != null)
+                        OutlinedButton(
+                          onPressed: _openLinkedJob,
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          child: const Text('View Job'),
+                        ),
+                    ],
                   ),
                 ),
                 Text(
@@ -784,19 +819,18 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
 
   @override
   Widget build(BuildContext context) {
-    maybeAutoOpenDrawer();
     final title = _isNew
         ? 'New quote'
         : '${_quote?['job_number'] ?? 'Quote'}';
 
     if (_loading || _quote == null) {
-      return Scaffold(
-        key: _scaffoldKey,
+      return WorkspaceScaffold(
+        scaffoldKey: _scaffoldKey,
         appBar: AppBar(
           title: Text(title),
           backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          leading: workspaceMenuLeading(context),
         ),
-        drawer: const AppDrawer(),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -916,19 +950,13 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
       ],
     );
 
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: Text(title),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
+        leading: workspaceMenuLeading(context),
       ),
-      drawer: const AppDrawer(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: wide

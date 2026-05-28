@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
-import 'app_drawer.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 import 'models.dart';
 import 'pocketbase_service.dart';
 import 'drawer_behavior.dart';
@@ -216,11 +217,12 @@ class _BuyListScreenState extends State<BuyListScreen> with AutoOpenDrawerMixin 
   @override
   Widget build(BuildContext context) {
     maybeAutoOpenDrawer();
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Buy List'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        leading: workspaceMenuLeading(context),
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -229,7 +231,6 @@ class _BuyListScreenState extends State<BuyListScreen> with AutoOpenDrawerMixin 
           ),
         ],
       ),
-      drawer: const AppDrawer(),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null

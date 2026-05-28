@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'drawer_data_cache.dart';
-import 'ui_breakpoints.dart';
+
+import 'workspace_layout.dart';
 
 /// Shared behavior for screens that use `AppDrawer`.
-/// When the "keep drawer open" setting is enabled and the screen is wide
-/// enough (desktop-style layout), this mixin will automatically open the
-/// drawer once when the screen first appears.
+/// When "keep drawer open" is off (or narrow layout), opens the slide-out drawer
+/// once on first visit. When pinned drawer is active, does nothing — the menu
+/// is already visible via [workspaceBody].
 mixin AutoOpenDrawerMixin<T extends StatefulWidget> on State<T> {
   bool _openedDrawerInitially = false;
 
@@ -13,16 +13,8 @@ mixin AutoOpenDrawerMixin<T extends StatefulWidget> on State<T> {
   GlobalKey<ScaffoldState> get scaffoldKey;
 
   void maybeAutoOpenDrawer() {
-    if (_openedDrawerInitially) return;
-    if (!DrawerDataCache.keepDrawerOpen) return;
-
-    final width = MediaQuery.of(context).size.width;
-    if (width < kWorkspaceWideBreakpointPx) return;
-
-    _openedDrawerInitially = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      scaffoldKey.currentState?.openDrawer();
-    });
+    // Pinned drawer is handled by [workspaceBody]; overlay drawer is opened via
+    // the menu button only. Auto-opening caused a visible flash on navigation.
   }
 }
 

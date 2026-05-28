@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'auth_service.dart';
 import 'pocketbase_service.dart';
-import 'app_drawer.dart';
 import 'category_management_screen.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 import 'tool_import_config_screen.dart'; // NEW
+import 'quote_management_settings_screen.dart';
 import 'theme_controller.dart';
 import 'drawer_behavior.dart';
 import 'drawer_data_cache.dart';
+import 'idle_logout_listener.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -21,8 +25,11 @@ class _SettingsScreenState extends State<SettingsScreen> with AutoOpenDrawerMixi
   bool _useCategoryButtons = false;
   bool _enableToolImport = false; // NEW
   bool _darkMode = false;
-  bool _keepDrawerOpen = false; // NEW
+  bool _keepDrawerOpen = DrawerDataCache.keepDrawerOpen;
   String? _settingsId;
+  String? _shopSettingsId;
+  final _autoLogoutMinutes = TextEditingController();
+  bool _savingAutoLogout = false;
 
   @override
   GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
@@ -36,6 +43,12 @@ class _SettingsScreenState extends State<SettingsScreen> with AutoOpenDrawerMixi
     _darkMode = ThemeController.instance.themeMode.value == ThemeMode.dark;
   }
 
+  @override
+  void dispose() {
+    _autoLogoutMinutes.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadSettings() async {
     setState(() {
       _isLoading = true;
@@ -43,14 +56,22 @@ class _SettingsScreenState extends State<SettingsScreen> with AutoOpenDrawerMixi
 
     try {
       final pbService = PocketBaseService();
-      final settings = await pbService.getAppSettings();
+      final results = await Future.wait([
+        pbService.getAppSettings(),
+        pbService.getShopSettings(),
+      ]);
+      final settings = results[0];
+      final shop = results[1];
+      final logoutRaw = (shop.data['auto_logout_minutes'] as num?)?.toInt() ?? 0;
       setState(() {
         _settingsId = settings.id;
+        _shopSettingsId = shop.id;
         _showAllInventoryInMenu = settings.data['show_all_inventory_in_menu'] ?? true;
         _showToolDetailsInList = settings.data['show_tool_details_in_list'] ?? true;
         _useCategoryButtons = settings.data['use_category_buttons'] ?? false;
         _enableToolImport = settings.data['enable_tool_import'] ?? false; // NEW
         _keepDrawerOpen = settings.data['keep_drawer_open'] ?? false;
+        _autoLogoutMinutes.text = logoutRaw < 0 ? '0' : '$logoutRaw';
         _isLoading = false;
       });
 
@@ -232,6 +253,45 @@ class _SettingsScreenState extends State<SettingsScreen> with AutoOpenDrawerMixi
     }
   }
 
+  Future<void> _saveAutoLogout() async {
+    if (_shopSettingsId == null) return;
+
+    final parsed = int.tryParse(_autoLogoutMinutes.text.trim());
+    final minutes = parsed == null || parsed < 0 ? 0 : parsed;
+
+    setState(() => _savingAutoLogout = true);
+    try {
+      await PocketBaseService().updateShopSettings(_shopSettingsId!, {
+        'auto_logout_minutes': minutes,
+      });
+      _autoLogoutMinutes.text = '$minutes';
+      IdleLogoutPolicy.instance.notifyChanged();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              minutes == 0
+                  ? 'Auto-logout disabled'
+                  : 'Auto-logout set to $minutes minute${minutes == 1 ? '' : 's'}',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving session setting: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingAutoLogout = false);
+    }
+  }
+
   Future<void> _updateKeepDrawerOpen(bool value) async {
     if (_settingsId == null) return;
 
@@ -266,11 +326,6 @@ class _SettingsScreenState extends State<SettingsScreen> with AutoOpenDrawerMixi
 
   @override
   Widget build(BuildContext context) {
-    maybeAutoOpenDrawer();
-
-    final isWide = MediaQuery.of(context).size.width >= 900;
-    final usePermanentDrawer = isWide && DrawerDataCache.keepDrawerOpen;
-
     final bodyContent = _isLoading
         ? const Center(child: CircularProgressIndicator())
         : ListView(
@@ -315,7 +370,108 @@ class _SettingsScreenState extends State<SettingsScreen> with AutoOpenDrawerMixi
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                const Text(
+                  'SESSION',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Auto-logout after inactivity',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Automatically sign out after a period with no activity. Set to 0 to disable.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            SizedBox(
+                              width: 120,
+                              child: TextField(
+                                controller: _autoLogoutMinutes,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'Minutes',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                                enabled: !_savingAutoLogout,
+                                onSubmitted: (_) => _saveAutoLogout(),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            FilledButton(
+                              onPressed: _savingAutoLogout ? null : _saveAutoLogout,
+                              child: _savingAutoLogout
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Text('Save'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (!AuthService.instance.isJobsOnly) ...[
+                  const SizedBox(height: 16),
+                  const Padding(
+                    padding: EdgeInsets.only(left: 4),
+                    child: Text(
+                      'QUOTE MANAGEMENT',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.request_quote, color: Colors.blue),
+                      title: const Text('Quote defaults & rates'),
+                      subtitle: const Text(
+                        'Markups, hourly rates, and exchange rate',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const QuoteManagementSettingsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
 
                 // Display Preferences Section
                 const Text(
@@ -441,30 +597,14 @@ class _SettingsScreenState extends State<SettingsScreen> with AutoOpenDrawerMixi
               ],
             );
 
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Settings'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: usePermanentDrawer
-            ? null
-            : Builder(
-                builder: (context) => IconButton(
-                  icon: const Icon(Icons.menu),
-                  onPressed: () => Scaffold.of(context).openDrawer(),
-                ),
-              ),
+        leading: workspaceMenuLeading(context),
       ),
-      drawer: usePermanentDrawer ? null : const AppDrawer(),
-      body: usePermanentDrawer
-          ? Row(
-              children: [
-                const AppDrawer(asDrawer: false, closeOnTap: false),
-                const VerticalDivider(width: 1),
-                Expanded(child: bodyContent),
-              ],
-            )
-          : bodyContent,
+      body: bodyContent,
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'pocketbase_service.dart';
-import 'app_drawer.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 import 'drawer_behavior.dart';
 import 'supplier_detail_screen.dart';
 
@@ -90,19 +91,13 @@ class _SuppliersScreenState extends State<SuppliersScreen> with AutoOpenDrawerMi
   Widget build(BuildContext context) {
     maybeAutoOpenDrawer();
 
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Suppliers'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
+        leading: workspaceMenuLeading(context),
       ),
-      drawer: const AppDrawer(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(

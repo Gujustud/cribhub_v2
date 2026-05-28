@@ -621,27 +621,62 @@ class PocketBaseService {
 
   Future<List<dynamic>> getCustomers() async {
     try {
-      return await pb.collection('customers').getFullList(sort: 'name');
+      return await pb.collection('customers').getFullList(sort: 'company');
     } catch (e) {
       print('Error getting customers: $e');
       rethrow;
     }
   }
 
+  Future<dynamic> getCustomer(String id) async {
+    try {
+      return await pb.collection('customers').getOne(id);
+    } catch (e) {
+      print('Error getting customer: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<dynamic>> getJobsForCustomer(String customerId) async {
+    try {
+      return await pb.collection('jobs').getFullList(
+        filter: 'customer = "$customerId"',
+        sort: '-updated',
+      );
+    } catch (e) {
+      print('Error getting jobs for customer: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<dynamic>> getQuotesForCustomer(String customerId) async {
+    try {
+      return await pb.collection('quotes').getFullList(
+        filter: 'customer = "$customerId"',
+        sort: '-updated',
+      );
+    } catch (e) {
+      print('Error getting quotes for customer: $e');
+      rethrow;
+    }
+  }
+
   Future<void> createCustomer({
-    required String name,
-    String? company,
+    required String company,
+    String? name,
     String? address,
     String? email,
     String? phone,
+    String? notes,
   }) async {
     try {
       await pb.collection('customers').create(body: {
-        'name': name,
         'company': company,
+        'name': name,
         'address': address,
         'email': email,
         'phone': phone,
+        'notes': notes,
       });
     } catch (e) {
       print('Error creating customer: $e');
@@ -651,19 +686,21 @@ class PocketBaseService {
 
   Future<void> updateCustomer({
     required String id,
-    required String name,
-    String? company,
+    required String company,
+    String? name,
     String? address,
     String? email,
     String? phone,
+    String? notes,
   }) async {
     try {
       await pb.collection('customers').update(id, body: {
-        'name': name,
         'company': company,
+        'name': name,
         'address': address,
         'email': email,
         'phone': phone,
+        'notes': notes,
       });
     } catch (e) {
       print('Error updating customer: $e');
@@ -705,9 +742,9 @@ class PocketBaseService {
     }
   }
 
-  Future<void> createJob(Map<String, dynamic> body) async {
+  Future<dynamic> createJob(Map<String, dynamic> body) async {
     try {
-      await pb.collection('jobs').create(body: body);
+      return await pb.collection('jobs').create(body: body);
     } catch (e) {
       print('Error creating job: $e');
       rethrow;
@@ -1122,6 +1159,46 @@ class PocketBaseService {
       print('App settings updated');
     } catch (e) {
       print('Error updating app settings: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================================
+  // SHOP ERP SETTINGS (`settings` collection — quote defaults)
+  // ============================================================================
+
+  Future<dynamic> getShopSettings() async {
+    try {
+      try {
+        return await pb.collection('settings').getFirstListItem('');
+      } catch (_) {
+        return await pb.collection('settings').create(
+          body: _defaultShopSettingsBodyForCreate(),
+        );
+      }
+    } catch (e) {
+      print('Error getting shop settings: $e');
+      rethrow;
+    }
+  }
+
+  Map<String, dynamic> _defaultShopSettingsBodyForCreate() => {
+        'default_shipping_markup_percent': 30,
+        'default_final_markup_percent': 0,
+        'default_hourly_rate_programming': 350,
+        'default_hourly_rate_setup': 350,
+        'default_hourly_rate_first_run': 350,
+        'default_hourly_rate_production': 269,
+        'exchange_rate_usd_to_cad': 1.3,
+        'exchange_rate_auto_update': false,
+        'auto_logout_minutes': 0,
+      };
+
+  Future<void> updateShopSettings(String id, Map<String, dynamic> body) async {
+    try {
+      await pb.collection('settings').update(id, body: body);
+    } catch (e) {
+      print('Error updating shop settings: $e');
       rethrow;
     }
   }

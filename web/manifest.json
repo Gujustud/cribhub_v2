@@ -1,6 +1,6 @@
 {
-    "name": "cribhub",
-    "short_name": "cribhub",
+    "name": "DharmaCore",
+    "short_name": "DharmaCore",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

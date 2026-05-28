@@ -10,10 +10,18 @@ import 'settings_screen.dart';
 import 'about_screen.dart';
 import 'customers_screen.dart';
 import 'jobs_screen.dart';
-import 'combined_home_screen.dart';
 import 'inventory_home_screen.dart';
 import 'quotes_screen.dart';
+import 'auth_gate.dart';
+import 'auth_service.dart';
+import 'dashboard_navigation.dart';
 import 'drawer_data_cache.dart';
+
+/// Width of the side menu panel (pinned or slide-out).
+const double kAppDrawerWidth = 240;
+
+const double kDrawerTileMinVerticalPadding = 2;
+const EdgeInsets kDrawerSectionHeaderPadding = EdgeInsets.all(10);
 
 class AppDrawer extends StatelessWidget {
   /// If true, this widget is used in `Scaffold.drawer` and will
@@ -25,16 +33,21 @@ class AppDrawer extends StatelessWidget {
   /// first (to close the drawer). For fixed panels this should be false.
   final bool closeOnTap;
 
+  /// When false, omits the branded header (used with [WorkspaceTopBar]).
+  final bool showBrandHeader;
+
   const AppDrawer({
     super.key,
     this.asDrawer = true,
     this.closeOnTap = true,
+    this.showBrandHeader = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final categories = DrawerDataCache.categories;
     final showAllInventory = DrawerDataCache.showAllInventory;
+    final isJobsOnly = AuthService.instance.isJobsOnly;
     final colorScheme = Theme.of(context).colorScheme;
     final appBarTheme = Theme.of(context).appBarTheme;
     // Use same background as app bar so drawer header matches top bar
@@ -47,24 +60,38 @@ class AppDrawer extends StatelessWidget {
       }
     }
 
-    final content = ListView(
+    final content = ListTileTheme(
+      data: ListTileTheme.of(context).copyWith(
+        minVerticalPadding: kDrawerTileMinVerticalPadding,
+      ),
+      child: ListView(
       padding: EdgeInsets.zero,
       children: [
-        Container(
-          decoration: BoxDecoration(color: headerBg),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          child: Text(
-            'Cribhub',
-            style: TextStyle(
-              color: headerFg,
-              fontSize: 24,
-              fontWeight: FontWeight.w500,
+        if (showBrandHeader) ...[
+          Container(
+            decoration: BoxDecoration(color: headerBg),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            child: Text(
+              'DharmaCore',
+              style: TextStyle(
+                color: headerFg,
+                fontSize: 24,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
+          const Divider(),
+        ],
+        ListTile(
+          leading: const Icon(Icons.home),
+          title: const Text('Dashboard'),
+          onTap: () {
+            maybeCloseDrawer(context);
+            goToDashboard(context);
+          },
         ),
-        const Divider(),
         const Padding(
-          padding: EdgeInsets.all(16.0),
+          padding: kDrawerSectionHeaderPadding,
           child: Text(
             'Inventory',
             style: TextStyle(
@@ -72,17 +99,6 @@ class AppDrawer extends StatelessWidget {
               color: Colors.grey,
             ),
           ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.home),
-          title: const Text('Dashboard'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const CombinedHomeScreen()),
-            );
-          },
         ),
         ListTile(
           leading: const Icon(Icons.search),
@@ -129,7 +145,7 @@ class AppDrawer extends StatelessWidget {
                 )),
         const Divider(),
         const Padding(
-          padding: EdgeInsets.all(16.0),
+          padding: kDrawerSectionHeaderPadding,
           child: Text(
             'Shop ERP',
             style: TextStyle(
@@ -138,19 +154,20 @@ class AppDrawer extends StatelessWidget {
             ),
           ),
         ),
-        ListTile(
-          leading: const Icon(Icons.request_quote_outlined),
-          title: const Text('Quotes'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (context) => const QuotesScreen(),
-              ),
-            );
-          },
-        ),
+        if (!isJobsOnly)
+          ListTile(
+            leading: const Icon(Icons.request_quote_outlined),
+            title: const Text('Quotes'),
+            onTap: () {
+              maybeCloseDrawer(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (context) => const QuotesScreen(),
+                ),
+              );
+            },
+          ),
         ListTile(
           leading: const Icon(Icons.work_outline),
           title: const Text('Jobs'),
@@ -166,7 +183,7 @@ class AppDrawer extends StatelessWidget {
         ),
         const Divider(),
         const Padding(
-          padding: EdgeInsets.all(16.0),
+          padding: kDrawerSectionHeaderPadding,
           child: Text(
             'Management',
             style: TextStyle(
@@ -255,6 +272,14 @@ class AppDrawer extends StatelessWidget {
           },
         ),
         ListTile(
+          leading: const Icon(Icons.logout),
+          title: const Text('Sign out'),
+          onTap: () {
+            maybeCloseDrawer(context);
+            signOut(context);
+          },
+        ),
+        ListTile(
           leading: const Icon(Icons.info),
           title: const Text('About'),
           onTap: () {
@@ -266,12 +291,13 @@ class AppDrawer extends StatelessWidget {
           },
         ),
       ],
+      ),
     );
 
     // Slide-out drawer for mobile / default.
     if (asDrawer) {
       return SizedBox(
-        width: 240,
+        width: kAppDrawerWidth,
         child: Drawer(
           child: content,
         ),
@@ -282,7 +308,7 @@ class AppDrawer extends StatelessWidget {
     return Material(
       elevation: 2,
       child: SizedBox(
-        width: 240,
+        width: kAppDrawerWidth,
         child: content,
       ),
     );

@@ -4,7 +4,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'pocketbase_service.dart';
-import 'app_drawer.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 import 'add_tool_screen.dart';
 import 'models.dart';
 import 'settings_screen.dart'; // NEW: For back button
@@ -1224,11 +1225,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
     final colorScheme = theme.colorScheme;
     final dividerColor = theme.dividerColor;
 
-    maybeAutoOpenDrawer();
-
-    final isWide = MediaQuery.of(context).size.width >= 900;
-    final usePermanentDrawer = isWide && DrawerDataCache.keepDrawerOpen;
-
     final bodyContent = _isLoading
         ? const Center(child: CircularProgressIndicator())
         : Row(
@@ -1389,30 +1385,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
               ],
             );
 
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Locations'),
         backgroundColor: colorScheme.inversePrimary,
-        leading: usePermanentDrawer
-            ? null
-            : Builder(
-                builder: (context) => IconButton(
-                  icon: const Icon(Icons.menu),
-                  onPressed: () => Scaffold.of(context).openDrawer(),
-                ),
-              ),
+        leading: workspaceMenuLeading(context),
       ),
-      drawer: usePermanentDrawer ? null : const AppDrawer(),
-      body: usePermanentDrawer
-          ? Row(
-              children: [
-                const AppDrawer(asDrawer: false, closeOnTap: false),
-                const VerticalDivider(width: 1),
-                Expanded(child: bodyContent),
-              ],
-            )
-          : bodyContent,
+      body: bodyContent,
     );
   }
 }

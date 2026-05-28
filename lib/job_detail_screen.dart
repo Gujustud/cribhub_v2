@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'app_drawer.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
+import 'auth_service.dart';
 import 'drawer_behavior.dart';
 import 'part_images_panel.dart';
 import 'pocketbase_service.dart';
 import 'quote_detail_screen.dart';
 import 'quote_sidebar.dart';
+import 'supplier_search_field.dart';
 import 'tracking_link.dart';
 import 'ui_breakpoints.dart';
 
@@ -52,7 +55,6 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
   final _materialLotController = TextEditingController();
   final _materialSourceController = TextEditingController();
   final _projectNotesController = TextEditingController();
-  final _notesController = TextEditingController();
 
   List<dynamic> _customers = [];
   List<dynamic> _quotes = [];
@@ -127,7 +129,6 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
     _materialLotController.text = '${d['material_lot'] ?? ''}';
     _materialSourceController.text = '${d['material_source'] ?? ''}';
     _projectNotesController.text = '${d['project_notes'] ?? ''}';
-    _notesController.text = '${d['notes_'] ?? d['notes'] ?? ''}';
     _partImages = PartImagesPanel.normalizeFilenames(d['part_images']);
     _showTracking2 = _trackingNumber2Controller.text.trim().isNotEmpty;
   }
@@ -151,7 +152,6 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
       _materialLotController,
       _materialSourceController,
       _projectNotesController,
-      _notesController,
     ]) {
       c.dispose();
     }
@@ -308,7 +308,6 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
       'material_lot': _optText(_materialLotController),
       'material_source': _optText(_materialSourceController),
       'project_notes': _optText(_projectNotesController),
-      'notes_': _optText(_notesController),
     };
   }
 
@@ -727,7 +726,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
     final narrow = MediaQuery.sizeOf(context).width < 640;
 
     final actions = [
-      if (_quoteId != null && _quoteId!.isNotEmpty)
+      if (!AuthService.instance.isJobsOnly &&
+          _quoteId != null &&
+          _quoteId!.isNotEmpty)
         _headerActionButton(
           context,
           label: 'View Quote →',
@@ -796,16 +797,6 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
   Widget _dharmaLeftDetailsCard(BuildContext context) {
     final link1 = _displayTrackingUrl(_trackingNumber1Controller.text, _trackingLink1Controller);
     final link2 = _displayTrackingUrl(_trackingNumber2Controller.text, _trackingLink2Controller);
-    String materialCaption = _materialSourceController.text.trim();
-    if (_materialSourceVendorId != null) {
-      try {
-        final s = _suppliers.firstWhere((x) => x.id == _materialSourceVendorId);
-        materialCaption = '${s.data['company_name'] ?? s.id}'.trim();
-      } catch (_) {
-        final hint = _expandedMaterialVendorName();
-        if (hint != null && hint.isNotEmpty) materialCaption = hint;
-      }
-    }
 
     return Card(
       child: Padding(
@@ -979,45 +970,16 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
             _notionRow(
               context,
               'Material source',
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (materialCaption.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Text(
-                        materialCaption,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
-                        ),
-                      ),
-                    ),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 300),
-                    child: DropdownButtonFormField<String?>(
-                      key: ValueKey('job_vendor_${_materialSourceVendorId ?? 'none'}'),
-                      initialValue: _materialSourceVendorId != null &&
-                              _suppliers.any((s) => s.id == _materialSourceVendorId)
-                          ? _materialSourceVendorId
-                          : null,
-                      decoration: _dropdownDecoration(context),
-                      items: [
-                        const DropdownMenuItem<String?>(value: null, child: Text('— Select vendor —')),
-                        ..._suppliers.map(
-                          (s) {
-                            final name = '${s.data['company_name'] ?? s.id}';
-                            return DropdownMenuItem<String?>(
-                              value: s.id as String,
-                              child: Text(name),
-                            );
-                          },
-                        ),
-                      ],
-                      onChanged: (id) => setState(() => _materialSourceVendorId = id),
-                    ),
-                  ),
-                ],
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 300),
+                child: SupplierSearchField(
+                  suppliers: _suppliers,
+                  selectedSupplierId: _materialSourceVendorId,
+                  selectedLabelFallback: _expandedMaterialVendorName(),
+                  noneOptionLabel: '— Select vendor —',
+                  decoration: _dropdownDecoration(context),
+                  onSupplierSelected: (id) => setState(() => _materialSourceVendorId = id),
+                ),
               ),
               showDivider: false,
             ),
@@ -1105,24 +1067,6 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
                     ),
                   ),
                 ],
-                const SizedBox(height: 12),
-                Text(
-                  'Internal notes',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? const Color(0xFF9CA3AF)
-                        : const Color(0xFF6B7280),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                TextField(
-                  controller: _notesController,
-                  maxLines: 3,
-                  style: const TextStyle(fontSize: 14),
-                  decoration: QuoteSidebarTheme.fieldDecoration(context),
-                ),
               ],
             ),
           ),
@@ -1533,26 +1477,12 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
                   ),
                 ),
                 const SizedBox(height: 4),
-                DropdownButtonFormField<String?>(
-                  key: ValueKey('job_vendor_${_materialSourceVendorId ?? 'none'}'),
-                  initialValue: _materialSourceVendorId != null &&
-                          _suppliers.any((s) => s.id == _materialSourceVendorId)
-                      ? _materialSourceVendorId
-                      : null,
+                SupplierSearchField(
+                  suppliers: _suppliers,
+                  selectedSupplierId: _materialSourceVendorId,
+                  selectedLabelFallback: _expandedMaterialVendorName(),
                   decoration: _dropdownDecoration(context),
-                  items: [
-                    const DropdownMenuItem<String?>(value: null, child: Text('— None —')),
-                    ..._suppliers.map(
-                      (s) {
-                        final name = '${s.data['company_name'] ?? s.id}';
-                        return DropdownMenuItem<String?>(
-                          value: s.id as String,
-                          child: Text(name),
-                        );
-                      },
-                    ),
-                  ],
-                  onChanged: (id) => setState(() => _materialSourceVendorId = id),
+                  onSupplierSelected: (id) => setState(() => _materialSourceVendorId = id),
                 ),
               ],
             ),
@@ -1574,17 +1504,6 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
           maxLines: 4,
           decoration: const InputDecoration(
             hintText: 'Project notes…',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 16),
-        const Text('Internal notes', style: TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _notesController,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            hintText: 'Notes…',
             border: OutlineInputBorder(),
           ),
         ),
@@ -1677,7 +1596,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
             ],
           ),
         ),
-        if (_quoteId != null && _quoteId!.isNotEmpty) ...[
+        if (!AuthService.instance.isJobsOnly &&
+            _quoteId != null &&
+            _quoteId!.isNotEmpty) ...[
           const SizedBox(height: 12),
           QuoteSidebarSecondaryButton(
             label: 'Open quote',
@@ -1703,25 +1624,18 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
 
   @override
   Widget build(BuildContext context) {
-    maybeAutoOpenDrawer();
     final title = _isNew
         ? 'New job'
         : (_jobNumberController.text.trim().isEmpty ? 'Job' : _jobNumberController.text.trim());
 
     if (_loading) {
-      return Scaffold(
-        key: _scaffoldKey,
+      return WorkspaceScaffold(
+        scaffoldKey: _scaffoldKey,
         appBar: AppBar(
           title: Text(title),
           backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-          leading: Builder(
-            builder: (context) => IconButton(
-              icon: const Icon(Icons.menu),
-              onPressed: () => Scaffold.of(context).openDrawer(),
-            ),
-          ),
+          leading: workspaceMenuLeading(context),
         ),
-        drawer: const AppDrawer(),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -1731,19 +1645,13 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
         ? _buildNewJobBody(context, wide: wide)
         : _buildExistingJobBody(context, wide: wide);
 
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: _isNew ? Text(title) : null,
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
+        leading: workspaceMenuLeading(context),
       ),
-      drawer: const AppDrawer(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: body,

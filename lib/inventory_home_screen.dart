@@ -3,15 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'add_tool_screen.dart';
-import 'app_drawer.dart';
 import 'drawer_behavior.dart';
-import 'drawer_data_cache.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 import 'inventory_screen.dart';
 import 'models.dart';
 import 'pocketbase_service.dart';
 import 'return_dialog.dart';
 
-/// Full-screen tool search home (original Cribhub startup screen).
+/// Full-screen tool search home (original DharmaCore startup screen).
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -217,11 +217,6 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
 
   @override
   Widget build(BuildContext context) {
-    maybeAutoOpenDrawer();
-
-    final isWide = MediaQuery.of(context).size.width >= 900;
-    final usePermanentDrawer = isWide && DrawerDataCache.keepDrawerOpen;
-
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isNarrow = screenWidth < 600;
 
@@ -339,30 +334,14 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
       ),
     );
 
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('Cribhub'),
-        leading: usePermanentDrawer
-            ? null
-            : Builder(
-                builder: (context) => IconButton(
-                  icon: const Icon(Icons.menu),
-                  onPressed: () => Scaffold.of(context).openDrawer(),
-                ),
-              ),
+        title: const Text('DharmaCore'),
+        leading: workspaceMenuLeading(context),
       ),
-      drawer: usePermanentDrawer ? null : const AppDrawer(),
-      body: usePermanentDrawer
-          ? Row(
-              children: [
-                const AppDrawer(asDrawer: false, closeOnTap: false),
-                const VerticalDivider(width: 1),
-                Expanded(child: content),
-              ],
-            )
-          : content,
+      body: content,
     );
   }
 

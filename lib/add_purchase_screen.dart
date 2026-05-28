@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'pocketbase_service.dart';
 import 'models.dart';
-import 'app_drawer.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 import 'drawer_behavior.dart';
 
 class AddPurchaseScreen extends StatefulWidget {
@@ -404,18 +405,12 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
 
   @override
   Widget build(BuildContext context) {
-    maybeAutoOpenDrawer();
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: Text(widget.purchase != null ? 'Edit Purchase' : 'Add Purchase'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
+        leading: workspaceMenuLeading(context),
         actions: [
           if (widget.purchase != null)
             TextButton(
@@ -424,7 +419,6 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
             ),
         ],
       ),
-      drawer: const AppDrawer(),
       body: _isLoadingData
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(

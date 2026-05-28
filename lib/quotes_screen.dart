@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import 'app_drawer.dart';
 import 'drawer_behavior.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
+import 'jobs_only_guard.dart';
 import 'pocketbase_service.dart';
 import 'quote_calculations.dart';
 import 'quote_detail_screen.dart';
+import 'list_toolbar_widgets.dart';
 import 'quote_sidebar.dart';
 import 'job_detail_screen.dart';
 
@@ -47,6 +50,7 @@ class _QuotesScreenState extends State<QuotesScreen> with AutoOpenDrawerMixin {
   @override
   void initState() {
     super.initState();
+    guardQuotesAccess(context);
     _loadData();
   }
 
@@ -706,8 +710,6 @@ class _QuotesScreenState extends State<QuotesScreen> with AutoOpenDrawerMixin {
 
   @override
   Widget build(BuildContext context) {
-    maybeAutoOpenDrawer();
-
     final now = DateTime.now();
     final monthStart = DateTime(now.year, now.month, 1);
     final monthEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
@@ -739,142 +741,140 @@ class _QuotesScreenState extends State<QuotesScreen> with AutoOpenDrawerMixin {
     final revenueLabel =
         _showTotals ? _formatCurrency(revenueThisMonth) : '—';
 
-    return Scaffold(
-      key: _scaffoldKey,
-      appBar: AppBar(
-        title: const Text('All Quotes'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
-      ),
-      drawer: const AppDrawer(),
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1400),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const Spacer(),
-                      SizedBox(
-                        width: 220,
+    final bodyWidget = RefreshIndicator(
+      onRefresh: _loadData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1400),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Spacer(),
+                    Flexible(
+                      flex: 3,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 480),
                         child: TextField(
                           controller: _searchController,
-                          decoration: QuoteSidebarTheme.fieldDecoration(context).copyWith(
+                          decoration: inventoryListSearchDecoration(
+                            context,
                             hintText: 'Search…',
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
                           ),
                           onChanged: _onSearchChanged,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      QuoteSidebarPrimaryButton(
-                        label: 'New Quote',
-                        onPressed: _newQuote,
+                    ),
+                    const SizedBox(width: 12),
+                    InventoryListActionButton(
+                      label: 'New Quote',
+                      onPressed: _newQuote,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _statsRow(
+                  quotesThisMonth,
+                  wonCount,
+                  pendingCount,
+                  revenueLabel,
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    _statusFilterDropdown(),
+                    Container(
+                      width: 1,
+                      height: 28,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      color: _tableBorderColor(context),
+                    ),
+                    _sortLink('Job #', 'job_number', defaultDir: 'desc'),
+                    _sortLink('Customer', 'customer', defaultDir: 'asc'),
+                    Text(
+                      'Order',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: titleColor,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _statsRow(
-                    quotesThisMonth,
-                    wonCount,
-                    pendingCount,
-                    revenueLabel,
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      _statusFilterDropdown(),
-                      Container(
-                        width: 1,
-                        height: 28,
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        color: _tableBorderColor(context),
-                      ),
-                      _sortLink('Job #', 'job_number', defaultDir: 'desc'),
-                      _sortLink('Customer', 'customer', defaultDir: 'asc'),
-                      Text(
-                        'Order',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: titleColor,
-                        ),
-                      ),
-                      InkWell(
-                        onTap: () => setState(() => _sortDir = 'asc'),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Text(
-                            'A→Z',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: _sortDir == 'asc' ? titleColor : Colors.grey,
-                            ),
+                    ),
+                    InkWell(
+                      onTap: () => setState(() => _sortDir = 'asc'),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Text(
+                          'A→Z',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color:
+                                _sortDir == 'asc' ? titleColor : Colors.grey,
                           ),
                         ),
                       ),
-                      InkWell(
-                        onTap: () => setState(() => _sortDir = 'desc'),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Text(
-                            'Z→A',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: _sortDir == 'desc' ? titleColor : Colors.grey,
-                            ),
+                    ),
+                    InkWell(
+                      onTap: () => setState(() => _sortDir = 'desc'),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Text(
+                          'Z→A',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: _sortDir == 'desc'
+                                ? titleColor
+                                : Colors.grey,
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  QuoteSidebarCard(
-                    padding: EdgeInsets.zero,
-                    child: _isLoading
-                        ? const Padding(
-                            padding: EdgeInsets.all(32),
-                            child: Center(child: CircularProgressIndicator()),
-                          )
-                        : filtered.isEmpty
-                            ? Padding(
-                                padding: const EdgeInsets.all(32),
-                                child: Center(
-                                  child: Text(
-                                    _quotes.isEmpty
-                                        ? 'No quotes yet. Create one to get started.'
-                                        : 'No quotes match your search or filter.',
-                                    style: TextStyle(color: Colors.grey[600]),
-                                  ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                QuoteSidebarCard(
+                  padding: EdgeInsets.zero,
+                  child: _isLoading
+                      ? const Padding(
+                          padding: EdgeInsets.all(32),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      : filtered.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Center(
+                                child: Text(
+                                  _quotes.isEmpty
+                                      ? 'No quotes yet. Create one to get started.'
+                                      : 'No quotes match your search or filter.',
+                                  style: TextStyle(color: Colors.grey[600]),
                                 ),
-                              )
-                            : _quotesTable(context, filtered),
-                  ),
-                ],
-              ),
+                              ),
+                            )
+                          : _quotesTable(context, filtered),
+                ),
+              ],
             ),
           ),
         ),
       ),
+    );
+
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
+      appBar: AppBar(
+        title: const Text('All Quotes'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        leading: workspaceMenuLeading(context),
+      ),
+      body: bodyWidget,
     );
   }
 }

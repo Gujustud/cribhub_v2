@@ -73,17 +73,22 @@ class QuoteSidebarCard extends StatelessWidget {
 /// Label above input (DharmaCore `Input.jsx` style).
 class QuoteSidebarField extends StatelessWidget {
   final String label;
-  final String value;
-  final ValueChanged<String> onChanged;
+  final String? value;
+  final TextEditingController? controller;
+  final ValueChanged<String>? onChanged;
   final TextInputType? keyboardType;
 
   const QuoteSidebarField({
     super.key,
     required this.label,
-    required this.value,
-    required this.onChanged,
+    this.value,
+    this.controller,
+    this.onChanged,
     this.keyboardType,
-  });
+  }) : assert(
+          controller != null || (value != null && onChanged != null),
+          'Provide controller or both value and onChanged',
+        );
 
   @override
   Widget build(BuildContext context) {
@@ -104,7 +109,8 @@ class QuoteSidebarField extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         TextFormField(
-          initialValue: value,
+          controller: controller,
+          initialValue: controller == null ? value : null,
           keyboardType: keyboardType,
           style: const TextStyle(fontSize: 15),
           decoration: QuoteSidebarTheme.fieldDecoration(context),

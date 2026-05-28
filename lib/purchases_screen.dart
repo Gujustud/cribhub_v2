@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'pocketbase_service.dart';
 import 'models.dart';
-import 'app_drawer.dart';
 import 'add_purchase_screen.dart';
 import 'drawer_behavior.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 
 class PurchasesScreen extends StatefulWidget {
   const PurchasesScreen({super.key});
@@ -71,19 +72,13 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
   Widget build(BuildContext context) {
     maybeAutoOpenDrawer();
     final isNarrow = MediaQuery.of(context).size.width < 700;
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Purchases'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
+        leading: workspaceMenuLeading(context),
       ),
-      drawer: const AppDrawer(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(

@@ -5,9 +5,10 @@ import 'pocketbase_service.dart';
 import 'transfer_dialog.dart';
 import 'add_tool_screen.dart';
 import 'return_dialog.dart';
-import 'app_drawer.dart';
 import 'drawer_behavior.dart';
-import 'drawer_data_cache.dart';
+import 'list_toolbar_widgets.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 
 class InventoryScreen extends StatefulWidget {
   final String? categoryFilter; // Optional category filter
@@ -385,10 +386,6 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
 
   @override
   Widget build(BuildContext context) {
-    maybeAutoOpenDrawer();
-
-    final isWide = MediaQuery.of(context).size.width >= 900;
-    final usePermanentDrawer = isWide && DrawerDataCache.keepDrawerOpen;
     final isNarrow = MediaQuery.of(context).size.width < 600;
 
     final bodyContent = Column(
@@ -415,63 +412,26 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
                       children: [
                         TextField(
                           controller: _searchController,
-                          decoration: InputDecoration(
+                          decoration: inventoryListSearchDecoration(
+                            context,
                             hintText: 'Search tools...',
-                            prefixIcon: const Icon(Icons.search),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           ),
                         ),
                         const SizedBox(height: 12),
                         Row(
                           children: [
                             Expanded(
-                              child: ElevatedButton(
+                              child: InventoryListActionButton(
+                                label: 'Add Tool',
                                 onPressed: _navigateToAddTool,
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                                  backgroundColor: Colors.grey[700],
-                                  foregroundColor: Colors.white,
-                                  minimumSize: const Size(0, 52),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.add, size: 24),
-                                    SizedBox(width: 8),
-                                    Text('Add Tool', style: TextStyle(fontSize: 16)),
-                                  ],
-                                ),
                               ),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: ElevatedButton(
+                              child: InventoryListActionButton(
+                                label: 'Return Tool',
+                                icon: Icons.keyboard_return,
                                 onPressed: _navigateToReturnTool,
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                                  backgroundColor: Colors.grey[700],
-                                  foregroundColor: Colors.white,
-                                  minimumSize: const Size(0, 52),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.keyboard_return, size: 24),
-                                    SizedBox(width: 8),
-                                    Text('Return Tool', style: TextStyle(fontSize: 16)),
-                                  ],
-                                ),
                               ),
                             ),
                           ],
@@ -485,57 +445,22 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
                           flex: 3,
                           child: TextField(
                             controller: _searchController,
-                            decoration: InputDecoration(
+                            decoration: inventoryListSearchDecoration(
+                              context,
                               hintText: 'Search tools...',
-                              prefixIcon: const Icon(Icons.search),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                             ),
                           ),
                         ),
                         const SizedBox(width: 12),
-                        ElevatedButton(
+                        InventoryListActionButton(
+                          label: 'Add Tool',
                           onPressed: _navigateToAddTool,
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                            backgroundColor: Colors.grey[700],
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size(0, 52),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.add, size: 24),
-                              SizedBox(width: 8),
-                              Text('Add Tool', style: TextStyle(fontSize: 16)),
-                            ],
-                          ),
                         ),
                         const SizedBox(width: 12),
-                        ElevatedButton(
+                        InventoryListActionButton(
+                          label: 'Return Tool',
+                          icon: Icons.keyboard_return,
                           onPressed: _navigateToReturnTool,
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                            backgroundColor: Colors.grey[700],
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size(0, 52),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.keyboard_return, size: 24),
-                              SizedBox(width: 8),
-                              Text('Return Tool', style: TextStyle(fontSize: 16)),
-                            ],
-                          ),
                         ),
                       ],
                     ),
@@ -742,19 +667,12 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
       ],
     );
 
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: Text(widget.categoryFilter ?? 'All Inventory'), // UPDATED: Dynamic title
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: usePermanentDrawer
-            ? null
-            : Builder(
-                builder: (context) => IconButton(
-                  icon: const Icon(Icons.menu),
-                  onPressed: () => Scaffold.of(context).openDrawer(),
-                ),
-              ),
+        leading: workspaceMenuLeading(context),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -763,16 +681,7 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
           ),
         ],
       ),
-      drawer: usePermanentDrawer ? null : const AppDrawer(),
-      body: usePermanentDrawer
-          ? Row(
-              children: [
-                const AppDrawer(asDrawer: false, closeOnTap: false),
-                const VerticalDivider(width: 1),
-                Expanded(child: bodyContent),
-              ],
-            )
-          : bodyContent,
+      body: bodyContent,
     );
   }
 }

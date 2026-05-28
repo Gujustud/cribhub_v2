@@ -12,9 +12,9 @@ import 'package:cribhub/main.dart';
 void main() {
   testWidgets('CribHub main screen smoke test', (WidgetTester tester) async {
     // Build the app and trigger a frame.
-    await tester.pumpWidget(const CribhubApp());
+    await tester.pumpWidget(const DharmaCoreApp());
 
     // Verify that the main screen title is shown.
-    expect(find.text('Cribhub'), findsOneWidget);
+    expect(find.text('DharmaCore'), findsOneWidget);
   });
 }

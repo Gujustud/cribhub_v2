@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'app_drawer.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 import 'git_info.dart';
 import 'drawer_behavior.dart';
 
@@ -53,19 +54,13 @@ class _AboutScreenState extends State<AboutScreen> with AutoOpenDrawerMixin {
   Widget build(BuildContext context) {
     maybeAutoOpenDrawer();
 
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: const Text('About'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
+        leading: workspaceMenuLeading(context),
       ),
-      drawer: const AppDrawer(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -82,7 +77,7 @@ class _AboutScreenState extends State<AboutScreen> with AutoOpenDrawerMixin {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'CribHub',
+                        'DharmaCore',
                         style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: Theme.of(context).colorScheme.primary,
@@ -122,9 +117,9 @@ class _AboutScreenState extends State<AboutScreen> with AutoOpenDrawerMixin {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'CribHub is a modern, cross-platform inventory management system for workshop tools built with Flutter and PocketBase. '
-                          'It helps workshop technicians efficiently track and manage tool inventory. From tool crib storage to machine locations, '
-                          'CribHub provides real-time visibility into tool locations, quantities, and movement history.',
+                          'DharmaCore is a modern, cross-platform inventory and shop ERP system built with Flutter and PocketBase. '
+                          'It helps workshop teams efficiently track tools, jobs, quotes, customers, and purchasing. '
+                          'DharmaCore provides real-time visibility into inventory locations, quantities, and workflow status.',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ],

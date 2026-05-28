@@ -5,9 +5,10 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'add_tool_screen.dart';
-import 'app_drawer.dart';
+import 'auth_service.dart';
 import 'drawer_behavior.dart';
-import 'drawer_data_cache.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 import 'inventory_screen.dart';
 import 'job_detail_screen.dart';
 import 'jobs_screen.dart';
@@ -17,7 +18,6 @@ import 'quote_sidebar.dart';
 import 'quotes_screen.dart';
 import 'return_dialog.dart';
 import 'tracking_link.dart';
-import 'ui_breakpoints.dart';
 
 /// Combined inventory + ERP dashboard (DharmaCore `Dashboard.jsx` + tool home).
 class CombinedHomeScreen extends StatefulWidget {
@@ -57,20 +57,33 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
     super.dispose();
   }
 
+  bool get _isJobsOnly => AuthService.instance.isJobsOnly;
+
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
       final pb = PocketBaseService();
-      final results = await Future.wait([
-        pb.getJobs(),
-        pb.getQuotes(),
-      ]);
-      if (mounted) {
-        setState(() {
-          _jobs = results[0];
-          _quotes = results[1];
-          _loading = false;
-        });
+      if (_isJobsOnly) {
+        final jobs = await pb.getJobs();
+        if (mounted) {
+          setState(() {
+            _jobs = jobs;
+            _quotes = [];
+            _loading = false;
+          });
+        }
+      } else {
+        final results = await Future.wait([
+          pb.getJobs(),
+          pb.getQuotes(),
+        ]);
+        if (mounted) {
+          setState(() {
+            _jobs = results[0];
+            _quotes = results[1];
+            _loading = false;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -512,29 +525,31 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
             TextField(
               controller: _dashboardSearchController,
               decoration: InputDecoration(
-                hintText: 'Search jobs & quotes…',
+                hintText: _isJobsOnly ? 'Search jobs…' : 'Search jobs & quotes…',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 prefixIcon: const Icon(Icons.search, size: 20),
               ),
             ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed: _openNewQuote,
-                  style: _greyActionButtonStyle,
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add, size: 24),
-                      SizedBox(width: 8),
-                      Text('New quote', style: TextStyle(fontSize: 16)),
-                    ],
+            if (!_isJobsOnly) ...[
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed: _openNewQuote,
+                    style: _greyActionButtonStyle,
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add, size: 24),
+                        SizedBox(width: 8),
+                        Text('New quote', style: TextStyle(fontSize: 16)),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -716,11 +731,6 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
 
   @override
   Widget build(BuildContext context) {
-    maybeAutoOpenDrawer();
-
-    final wide = MediaQuery.sizeOf(context).width >= kWorkspaceWideBreakpointPx;
-    final usePermanentDrawer = wide && DrawerDataCache.keepDrawerOpen;
-
     final searchLower = _dashboardSearch.trim().toLowerCase();
 
     final activeJobsAll = _jobs.where((j) {
@@ -871,19 +881,20 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
                     ),
                     child: _activeJobsTable(activeJobs),
                   ),
-                  _dashboardSection(
-                    title: 'Recent Quotes',
-                    trailing: TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const QuotesScreen()),
-                        );
-                      },
-                      child: const Text('All quotes'),
+                  if (!_isJobsOnly)
+                    _dashboardSection(
+                      title: 'Recent Quotes',
+                      trailing: TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const QuotesScreen()),
+                          );
+                        },
+                        child: const Text('All quotes'),
+                      ),
+                      child: _recentQuotesTable(recentQuotes),
                     ),
-                    child: _recentQuotesTable(recentQuotes),
-                  ),
                 ],
               ],
             ),
@@ -892,30 +903,14 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
       ),
     );
 
-    return Scaffold(
-      key: _scaffoldKey,
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('Cribhub'),
-        leading: usePermanentDrawer
-            ? null
-            : Builder(
-                builder: (context) => IconButton(
-                  icon: const Icon(Icons.menu),
-                  onPressed: () => Scaffold.of(context).openDrawer(),
-                ),
-              ),
+        title: const Text('DharmaCore'),
+        leading: workspaceMenuLeading(context),
       ),
-      drawer: usePermanentDrawer ? null : const AppDrawer(),
-      body: usePermanentDrawer
-          ? Row(
-              children: [
-                const AppDrawer(asDrawer: false, closeOnTap: false),
-                const VerticalDivider(width: 1),
-                Expanded(child: body),
-              ],
-            )
-          : body,
+      body: body,
     );
   }
 }

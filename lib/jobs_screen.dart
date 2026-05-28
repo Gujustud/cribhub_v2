@@ -2,12 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'app_drawer.dart';
 import 'drawer_behavior.dart';
+import 'workspace_layout.dart';
+import 'workspace_scaffold.dart';
 import 'job_detail_screen.dart';
+import 'jobs_kanban_board.dart';
 import 'pocketbase_service.dart';
 import 'quote_detail_screen.dart';
+import 'list_toolbar_widgets.dart';
 import 'quote_sidebar.dart';
 
 /// All jobs list (layout aligned with [QuotesScreen]).
@@ -19,6 +23,8 @@ class JobsScreen extends StatefulWidget {
 }
 
 class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
+  static const _jobsViewKey = 'cribhub_jobs_view';
+
   List<dynamic> _jobs = [];
   bool _isLoading = true;
   String _search = '';
@@ -26,6 +32,7 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
   String _statusFilter = '';
   String _sortKey = 'job_number';
   String _sortDir = 'desc';
+  String _viewMode = 'board';
   Timer? _searchDebounce;
 
   final _searchController = TextEditingController();
@@ -39,6 +46,7 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
   @override
   void initState() {
     super.initState();
+    _loadViewPreference();
     _loadData();
   }
 
@@ -47,6 +55,21 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
     _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadViewPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString(_jobsViewKey);
+    if (!mounted) return;
+    if (saved == 'board' || saved == 'list') {
+      setState(() => _viewMode = saved!);
+    }
+  }
+
+  Future<void> _setViewMode(String mode) async {
+    setState(() => _viewMode = mode);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_jobsViewKey, mode);
   }
 
   Future<void> _loadData() async {
@@ -153,11 +176,59 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
     return DateTime(yyyy, mm, dd).millisecondsSinceEpoch;
   }
 
+  String _jobNumberLabel(dynamic job) {
+    final data = job.data as Map<String, dynamic>? ?? {};
+    return _str(data['job_number']);
+  }
+
+  DateTime? _jobActivityDate(Map<String, dynamic> data, dynamic job) {
+    final completion = _parseDue(data['completion_date']);
+    if (completion != null) return completion;
+    final ship = _parseDue(data['ship_date']);
+    if (ship != null) return ship;
+    return _jobCreated(job);
+  }
+
+  Future<void> _onKanbanStatusChange(String jobId, String newStatus) async {
+    try {
+      await PocketBaseService().updateJob(jobId, {'status': newStatus});
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update status: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Widget _viewModeLink(String label, String mode) {
+    final active = _viewMode == mode;
+    final titleColor = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : const Color(0xFF111827);
+    final color = active
+        ? titleColor
+        : (Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF9CA3AF)
+            : const Color(0xFF4B5563));
+    return InkWell(
+      onTap: () => _setViewMode(mode),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        child: Text(
+          label,
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color),
+        ),
+      ),
+    );
+  }
+
   List<dynamic> get _filteredJobs {
     final searchLower = _searchDebounced.trim().toLowerCase();
+    final useStatusFilter = _viewMode == 'list';
     var list = _jobs.where((job) {
       final data = job.data as Map<String, dynamic>? ?? {};
-      if (_statusFilter.isNotEmpty && _str(data['status']) != _statusFilter) {
+      if (useStatusFilter && _statusFilter.isNotEmpty && _str(data['status']) != _statusFilter) {
         return false;
       }
       if (searchLower.isEmpty) return true;
@@ -285,7 +356,7 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
     );
   }
 
-  Widget _statsRow(int thisMonth, int inProgress, int done, int cancelled) {
+  Widget _statsRow(int planning, int inProgress, int doneThisMonth, int doneThisYear) {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= 700) {
@@ -293,13 +364,13 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: _statCard('Jobs this month', '$thisMonth')),
+                Expanded(child: _statCard('Planning', '$planning')),
                 const SizedBox(width: 12),
                 Expanded(child: _statCard('In progress', '$inProgress')),
                 const SizedBox(width: 12),
-                Expanded(child: _statCard('Done', '$done')),
+                Expanded(child: _statCard('Done this month', '$doneThisMonth')),
                 const SizedBox(width: 12),
-                Expanded(child: _statCard('Cancelled', '$cancelled')),
+                Expanded(child: _statCard('Done this year', '$doneThisYear')),
               ],
             ),
           );
@@ -308,7 +379,7 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
           children: [
             Row(
               children: [
-                Expanded(child: _statCard('Jobs this month', '$thisMonth')),
+                Expanded(child: _statCard('Planning', '$planning')),
                 const SizedBox(width: 12),
                 Expanded(child: _statCard('In progress', '$inProgress')),
               ],
@@ -316,9 +387,9 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _statCard('Done', '$done')),
+                Expanded(child: _statCard('Done this month', '$doneThisMonth')),
                 const SizedBox(width: 12),
-                Expanded(child: _statCard('Cancelled', '$cancelled')),
+                Expanded(child: _statCard('Done this year', '$doneThisYear')),
               ],
             ),
           ],
@@ -588,29 +659,23 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
 
   @override
   Widget build(BuildContext context) {
-    maybeAutoOpenDrawer();
-
     final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1);
-    final monthEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
-
-    var thisMonth = 0;
+    var planning = 0;
     var inProgress = 0;
-    var done = 0;
-    var cancelled = 0;
+    var doneThisMonth = 0;
+    var doneThisYear = 0;
 
     for (final job in _jobs) {
       final data = job.data as Map<String, dynamic>? ?? {};
       final st = _str(data['status']);
+      if (st.isEmpty || st == 'planning') planning++;
       if (st == 'in_progress') inProgress++;
-      if (st == 'done') done++;
-      if (st == 'cancelled') cancelled++;
-
-      final created = _jobCreated(job);
-      if (created != null &&
-          !created.isBefore(monthStart) &&
-          !created.isAfter(monthEnd)) {
-        thisMonth++;
+      if (st == 'done') {
+        final d = _jobActivityDate(data, job);
+        if (d != null) {
+          if (d.year == now.year && d.month == now.month) doneThisMonth++;
+          if (d.year == now.year) doneThisYear++;
+        }
       }
     }
 
@@ -619,63 +684,50 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
         ? Colors.white
         : const Color(0xFF111827);
 
-    return Scaffold(
-      key: _scaffoldKey,
-      appBar: AppBar(
-        title: const Text('All Jobs'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
-      ),
-      drawer: const AppDrawer(),
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1400),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      const Spacer(),
-                      SizedBox(
-                        width: 220,
+    final bodyWidget = RefreshIndicator(
+      onRefresh: _loadData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1400),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Spacer(),
+                    Flexible(
+                      flex: 3,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 480),
                         child: TextField(
                           controller: _searchController,
-                          decoration: QuoteSidebarTheme.fieldDecoration(context).copyWith(
+                          decoration: inventoryListSearchDecoration(
+                            context,
                             hintText: 'Search…',
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
                           ),
                           onChanged: _onSearchChanged,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      QuoteSidebarPrimaryButton(
-                        label: 'New job',
-                        onPressed: _newJob,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _statsRow(thisMonth, inProgress, done, cancelled),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
+                    ),
+                    const SizedBox(width: 12),
+                    InventoryListActionButton(
+                      label: 'New Job',
+                      onPressed: _newJob,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _statsRow(planning, inProgress, doneThisMonth, doneThisYear),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (_viewMode == 'list') ...[
                       _statusFilterDropdown(),
                       Container(
                         width: 1,
@@ -683,74 +735,106 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
                         margin: const EdgeInsets.symmetric(horizontal: 4),
                         color: _tableBorderColor(context),
                       ),
-                      _sortLink('Job #', 'job_number', defaultDir: 'desc'),
-                      _sortLink('Customer', 'customer', defaultDir: 'asc'),
+                    ],
+                    _sortLink('Job #', 'job_number', defaultDir: 'desc'),
+                    _sortLink('Customer', 'customer', defaultDir: 'asc'),
+                    if (_viewMode == 'list') ...[
                       _sortLink('Due', 'due_date', defaultDir: 'asc'),
                       _sortLink('Status', 'status', defaultDir: 'asc'),
-                      Text(
-                        'Order',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: titleColor,
-                        ),
-                      ),
-                      InkWell(
-                        onTap: () => setState(() => _sortDir = 'asc'),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Text(
-                            'A→Z',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: _sortDir == 'asc' ? titleColor : Colors.grey,
-                            ),
-                          ),
-                        ),
-                      ),
-                      InkWell(
-                        onTap: () => setState(() => _sortDir = 'desc'),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Text(
-                            'Z→A',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: _sortDir == 'desc' ? titleColor : Colors.grey,
-                            ),
-                          ),
-                        ),
-                      ),
                     ],
-                  ),
-                  const SizedBox(height: 16),
-                  QuoteSidebarCard(
-                    padding: EdgeInsets.zero,
-                    child: _isLoading
-                        ? const Padding(
-                            padding: EdgeInsets.all(32),
-                            child: Center(child: CircularProgressIndicator()),
+                    Text(
+                      'Order',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: titleColor,
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => setState(() => _sortDir = 'asc'),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Text(
+                          'A→Z',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: _sortDir == 'asc'
+                                ? titleColor
+                                : Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => setState(() => _sortDir = 'desc'),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Text(
+                          'Z→A',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: _sortDir == 'desc'
+                                ? titleColor
+                                : Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 28,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      color: _tableBorderColor(context),
+                    ),
+                    _viewModeLink('Board', 'board'),
+                    _viewModeLink('List', 'list'),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _isLoading
+                    ? const Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    : filtered.isEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Center(
+                              child: Text(
+                                _jobs.isEmpty
+                                    ? 'No jobs yet. Create one to get started.'
+                                    : "No jobs match your search${_viewMode == 'list' && _statusFilter.isNotEmpty ? ' or filter' : ''}.",
+                                style: TextStyle(color: Colors.grey[600]),
+                              ),
+                            ),
                           )
-                        : filtered.isEmpty
-                            ? Padding(
-                                padding: const EdgeInsets.all(32),
-                                child: Center(
-                                  child: Text(
-                                    _jobs.isEmpty
-                                        ? 'No jobs yet. Create one to get started.'
-                                        : 'No jobs match your search or filter.',
-                                    style: TextStyle(color: Colors.grey[600]),
-                                  ),
-                                ),
+                        : _viewMode == 'board'
+                            ? JobsKanbanBoard(
+                                jobs: filtered,
+                                customerLabel: _customerDisplay,
+                                jobNumber: _jobNumberLabel,
+                                onOpenJob: _openJob,
+                                onStatusChange: _onKanbanStatusChange,
                               )
-                            : _jobsTable(context, filtered),
-                  ),
-                ],
-              ),
+                            : QuoteSidebarCard(
+                                padding: EdgeInsets.zero,
+                                child: _jobsTable(context, filtered),
+                              ),
+              ],
             ),
           ),
         ),
       ),
+    );
+
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
+      appBar: AppBar(
+        title: const Text('All Jobs'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        leading: workspaceMenuLeading(context),
+      ),
+      body: bodyWidget,
     );
   }
 }
