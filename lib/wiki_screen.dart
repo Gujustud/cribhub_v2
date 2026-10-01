@@ -25,6 +25,8 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
   bool _loading = true;
   String? _selectedId;
   String _query = '';
+  /// Page ids whose children are shown in the left tree.
+  final Set<String> _expandedIds = {};
 
   @override
   GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
@@ -43,6 +45,20 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
     super.dispose();
   }
 
+  void _ensureExpandedFor(String? pageId) {
+    if (pageId == null) return;
+    _expandedIds.addAll(wikiAncestorIds(_pages, pageId));
+  }
+
+  void _expandRootsWithChildren() {
+    final children = wikiChildrenMap(_pages);
+    for (final root in children[null] ?? const <RecordModel>[]) {
+      if ((children[root.id] ?? const []).isNotEmpty) {
+        _expandedIds.add(root.id);
+      }
+    }
+  }
+
   Future<void> _load({String? keepId}) async {
     setState(() => _loading = true);
     try {
@@ -53,8 +69,10 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
       final id = keepId ?? _selectedId;
       final still = records.any((p) => p.id == id);
       setState(() {
-          _pages = List<RecordModel>.from(records);
+        _pages = List<RecordModel>.from(records);
         _selectedId = still ? id : (records.isEmpty ? null : records.first.id);
+        _expandRootsWithChildren();
+        _ensureExpandedFor(_selectedId);
         _loading = false;
       });
     } catch (e) {
@@ -146,7 +164,17 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
                       context,
                       hintText: 'Search titles and page text',
                     ),
-                    onChanged: (v) => setState(() => _query = v),
+                    onChanged: (v) => setState(() {
+                      _query = v;
+                      if (v.trim().isNotEmpty) {
+                        // Expand ancestors of search hits so matches are visible.
+                        for (final p in _pages) {
+                          if (wikiMatchesQuery(p, v)) {
+                            _expandedIds.addAll(wikiAncestorIds(_pages, p.id));
+                          }
+                        }
+                      }
+                    }),
                   ),
                 ),
                 if (_canEdit) ...[
@@ -235,17 +263,44 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
   ) {
     final kids = (children[page.id] ?? []).where((c) => visible.contains(c.id)).toList();
     final selected = page.id == _selectedId;
+    final hasKids = kids.isNotEmpty;
+    final expanded = _expandedIds.contains(page.id) || _query.trim().isNotEmpty;
+
     return [
       ListTile(
         selected: selected,
-        contentPadding: EdgeInsets.only(left: 12 + depth * 16, right: 8),
+        dense: true,
+        contentPadding: EdgeInsets.only(left: 4 + depth * 12, right: 4),
+        leading: hasKids
+            ? IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                tooltip: expanded ? 'Collapse' : 'Expand',
+                icon: Icon(
+                  expanded ? Icons.expand_more : Icons.chevron_right,
+                  size: 22,
+                ),
+                onPressed: () {
+                  setState(() {
+                    if (_expandedIds.contains(page.id)) {
+                      _expandedIds.remove(page.id);
+                    } else {
+                      _expandedIds.add(page.id);
+                    }
+                  });
+                },
+              )
+            : const SizedBox(width: 32),
         title: Text(
           wikiTitle(page),
           style: TextStyle(
             fontWeight: depth == 0 ? FontWeight.w600 : FontWeight.w400,
           ),
         ),
-        onTap: () => setState(() => _selectedId = page.id),
+        onTap: () => setState(() {
+          _selectedId = page.id;
+          _ensureExpandedFor(page.id);
+        }),
         trailing: _canEdit
             ? PopupMenuButton<String>(
                 onSelected: (v) {
@@ -261,7 +316,8 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
               )
             : null,
       ),
-      for (final c in kids) ..._treeTiles(c, children, visible, depth + 1),
+      if (hasKids && expanded)
+        for (final c in kids) ..._treeTiles(c, children, visible, depth + 1),
     ];
   }
 

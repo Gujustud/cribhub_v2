@@ -246,6 +246,90 @@ class _WikiEditScreenState extends State<WikiEditScreen> {
     }
   }
 
+  /// Upload image(s) and insert markdown `![alt](url)` at the cursor.
+  Future<void> _insertInlineImages() async {
+    var record = _record;
+    if (record == null) {
+      await _save(popOnSuccess: false);
+      record = _record;
+    }
+    if (record == null || !mounted) return;
+
+    final names = wikiAttachmentNames(record);
+    if (names.length >= 12) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximum 12 files per page.')),
+      );
+      return;
+    }
+
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'],
+      allowMultiple: true,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    setState(() => _uploading = true);
+    try {
+      final pb = PocketBaseService().pb;
+      final col = pb.collection('wiki_pages');
+      var last = record!;
+      final before = wikiAttachmentNames(last).toSet();
+      final snippets = <String>[];
+      var count = before.length;
+
+      for (final f in result.files) {
+        if (count >= 12) break;
+        final bytes = f.bytes;
+        if (bytes == null || bytes.isEmpty) continue;
+        last = await col.update(
+          last.id,
+          files: [
+            http.MultipartFile.fromBytes(
+              'attachments',
+              bytes,
+              filename: f.name,
+            ),
+          ],
+        );
+        count++;
+        final after = wikiAttachmentNames(last);
+        final added = after.where((n) => !before.contains(n)).toList();
+        before.addAll(after);
+        for (final name in added) {
+          final url = pb.files.getUrl(last, name).toString();
+          final alt = name.replaceAll(RegExp(r'\.[^.]+$'), '');
+          snippets.add('![$alt]($url)');
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _record = last;
+          _preview = false;
+        });
+        if (snippets.isNotEmpty) {
+          final (start, end, _) = _bodySelection();
+          final block = snippets.join('\n\n');
+          final needsPadBefore =
+              start > 0 && !_body.text.substring(0, start).endsWith('\n');
+          final insert = '${needsPadBefore ? '\n\n' : ''}$block\n\n';
+          _replaceBodyRange(start, end, insert);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Image insert failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
   Future<void> _removeFile(String filename) async {
     final record = _record;
     if (record == null) return;
@@ -403,6 +487,11 @@ class _WikiEditScreenState extends State<WikiEditScreen> {
                             tooltip: 'Underline',
                             onPressed: _wrapUnderline,
                             icon: const Icon(Icons.format_underlined),
+                          ),
+                          IconButton(
+                            tooltip: 'Insert image inline',
+                            onPressed: _uploading ? null : _insertInlineImages,
+                            icon: const Icon(Icons.image_outlined),
                           ),
                         ],
                       ),

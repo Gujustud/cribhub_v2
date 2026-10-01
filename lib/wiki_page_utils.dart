@@ -95,6 +95,20 @@ Set<String> wikiDescendantIds(List<RecordModel> pages, String id) {
   return out;
 }
 
+/// Parent chain above [id] (not including [id] itself).
+Set<String> wikiAncestorIds(List<RecordModel> pages, String id) {
+  final byId = {for (final p in pages) p.id: p};
+  final out = <String>{};
+  var cur = byId[id];
+  while (cur != null) {
+    final parent = wikiParentId(cur);
+    if (parent == null || !byId.containsKey(parent)) break;
+    if (!out.add(parent)) break;
+    cur = byId[parent];
+  }
+  return out;
+}
+
 bool wikiMatchesQuery(RecordModel page, String query) {
   final q = query.trim().toLowerCase();
   if (q.isEmpty) return true;
