@@ -1,0 +1,682 @@
+
+
+#pragma once
+#import <Foundation/Foundation.h>
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacyBatteryCommandTypeNumber) {
+  BFElementModelSpecLegacyBatteryCommandTypeNumberPS_BAT_NON,
+  BFElementModelSpecLegacyBatteryCommandTypeNumberPS_BAT_PJCOMMAND,
+  BFElementModelSpecLegacyBatteryCommandTypeNumberPS_BAT_MW145COMMAND,
+  BFElementModelSpecLegacyBatteryCommandTypeNumberPS_BAT_MW260COMMAND,
+  BFElementModelSpecLegacyBatteryCommandTypeNumberPS_BAT_FROMSTATUS,
+  BFElementModelSpecLegacyBatteryCommandTypeNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacyBatteryCommandTypeStringPS_BAT_NON;
+extern NSString * __nonnull const BFElementModelSpecLegacyBatteryCommandTypeStringPS_BAT_PJCOMMAND;
+extern NSString * __nonnull const BFElementModelSpecLegacyBatteryCommandTypeStringPS_BAT_MW145COMMAND;
+extern NSString * __nonnull const BFElementModelSpecLegacyBatteryCommandTypeStringPS_BAT_MW260COMMAND;
+extern NSString * __nonnull const BFElementModelSpecLegacyBatteryCommandTypeStringPS_BAT_FROMSTATUS;
+extern NSString * __nonnull const BFElementModelSpecLegacyBatteryCommandTypeString__Null;
+@interface BFElementModelSpecLegacyBatteryCommandType : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacyBatteryCommandTypeNumber)num;
++ (BFElementModelSpecLegacyBatteryCommandTypeNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyBitOrderOfBitmapIsLittleNumber;
+@interface BFElementModelSpecLegacyBitOrderOfBitmapIsLittle : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyChangeStatusModeNumber;
+@interface BFElementModelSpecLegacyChangeStatusMode : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyFirmUpdateShouldChangeCommandModeNumber;
+@interface BFElementModelSpecLegacyFirmUpdateShouldChangeCommandMode : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacyGraphicCommandTypeNumber) {
+  BFElementModelSpecLegacyGraphicCommandTypeNumberG_COMMAND_g,
+  BFElementModelSpecLegacyGraphicCommandTypeNumberG_COMMAND_G,
+  BFElementModelSpecLegacyGraphicCommandTypeNumberG_COMMAND_PJ,
+  BFElementModelSpecLegacyGraphicCommandTypeNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacyGraphicCommandTypeStringG_COMMAND_g;
+extern NSString * __nonnull const BFElementModelSpecLegacyGraphicCommandTypeStringG_COMMAND_G;
+extern NSString * __nonnull const BFElementModelSpecLegacyGraphicCommandTypeStringG_COMMAND_PJ;
+extern NSString * __nonnull const BFElementModelSpecLegacyGraphicCommandTypeString__Null;
+@interface BFElementModelSpecLegacyGraphicCommandType : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacyGraphicCommandTypeNumber)num;
++ (BFElementModelSpecLegacyGraphicCommandTypeNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyHeadPinNumber;
+@interface BFElementModelSpecLegacyHeadPin : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyHeadPinWhenPrintTubeNumber;
+@interface BFElementModelSpecLegacyHeadPinWhenPrintTube : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyIgnorePaperEmptyWhenPrintEndNumber;
+@interface BFElementModelSpecLegacyIgnorePaperEmptyWhenPrintEnd : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyImageHalftoneShouldGammaAdjustNumber;
+@interface BFElementModelSpecLegacyImageHalftoneShouldGammaAdjust : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacyMainVersionCommandTypeNumber) {
+  BFElementModelSpecLegacyMainVersionCommandTypeNumberMV_U0FH01H01H,
+  BFElementModelSpecLegacyMainVersionCommandTypeNumberMV_U0EH01H,
+  BFElementModelSpecLegacyMainVersionCommandTypeNumberMV_U0FH02H01H,
+  BFElementModelSpecLegacyMainVersionCommandTypeNumberMV_UNKWOUN,
+  BFElementModelSpecLegacyMainVersionCommandTypeNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacyMainVersionCommandTypeStringMV_U0FH01H01H;
+extern NSString * __nonnull const BFElementModelSpecLegacyMainVersionCommandTypeStringMV_U0EH01H;
+extern NSString * __nonnull const BFElementModelSpecLegacyMainVersionCommandTypeStringMV_U0FH02H01H;
+extern NSString * __nonnull const BFElementModelSpecLegacyMainVersionCommandTypeStringMV_UNKWOUN;
+extern NSString * __nonnull const BFElementModelSpecLegacyMainVersionCommandTypeString__Null;
+@interface BFElementModelSpecLegacyMainVersionCommandType : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacyMainVersionCommandTypeNumber)num;
++ (BFElementModelSpecLegacyMainVersionCommandTypeNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyMediaSizeShouldCheckNumber;
+@interface BFElementModelSpecLegacyMediaSizeShouldCheck : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyMinPrintMerginPerTenthMMNumber;
+@interface BFElementModelSpecLegacyMinPrintMerginPerTenthMM : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyMinPrintPaperLengthPerTenthMMNumber;
+@interface BFElementModelSpecLegacyMinPrintPaperLengthPerTenthMM : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyMode9CompressionMaxByteSizeNumber;
+@interface BFElementModelSpecLegacyMode9CompressionMaxByteSize : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyMode9ShouldFlipHorizontalNumber;
+@interface BFElementModelSpecLegacyMode9ShouldFlipHorizontal : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyModelCodeNumber;
+@interface BFElementModelSpecLegacyModelCode : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef NSString* BFElementModelSpecLegacyModelNameNumber;
+@interface BFElementModelSpecLegacyModelName : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyNullCommandLengthNumber;
+@interface BFElementModelSpecLegacyNullCommandLength : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacyPageEndCommandTypeNumber) {
+  BFElementModelSpecLegacyPageEndCommandTypeNumberEND_PJCODE,
+  BFElementModelSpecLegacyPageEndCommandTypeNumberEND_NORMAL,
+  BFElementModelSpecLegacyPageEndCommandTypeNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacyPageEndCommandTypeStringEND_PJCODE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPageEndCommandTypeStringEND_NORMAL;
+extern NSString * __nonnull const BFElementModelSpecLegacyPageEndCommandTypeString__Null;
+@interface BFElementModelSpecLegacyPageEndCommandType : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacyPageEndCommandTypeNumber)num;
++ (BFElementModelSpecLegacyPageEndCommandTypeNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacyPaperListKindNumber) {
+  BFElementModelSpecLegacyPaperListKindNumberPS_A7,
+  BFElementModelSpecLegacyPaperListKindNumberPS_A6,
+  BFElementModelSpecLegacyPaperListKindNumberPS_PJ,
+  BFElementModelSpecLegacyPaperListKindNumberPS_BIN,
+  BFElementModelSpecLegacyPaperListKindNumberPS_QL,
+  BFElementModelSpecLegacyPaperListKindNumberPS_PT,
+  BFElementModelSpecLegacyPaperListKindNumberPS_PT_36mm,
+  BFElementModelSpecLegacyPaperListKindNumberPS_PT_18mm,
+  BFElementModelSpecLegacyPaperListKindNumberPS_TUBE,
+  BFElementModelSpecLegacyPaperListKindNumberPS_FLE,
+  BFElementModelSpecLegacyPaperListKindNumberPS_PT3,
+  BFElementModelSpecLegacyPaperListKindNumberPS_QL1000,
+  BFElementModelSpecLegacyPaperListKindNumberPS_PT_CUBE3,
+  BFElementModelSpecLegacyPaperListKindNumberPS_PT9000,
+  BFElementModelSpecLegacyPaperListKindNumberPS_PT_3_5mmUNSUPPORT,
+  BFElementModelSpecLegacyPaperListKindNumberPS_PT_HS3,
+  BFElementModelSpecLegacyPaperListKindNumberPS_PT_36mm_HS3,
+  BFElementModelSpecLegacyPaperListKindNumberPAPER_UNSUPPORT,
+  BFElementModelSpecLegacyPaperListKindNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_A7;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_A6;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_PJ;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_BIN;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_QL;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_PT;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_PT_36mm;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_PT_18mm;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_TUBE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_FLE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_PT3;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_QL1000;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_PT_CUBE3;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_PT9000;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_PT_3_5mmUNSUPPORT;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_PT_HS3;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPS_PT_36mm_HS3;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindStringPAPER_UNSUPPORT;
+extern NSString * __nonnull const BFElementModelSpecLegacyPaperListKindString__Null;
+@interface BFElementModelSpecLegacyPaperListKind : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacyPaperListKindNumber)num;
++ (BFElementModelSpecLegacyPaperListKindNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacyPrintCompressTypeNumber) {
+  BFElementModelSpecLegacyPrintCompressTypeNumberCOM_RAW,
+  BFElementModelSpecLegacyPrintCompressTypeNumberCOM_RAW_TIFF,
+  BFElementModelSpecLegacyPrintCompressTypeNumberCOM_TIFF,
+  BFElementModelSpecLegacyPrintCompressTypeNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacyPrintCompressTypeStringCOM_RAW;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrintCompressTypeStringCOM_RAW_TIFF;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrintCompressTypeStringCOM_TIFF;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrintCompressTypeString__Null;
+@interface BFElementModelSpecLegacyPrintCompressType : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacyPrintCompressTypeNumber)num;
++ (BFElementModelSpecLegacyPrintCompressTypeNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacyPrinterSettingCategoryNumber) {
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_NET_IPV6,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_WIFI_IPV6,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_WIFI_BOOTMODE,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_WIFI_INTERFACE,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_WIFI_WIRELESSDIRECT_BOOTMODE,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_WIFI_SETTINGS,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_WIFI_NODENAME,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_LAN_SETTINGS,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_LAN_NODENAME,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_LAN_IPV6,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_WIRELESSDIRECT_CREATE_KRY,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_WIRELESSDIRECT_SETTINGS,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_AUTOPOWEROFFTIME,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_AUTOSLEEPTIME,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_AUTOSLEEPTOPOWEROFFTIME,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_POWERSAVEMODE,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_ISDISCOVERABLE,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_DEVICENAME,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_PINCODE,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_SSP,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_PINCODE_ENABLE,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_SECURITYMODE,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_BOOTMODE,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_BLUETOOTH_TO_IRDA,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_BLUETOOTH_TO_NET,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_KEY,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_AUTO_CONNECTION,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_BT_BOOTMODE_PJ,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_PRINT_JPEG_HALFTONE,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_PRINT_JPEG_SCALE,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_PRINT_DENSITY,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_PRINT_SPEED,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_POWER_POWEROFFTIME,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_POWER_POWEROFFTIME_BATTERY,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_POWER_POWEROFFTIME_RJ2,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_POWER_POWEROFFTIME_QL8,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_POWER_POWEROFFTIME_BATTERY_QL8,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_POWER_POWEROFFTIME_QL1100,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_POWER_POWEROFFTIME_RJ4000a,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_POWER_POWEROFFTIME_ModelFilter,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumberPS_POWER_POWEROFFTIME_PowerSupplyFilter,
+  BFElementModelSpecLegacyPrinterSettingCategoryNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_NET_IPV6;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_WIFI_IPV6;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_WIFI_BOOTMODE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_WIFI_INTERFACE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_WIFI_WIRELESSDIRECT_BOOTMODE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_WIFI_SETTINGS;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_WIFI_NODENAME;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_LAN_SETTINGS;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_LAN_NODENAME;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_LAN_IPV6;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_WIRELESSDIRECT_CREATE_KRY;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_WIRELESSDIRECT_SETTINGS;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_AUTOPOWEROFFTIME;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_AUTOSLEEPTIME;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_AUTOSLEEPTOPOWEROFFTIME;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_POWERSAVEMODE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_ISDISCOVERABLE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_DEVICENAME;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_PINCODE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_SSP;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_PINCODE_ENABLE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_SECURITYMODE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_BOOTMODE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_BLUETOOTH_TO_IRDA;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_BLUETOOTH_TO_NET;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_KEY;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_AUTO_CONNECTION;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_BT_BOOTMODE_PJ;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_PRINT_JPEG_HALFTONE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_PRINT_JPEG_SCALE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_PRINT_DENSITY;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_PRINT_SPEED;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_POWER_POWEROFFTIME;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_POWER_POWEROFFTIME_BATTERY;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_POWER_POWEROFFTIME_RJ2;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_POWER_POWEROFFTIME_QL8;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_POWER_POWEROFFTIME_BATTERY_QL8;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_POWER_POWEROFFTIME_QL1100;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_POWER_POWEROFFTIME_RJ4000a;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_POWER_POWEROFFTIME_ModelFilter;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryStringPS_POWER_POWEROFFTIME_PowerSupplyFilter;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryString__Null;
+@interface BFElementModelSpecLegacyPrinterSettingCategory : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacyPrinterSettingCategoryNumber)num;
++ (BFElementModelSpecLegacyPrinterSettingCategoryNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumber) {
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_AUTOPOWEROFFTIME,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_AUTOSLEEPTIME,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_AUTOSLEEPTOPOWEROFFTIME,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_POWERSAVEMODE,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_ISDISCOVERABLE,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_DEVICENAME,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_PINCODE,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_SSP,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_PINCODE_ENABLE,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_SECURITYMODE,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_BOOTMODE,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_BLUETOOTH_TO_IRDA,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_BLUETOOTH_TO_NET,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_KEY,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_AUTO_CONNECTION,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumberPS_BT_BOOTMODE_PJ,
+  BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_AUTOPOWEROFFTIME;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_AUTOSLEEPTIME;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_AUTOSLEEPTOPOWEROFFTIME;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_POWERSAVEMODE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_ISDISCOVERABLE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_DEVICENAME;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_PINCODE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_SSP;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_PINCODE_ENABLE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_SECURITYMODE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_BOOTMODE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_BLUETOOTH_TO_IRDA;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_BLUETOOTH_TO_NET;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_KEY;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_AUTO_CONNECTION;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothStringPS_BT_BOOTMODE_PJ;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryBluetoothString__Null;
+@interface BFElementModelSpecLegacyPrinterSettingCategoryBluetooth : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumber)num;
++ (BFElementModelSpecLegacyPrinterSettingCategoryBluetoothNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumber) {
+  BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumberPS_NET_IPV6,
+  BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumberPS_WIFI_IPV6,
+  BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumberPS_WIFI_BOOTMODE,
+  BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumberPS_WIFI_INTERFACE,
+  BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumberPS_WIFI_WIRELESSDIRECT_BOOTMODE,
+  BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumberPS_WIFI_SETTINGS,
+  BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumberPS_WIFI_NODENAME,
+  BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumberPS_LAN_SETTINGS,
+  BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumberPS_LAN_NODENAME,
+  BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumberPS_LAN_IPV6,
+  BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumberPS_WIRELESSDIRECT_CREATE_KRY,
+  BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumberPS_WIRELESSDIRECT_SETTINGS,
+  BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryNetworkStringPS_NET_IPV6;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryNetworkStringPS_WIFI_IPV6;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryNetworkStringPS_WIFI_BOOTMODE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryNetworkStringPS_WIFI_INTERFACE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryNetworkStringPS_WIFI_WIRELESSDIRECT_BOOTMODE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryNetworkStringPS_WIFI_SETTINGS;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryNetworkStringPS_WIFI_NODENAME;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryNetworkStringPS_LAN_SETTINGS;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryNetworkStringPS_LAN_NODENAME;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryNetworkStringPS_LAN_IPV6;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryNetworkStringPS_WIRELESSDIRECT_CREATE_KRY;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryNetworkStringPS_WIRELESSDIRECT_SETTINGS;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryNetworkString__Null;
+@interface BFElementModelSpecLegacyPrinterSettingCategoryNetwork : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumber)num;
++ (BFElementModelSpecLegacyPrinterSettingCategoryNetworkNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacyPrinterSettingCategoryPowerNumber) {
+  BFElementModelSpecLegacyPrinterSettingCategoryPowerNumberPS_POWER_POWEROFFTIME,
+  BFElementModelSpecLegacyPrinterSettingCategoryPowerNumberPS_POWER_POWEROFFTIME_BATTERY,
+  BFElementModelSpecLegacyPrinterSettingCategoryPowerNumberPS_POWER_POWEROFFTIME_RJ2,
+  BFElementModelSpecLegacyPrinterSettingCategoryPowerNumberPS_POWER_POWEROFFTIME_QL8,
+  BFElementModelSpecLegacyPrinterSettingCategoryPowerNumberPS_POWER_POWEROFFTIME_BATTERY_QL8,
+  BFElementModelSpecLegacyPrinterSettingCategoryPowerNumberPS_POWER_POWEROFFTIME_QL1100,
+  BFElementModelSpecLegacyPrinterSettingCategoryPowerNumberPS_POWER_POWEROFFTIME_RJ4000a,
+  BFElementModelSpecLegacyPrinterSettingCategoryPowerNumberPS_POWER_POWEROFFTIME_BATTERY_PJ8,
+  BFElementModelSpecLegacyPrinterSettingCategoryPowerNumberPS_POWER_POWEROFFTIME_ModelFilter,
+  BFElementModelSpecLegacyPrinterSettingCategoryPowerNumberPS_POWER_POWEROFFTIME_PowerSupplyFilter,
+  BFElementModelSpecLegacyPrinterSettingCategoryPowerNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPowerStringPS_POWER_POWEROFFTIME;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPowerStringPS_POWER_POWEROFFTIME_BATTERY;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPowerStringPS_POWER_POWEROFFTIME_RJ2;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPowerStringPS_POWER_POWEROFFTIME_QL8;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPowerStringPS_POWER_POWEROFFTIME_BATTERY_QL8;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPowerStringPS_POWER_POWEROFFTIME_QL1100;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPowerStringPS_POWER_POWEROFFTIME_RJ4000a;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPowerStringPS_POWER_POWEROFFTIME_BATTERY_PJ8;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPowerStringPS_POWER_POWEROFFTIME_ModelFilter;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPowerStringPS_POWER_POWEROFFTIME_PowerSupplyFilter;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPowerString__Null;
+@interface BFElementModelSpecLegacyPrinterSettingCategoryPower : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacyPrinterSettingCategoryPowerNumber)num;
++ (BFElementModelSpecLegacyPrinterSettingCategoryPowerNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacyPrinterSettingCategoryPrintNumber) {
+  BFElementModelSpecLegacyPrinterSettingCategoryPrintNumberPS_PRINT_JPEG_HALFTONE,
+  BFElementModelSpecLegacyPrinterSettingCategoryPrintNumberPS_PRINT_JPEG_SCALE,
+  BFElementModelSpecLegacyPrinterSettingCategoryPrintNumberPS_PRINT_DENSITY,
+  BFElementModelSpecLegacyPrinterSettingCategoryPrintNumberPS_PRINT_SPEED,
+  BFElementModelSpecLegacyPrinterSettingCategoryPrintNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPrintStringPS_PRINT_JPEG_HALFTONE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPrintStringPS_PRINT_JPEG_SCALE;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPrintStringPS_PRINT_DENSITY;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPrintStringPS_PRINT_SPEED;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrinterSettingCategoryPrintString__Null;
+@interface BFElementModelSpecLegacyPrinterSettingCategoryPrint : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacyPrinterSettingCategoryPrintNumber)num;
++ (BFElementModelSpecLegacyPrinterSettingCategoryPrintNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacyPrintPageCommandTypeNumber) {
+  BFElementModelSpecLegacyPrintPageCommandTypeNumberPAGE_START_END,
+  BFElementModelSpecLegacyPrintPageCommandTypeNumberPAGE_START_NEXT_END,
+  BFElementModelSpecLegacyPrintPageCommandTypeNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacyPrintPageCommandTypeStringPAGE_START_END;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrintPageCommandTypeStringPAGE_START_NEXT_END;
+extern NSString * __nonnull const BFElementModelSpecLegacyPrintPageCommandTypeString__Null;
+@interface BFElementModelSpecLegacyPrintPageCommandType : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacyPrintPageCommandTypeNumber)num;
++ (BFElementModelSpecLegacyPrintPageCommandTypeNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyPrintShouldDensityCommandNumber;
+@interface BFElementModelSpecLegacyPrintShouldDensityCommand : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyPrintShouldPrinterInfoCommandNumber;
+@interface BFElementModelSpecLegacyPrintShouldPrinterInfoCommand : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyPrintShouldSpaceCommandNumber;
+@interface BFElementModelSpecLegacyPrintShouldSpaceCommand : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacySeriesCodeNumber;
+@interface BFElementModelSpecLegacySeriesCode : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyStatusIndexOfPaperBackgroundColorNumber;
+@interface BFElementModelSpecLegacyStatusIndexOfPaperBackgroundColor : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyStatusIndexOfPaperTextColorNumber;
+@interface BFElementModelSpecLegacyStatusIndexOfPaperTextColor : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyStatusIndexOfTubeRibbonNumber;
+@interface BFElementModelSpecLegacyStatusIndexOfTubeRibbon : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacySupportAdjustPaperPositionNumber;
+@interface BFElementModelSpecLegacySupportAdjustPaperPosition : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacySupportAdvanceModeCommandNumber) {
+  BFElementModelSpecLegacySupportAdvanceModeCommandNumberPS_AM_HALFCUT,
+  BFElementModelSpecLegacySupportAdvanceModeCommandNumberPS_AM_CUTEND,
+  BFElementModelSpecLegacySupportAdvanceModeCommandNumberPS_AM_SPECIALTAPE,
+  BFElementModelSpecLegacySupportAdvanceModeCommandNumberPS_AM_HIGH_RESOLUTION,
+  BFElementModelSpecLegacySupportAdvanceModeCommandNumberPS_AM_LABEL_CUTEND,
+  BFElementModelSpecLegacySupportAdvanceModeCommandNumberPS_AM_NOBUFFER,
+  BFElementModelSpecLegacySupportAdvanceModeCommandNumberPS_AM_LOW_RESOLUTION,
+  BFElementModelSpecLegacySupportAdvanceModeCommandNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacySupportAdvanceModeCommandStringPS_AM_HALFCUT;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportAdvanceModeCommandStringPS_AM_CUTEND;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportAdvanceModeCommandStringPS_AM_SPECIALTAPE;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportAdvanceModeCommandStringPS_AM_HIGH_RESOLUTION;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportAdvanceModeCommandStringPS_AM_LABEL_CUTEND;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportAdvanceModeCommandStringPS_AM_NOBUFFER;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportAdvanceModeCommandStringPS_AM_LOW_RESOLUTION;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportAdvanceModeCommandString__Null;
+@interface BFElementModelSpecLegacySupportAdvanceModeCommand : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacySupportAdvanceModeCommandNumber)num;
++ (BFElementModelSpecLegacySupportAdvanceModeCommandNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacySupportChangeDpiNumber;
+@interface BFElementModelSpecLegacySupportChangeDpi : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacySupportCommandProtocolVersionNumber;
+@interface BFElementModelSpecLegacySupportCommandProtocolVersion : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacySupportFuncNumber) {
+  BFElementModelSpecLegacySupportFuncNumberSP_FUC_RASTER_PRINT,
+  BFElementModelSpecLegacySupportFuncNumberSP_FUC_TEMPLATE_PRINT,
+  BFElementModelSpecLegacySupportFuncNumberSP_FUC_TEMPLATE_TRANS,
+  BFElementModelSpecLegacySupportFuncNumberSP_FUC_TEMPLATE_REMOVE,
+  BFElementModelSpecLegacySupportFuncNumberSP_FUC_PRINTER_SETTINGS,
+  BFElementModelSpecLegacySupportFuncNumberSP_FUC_FIRM_UPDATE,
+  BFElementModelSpecLegacySupportFuncNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacySupportFuncStringSP_FUC_RASTER_PRINT;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportFuncStringSP_FUC_TEMPLATE_PRINT;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportFuncStringSP_FUC_TEMPLATE_TRANS;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportFuncStringSP_FUC_TEMPLATE_REMOVE;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportFuncStringSP_FUC_PRINTER_SETTINGS;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportFuncStringSP_FUC_FIRM_UPDATE;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportFuncString__Null;
+@interface BFElementModelSpecLegacySupportFunc : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacySupportFuncNumber)num;
++ (BFElementModelSpecLegacySupportFuncNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacySupportGetBatteryWeakNumber;
+@interface BFElementModelSpecLegacySupportGetBatteryWeak : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacySupportGetMediaInfoVersionNumber;
+@interface BFElementModelSpecLegacySupportGetMediaInfoVersion : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacySupportGetSerialNumberNumber;
+@interface BFElementModelSpecLegacySupportGetSerialNumber : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacySupportMode9CompressionNumber;
+@interface BFElementModelSpecLegacySupportMode9Compression : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacySupportMultiColorLabelNumber) {
+  BFElementModelSpecLegacySupportMultiColorLabelNumberMONO_COLOR,
+  BFElementModelSpecLegacySupportMultiColorLabelNumberBI_COLOR,
+  BFElementModelSpecLegacySupportMultiColorLabelNumberUNSUPPORTED_COLOR,
+  BFElementModelSpecLegacySupportMultiColorLabelNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacySupportMultiColorLabelStringMONO_COLOR;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportMultiColorLabelStringBI_COLOR;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportMultiColorLabelStringUNSUPPORTED_COLOR;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportMultiColorLabelString__Null;
+@interface BFElementModelSpecLegacySupportMultiColorLabel : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacySupportMultiColorLabelNumber)num;
++ (BFElementModelSpecLegacySupportMultiColorLabelNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacySupportPJFeedModeNumber) {
+  BFElementModelSpecLegacySupportPJFeedModeNumberFEED_MODE_FREE,
+  BFElementModelSpecLegacySupportPJFeedModeNumberFEED_MODE_FIXEDPAGE,
+  BFElementModelSpecLegacySupportPJFeedModeNumberFEED_MODE_ENDOFPAGE,
+  BFElementModelSpecLegacySupportPJFeedModeNumberFEED_MODE_ENDOFPAGERETRACT,
+  BFElementModelSpecLegacySupportPJFeedModeNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacySupportPJFeedModeStringFEED_MODE_FREE;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportPJFeedModeStringFEED_MODE_FIXEDPAGE;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportPJFeedModeStringFEED_MODE_ENDOFPAGE;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportPJFeedModeStringFEED_MODE_ENDOFPAGERETRACT;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportPJFeedModeString__Null;
+@interface BFElementModelSpecLegacySupportPJFeedMode : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacySupportPJFeedModeNumber)num;
++ (BFElementModelSpecLegacySupportPJFeedModeNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacySupportPJRollCaseNumber;
+@interface BFElementModelSpecLegacySupportPJRollCase : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacySupportPJSpeedCommandNumber;
+@interface BFElementModelSpecLegacySupportPJSpeedCommand : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacySupportTubeNumber;
+@interface BFElementModelSpecLegacySupportTube : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef NS_ENUM(NSUInteger, BFElementModelSpecLegacySupportVariousModeCommandNumber) {
+  BFElementModelSpecLegacySupportVariousModeCommandNumberPS_VM_AUTOCUT,
+  BFElementModelSpecLegacySupportVariousModeCommandNumberPS_VM_MIRROR,
+  BFElementModelSpecLegacySupportVariousModeCommandNumberPS_VM_PEEL,
+  BFElementModelSpecLegacySupportVariousModeCommandNumberPS_VM_ROTATE180,
+  BFElementModelSpecLegacySupportVariousModeCommandNumberPS_VM_CUTMARK,
+  BFElementModelSpecLegacySupportVariousModeCommandNumberPS_FEEDVOL,
+  BFElementModelSpecLegacySupportVariousModeCommandNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelSpecLegacySupportVariousModeCommandStringPS_VM_AUTOCUT;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportVariousModeCommandStringPS_VM_MIRROR;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportVariousModeCommandStringPS_VM_PEEL;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportVariousModeCommandStringPS_VM_ROTATE180;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportVariousModeCommandStringPS_VM_CUTMARK;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportVariousModeCommandStringPS_FEEDVOL;
+extern NSString * __nonnull const BFElementModelSpecLegacySupportVariousModeCommandString__Null;
+@interface BFElementModelSpecLegacySupportVariousModeCommand : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelSpecLegacySupportVariousModeCommandNumber)num;
++ (BFElementModelSpecLegacySupportVariousModeCommandNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyTemplateLimitedNumber;
+@interface BFElementModelSpecLegacyTemplateLimited : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef NSString* BFElementModelSpecLegacyTemplateLimitedFirmNameNumber;
+@interface BFElementModelSpecLegacyTemplateLimitedFirmName : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyTemplateLimitedFirmTypeNumber;
+@interface BFElementModelSpecLegacyTemplateLimitedFirmType : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyTemplateMaxObjectSizeNumber;
+@interface BFElementModelSpecLegacyTemplateMaxObjectSize : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyTemplateShouldChangeCommandModeNumber;
+@interface BFElementModelSpecLegacyTemplateShouldChangeCommandMode : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyUSBDeviceProductIDNumber;
+@interface BFElementModelSpecLegacyUSBDeviceProductID : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyValidCommunicationBidirectionalNumber;
+@interface BFElementModelSpecLegacyValidCommunicationBidirectional : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyValidResponseAfterFirmUpdateNumber;
+@interface BFElementModelSpecLegacyValidResponseAfterFirmUpdate : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef bool BFElementModelSpecLegacyWaitForPaperInsertionWhenPaperEmptyNumber;
+@interface BFElementModelSpecLegacyWaitForPaperInsertionWhenPaperEmpty : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyXdpiNumber;
+@interface BFElementModelSpecLegacyXdpi : NSObject
++ (nonnull NSString*)key;
+@end
+
+typedef int BFElementModelSpecLegacyYdpiNumber;
+@interface BFElementModelSpecLegacyYdpi : NSObject
++ (nonnull NSString*)key;
+@end
+

@@ -1,0 +1,33 @@
+
+
+#import "BFElementModelCapabilityDefinition.h"
+
+NSString * __nonnull const BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseStringPrioritizeAutoCutEveryTrue = @"PrioritizeAutoCutEveryTrue";
+NSString * __nonnull const BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseStringPrioritizeAutoCutLastFalse = @"PrioritizeAutoCutLastFalse";
+NSString * __nonnull const BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseString__Null = @"__Null";
+@implementation BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalse
++ (nonnull NSString*)convertToString:(BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumber)num {
+  switch(num) {
+  case BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumberPrioritizeAutoCutEveryTrue: return BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseStringPrioritizeAutoCutEveryTrue;
+  case BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumberPrioritizeAutoCutLastFalse: return BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseStringPrioritizeAutoCutLastFalse;
+  case BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumber__Null: return BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseString__Null;
+  }
+  return BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseString__Null;
+}
++ (BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumber)convertToNumber:(nonnull NSString*)str {
+  if ([str isEqualToString:BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseStringPrioritizeAutoCutEveryTrue]) {
+    return BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumberPrioritizeAutoCutEveryTrue;
+  }
+  if ([str isEqualToString:BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseStringPrioritizeAutoCutLastFalse]) {
+    return BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumberPrioritizeAutoCutLastFalse;
+  }
+  if ([str isEqualToString:BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseString__Null]) {
+    return BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumber__Null;
+  }
+  return BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumber__Null;
+}
++ (nonnull NSString*)key {
+  return @"ModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalse";
+}
+@end
+

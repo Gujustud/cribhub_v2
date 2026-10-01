@@ -1,0 +1,42 @@
+{# --- explanation of args --- #}
+{# outputPrefix : prefix of output file name #}
+{# outputExt : ext of output file name #}
+{# mainNamespace : name of main namespace #}
+{# subNamespace : name of sub namespace #}
+{# stringClass : name of string identifier class #}
+{# enumClass : name of enum identifier class #}
+{# section - name : name of section #}
+{#         - elements : array of Element #}
+{#         * Element - key : name of element #}
+{#                   - type : any one of ( enum, int, float, bool, string ) #}
+{#                   - values : array of possible values #}
+
+#include "{{ outputPrefix }}{{ section.name }}_{{ templateName }}.hpp"
+#include <string>
+#include <cstring>
+
+namespace {{ mainNamespace }} {
+  namespace {{ subNamespace }} {
+{% for element in section.elements %}
+{% if element.type == Type.enum %}
+    const char* {{ inSyntax(element.key) }}::convertTo{{ stringClass }}({{ enumClass }} num) {
+      switch(num) {
+{% for value in element.values %}
+        case {{ enumClass }}::{{ inSyntax(value) }}: return {{ stringClass }}::{{ inSyntax(value) }};
+{% endfor %}
+      }
+      return {{ stringClass }}::{{ element.nullname }};
+    };
+    {{ inSyntax(element.key) }}::{{ enumClass }} {{ inSyntax(element.key) }}::convertTo{{ enumClass }}(const char* string) {
+{% for value in element.values %}
+      if (!strcmp(string, {{ stringClass }}::{{ inSyntax(value) }})) {
+        return {{ enumClass }}::{{ inSyntax(value) }};
+      }
+{% endfor %}
+      return {{ enumClass }}::{{ element.nullname }};
+    };
+
+{% endif %}
+{% endfor %}
+  }
+}

@@ -1,0 +1,68 @@
+{# --- explanation of args --- #}
+{# outputPrefix : prefix of output file name #}
+{# outputExt : ext of output file name #}
+{# mainNamespace : name of main namespace #}
+{# subNamespace : name of sub namespace #}
+{# stringClass : name of string identifier class #}
+{# enumClass : name of enum identifier class #}
+{# section - name : name of section #}
+{#         - elements : array of Element #}
+{#         * Element - key : name of element #}
+{#                   - type : any one of ( enum, int, float, bool, string ) #}
+{#                   - values : array of possible values #}
+
+#pragma once
+#include <string>
+
+namespace {{ mainNamespace }} {
+  namespace {{ subNamespace }} {
+{% for element in section.elements %}
+{% if element.type == Type.enum %}
+    struct {{ inSyntax(element.key) }} {
+      enum class {{ enumClass }} {
+{% for value in element.values %}
+        {{ inSyntax(value) }},
+{% endfor %}
+      };
+      struct {{ stringClass }} {
+{% for value in element.values %}
+        constexpr static const char * {{ inSyntax(value) }} = "{{ value }}";
+{% endfor %}
+      };
+      static const char* convertTo{{ stringClass }}({{ enumClass }} number);
+      static {{ enumClass }} convertTo{{ enumClass }}(const char* string);
+      constexpr static const char * key = "{{ element.key }}";
+    };
+
+{% endif %}
+{% if element.type == Type.int %}
+    struct {{ inSyntax(element.key) }} {
+      using {{ enumClass }} = int;
+      constexpr static const char * key = "{{ element.key }}";
+    };
+
+{% endif %}
+{% if element.type == Type.float %}
+    struct {{ inSyntax(element.key) }} {
+      using {{ enumClass }} = double;
+      constexpr static const char * key = "{{ element.key }}";
+    };
+
+{% endif %}
+{% if element.type == Type.bool %}
+    struct {{ inSyntax(element.key) }} {
+      using {{ enumClass }} = bool;
+      constexpr static const char * key = "{{ element.key }}";
+    };
+
+{% endif %}
+{% if element.type == Type.string %}
+    struct {{ inSyntax(element.key) }} {
+      using {{ enumClass }} = std::string;
+      constexpr static const char * key = "{{ element.key }}";
+    };
+
+{% endif %}
+{% endfor %}
+  }
+}

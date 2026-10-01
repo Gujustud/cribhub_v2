@@ -1,0 +1,89 @@
+{# --- explanation of args --- #}
+{# outputPrefix : prefix of output file name #}
+{# outputExt : ext of output file name #}
+{# mainNamespace : name of main namespace #}
+{# subNamespace : name of sub namespace #}
+{# stringClass : name of string identifier class #}
+{# enumClass : name of enum identifier class #}
+{# section - name : name of section #}
+{#         - elements : array of Element #}
+{#         * Element - key : name of element #}
+{#                   - type : any one of ( enum, int, float, bool, string ) #}
+{#                   - values : array of possible values #}
+
+{% macro prefix(element) -%}
+{{ mainNamespace.upper() }}{{ subNamespace.title().replace("_", "") }}{{ inSyntax(element.key) }}
+{%- endmacro %}
+
+#import <XCTest/XCTest.h>
+#include <string>
+#include "{{ mainNamespace }}_{{ subNamespace }}_{{ section.name }}_definition.hpp"
+#import "{{ outputPrefix }}{{ camelCase(section.name.title()) }}Definition.h"
+
+@interface {{ mainNamespace.upper() }}{{ subNamespace.title().replace("_", "") }}{{ section.name.title().replace("_", "") }}Test : XCTestCase
+
+@end
+
+@implementation {{ mainNamespace.upper() }}{{ subNamespace.title().replace("_", "") }}{{ section.name.title().replace("_", "") }}Test
+
+- (void)setUp {
+    [super setUp];
+    // Put setup code here. This method is called before the invocation of each test method in the class.
+}
+
+- (void)tearDown {
+    // Put teardown code here. This method is called after the invocation of each test method in the class.
+    [super tearDown];
+}
+
+{% for element in section.elements %}
+{% if element.type == Type.enum %}
+- (void) convertChecking{{ prefix(element) }}: ({{ prefix(element) }}{{ enumClass }})num {
+    NSString *str = [{{ prefix(element) }} convertTo{{ stringClass }}:num];
+    {{ prefix(element) }}{{ enumClass }} convertedNum = [{{ prefix(element) }} convertTo{{ enumClass }}:str];
+    XCTAssertEqual(num, convertedNum);
+}
+- (void) convertCheckingOcToCpp{{ prefix(element) }}: ({{ prefix(element) }}{{ enumClass }})num {
+    NSString *strOc = [{{ prefix(element) }} convertTo{{ stringClass }}:num];
+    NSData* strAsData = [strOc dataUsingEncoding:CFStringConvertEncodingToNSStringEncoding(kCFStringEncodingUTF8)];
+    std::string strCpp = std::string((char*)[strAsData bytes], [strAsData length] / sizeof(char));
+    {{ mainNamespace }}::{{ subNamespace }}::{{ inSyntax(element.key) }}::{{ enumClass }} numCpp = {{ mainNamespace }}::{{ subNamespace }}::{{ inSyntax(element.key) }}::convertTo{{ enumClass }}(strCpp.c_str());
+    NSInteger numOc = (NSInteger)numCpp;
+    XCTAssertEqual(num, numOc);
+}
+- (void) convertCheckingCppToOc{{ prefix(element) }}: ({{ mainNamespace }}::{{ subNamespace }}::{{ inSyntax(element.key) }}::{{ enumClass }})num {
+    std::string strCpp = std::string({{ mainNamespace }}::{{ subNamespace }}::{{ inSyntax(element.key) }}::convertTo{{ stringClass }}(num));
+    NSString *strOc = [[NSString alloc] initWithBytes:(char*)strCpp.data() length:(strCpp.size() * sizeof(char)) encoding:CFStringConvertEncodingToNSStringEncoding(kCFStringEncodingUTF8)];
+    {{ prefix(element) }}{{ enumClass }} numOc = [{{ prefix(element) }} convertTo{{ enumClass }}:strOc];
+    {{ mainNamespace }}::{{ subNamespace }}::{{ inSyntax(element.key) }}::{{ enumClass }} numCpp = ({{ mainNamespace }}::{{ subNamespace }}::{{ inSyntax(element.key) }}::{{ enumClass }})numOc;
+    XCTAssertEqual(num, numCpp);
+}
+- (void) irregularChecking{{ prefix(element) }} {
+    NSString *str;
+    {{ prefix(element) }}{{ enumClass }} num;
+    str = [{{ prefix(element) }} convertTo{{ stringClass }}:{{ prefix(element) }}{{ enumClass }}(-1)];
+    XCTAssertEqualObjects(str, {{ prefix(element) }}{{ stringClass }}{{ element.nullname }});
+    str = [{{ prefix(element) }} convertTo{{ stringClass }}:{{ prefix(element) }}{{ enumClass }}(1000000)];
+    XCTAssertEqualObjects(str, {{ prefix(element) }}{{ stringClass }}{{ element.nullname }});
+    num = [{{ prefix(element) }} convertTo{{ enumClass }}:@""];
+    XCTAssertEqual(num, {{ prefix(element) }}{{ enumClass }}{{ element.nullname }});
+    num = [{{ prefix(element) }} convertTo{{ enumClass }}:@"hogehogehogehogehoge"];
+    XCTAssertEqual(num, {{ prefix(element) }}{{ enumClass }}{{ element.nullname }});
+}
+- (void)testPrintSettingDefinitionCheck{{ prefix(element) }}
+{
+{% for value in element.values %}
+    [self convertChecking{{ prefix(element) }}:{{ prefix(element) }}{{ enumClass }}{{ inSyntax(value) }}];
+    [self convertCheckingOcToCpp{{ prefix(element) }}:{{ prefix(element) }}{{ enumClass }}{{ inSyntax(value) }}];
+    [self convertCheckingCppToOc{{ prefix(element) }}:{{ mainNamespace }}::{{ subNamespace }}::{{ inSyntax(element.key) }}::{{ enumClass }}::{{ inSyntax(value) }}];
+{% endfor %}
+    [self irregularChecking{{ prefix(element) }}];
+    NSData* strAsData = [{{ prefix(element) }}.key dataUsingEncoding:CFStringConvertEncodingToNSStringEncoding(kCFStringEncodingUTF8)];
+    std::string ocKey = std::string((char*)[strAsData bytes], [strAsData length] / sizeof(char));
+    XCTAssertTrue({{ mainNamespace }}::{{ subNamespace }}::{{ inSyntax(element.key) }}::key == ocKey);
+}
+
+{% endif %}
+{% endfor %}
+
+@end

@@ -1,0 +1,58 @@
+{# --- explanation of args --- #}
+{# outputPrefix : prefix of output file name #}
+{# outputExt : ext of output file name #}
+{# mainNamespace : name of main namespace #}
+{# subNamespace : name of sub namespace #}
+{# stringClass : name of string identifier class #}
+{# enumClass : name of enum identifier class #}
+{# section - name : name of section #}
+{#         - elements : array of Element #}
+{#         * Element - key : name of element #}
+{#                   - type : any one of ( enum, int, float, bool, string ) #}
+{#                   - values : array of possible values #}
+{% macro prefix(element) -%}
+{{ mainNamespace.upper() }}{{ subNamespace.title().replace("_", "") }}{{ inSyntax(element.key) }}
+{%- endmacro %}
+package com.brother.bfelement;
+
+public class {{ outputPrefix }}{{ headUpper(camelCase(section.name)) }}{{ templateName.title() }} {
+
+{% for element in section.elements %}
+{% if element.type == Type.enum %}
+public enum {{ inSyntax(element.key) }} {
+{% for value in element.values %}
+    {{ inSyntax(value) }}{% if not loop.last %},{% else %};{% endif %}
+    
+{% endfor %}
+
+    public static final String key = "{{ inSyntax(element.key) }}";
+}
+
+
+{% endif %}
+{% if element.type == Type.int %}
+public class {{ inSyntax(element.key) }} {
+    public static final String key = "{{ inSyntax(element.key) }}";
+}
+
+{% endif %}
+{% if element.type == Type.float %}
+public class {{ inSyntax(element.key) }} {
+    public static final String key = "{{ inSyntax(element.key) }}";
+}
+
+{% endif %}
+{% if element.type == Type.bool %}
+public class {{ inSyntax(element.key) }} {
+    public static final String key = "{{ inSyntax(element.key) }}";
+}
+
+{% endif %}
+{% if element.type == Type.string %}
+public class {{ inSyntax(element.key) }} {
+    public static final String key = "{{ inSyntax(element.key) }}";
+}
+
+{% endif %}
+{% endfor %}
+}

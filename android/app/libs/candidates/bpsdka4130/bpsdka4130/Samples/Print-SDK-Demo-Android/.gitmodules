@@ -1,0 +1,6 @@
+[submodule "AutoGen/brlmprinterkit-printsettings-materials"]
+	path = AutoGen/brlmprinterkit-printsettings-materials
+	url = git@github.ap.brothergroup.net:brother/brlmprinterkit-printsettings-materials.git
+[submodule "AutoGen/BFElement"]
+	path = AutoGen/BFElement
+	url = git@github.ap.brothergroup.net:brother/BFElement.git

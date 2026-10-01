@@ -1,0 +1,80 @@
+{# --- explanation of args --- #}
+{# outputPrefix : prefix of output file name #}
+{# outputExt : ext of output file name #}
+{# mainNamespace : name of main namespace #}
+{# subNamespace : name of sub namespace #}
+{# stringClass : name of string identifier class #}
+{# enumClass : name of enum identifier class #}
+{# section - name : name of section #}
+{#         - elements : array of Element #}
+{#         * Element - key : name of element #}
+{#                   - type : any one of ( enum, int, float, bool, string ) #}
+{#                   - values : array of possible values #}
+
+{% macro prefix(element) -%}
+{{ mainNamespace.upper() }}{{ subNamespace.title().replace("_", "") }}{{ inSyntax(element.key) }}
+{%- endmacro %}
+
+#import "{{ outputPrefix }}{{ camelCase(section.name.title()) }}{{ camelCase(templateName.title()) }}.h"
+
+{% for element in section.elements %}
+{% if element.type == Type.enum %}
+{% for value in element.values %}
+NSString * __nonnull const {{ prefix(element) }}{{ stringClass }}{{ inSyntax(value) }} = @"{{ value }}";
+{% endfor %}
+@implementation {{ prefix(element) }}
++ (nonnull NSString*)convertTo{{ stringClass }}:({{ prefix(element) }}{{ enumClass }})num {
+  switch(num) {
+{% for value in element.values %}
+  case {{ prefix(element) }}{{ enumClass }}{{ inSyntax(value) }}: return {{ prefix(element) }}{{ stringClass }}{{ inSyntax(value) }};
+{% endfor %}
+  }
+  return {{ prefix(element) }}{{ stringClass }}{{ element.nullname }};
+}
++ ({{ prefix(element) }}{{ enumClass }})convertTo{{ enumClass }}:(nonnull NSString*)str {
+{% for value in element.values %}
+  if ([str isEqualToString:{{ prefix(element) }}{{ stringClass }}{{ inSyntax(value) }}]) {
+    return {{ prefix(element) }}{{ enumClass }}{{ inSyntax(value) }};
+  }
+{% endfor %}
+  return {{ prefix(element) }}{{ enumClass }}{{ element.nullname }};
+}
++ (nonnull NSString*)key {
+  return @"{{ element.key }}";
+}
+@end
+
+{% endif %}
+{% if element.type == Type.int %}
+@implementation {{ prefix(element) }}
++ (nonnull NSString*)key {
+  return @"{{ element.key }}";
+}
+@end
+
+{% endif %}
+{% if element.type == Type.float %}
+@implementation {{ prefix(element) }}
++ (nonnull NSString*)key {
+  return @"{{ element.key }}";
+}
+@end
+
+{% endif %}
+{% if element.type == Type.bool %}
+@implementation {{ prefix(element) }}
++ (nonnull NSString*)key {
+  return @"{{ element.key }}";
+}
+@end
+
+{% endif %}
+{% if element.type == Type.string %}
+@implementation {{ prefix(element) }}
++ (nonnull NSString*)key {
+  return @"{{ element.key }}";
+}
+@end
+
+{% endif %}
+{% endfor %}

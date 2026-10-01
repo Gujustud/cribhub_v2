@@ -1,0 +1,19 @@
+
+
+#pragma once
+#import <Foundation/Foundation.h>
+
+typedef NS_ENUM(NSUInteger, BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumber) {
+  BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumberPrioritizeAutoCutEveryTrue,
+  BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumberPrioritizeAutoCutLastFalse,
+  BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumber__Null,
+};
+extern NSString * __nonnull const BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseStringPrioritizeAutoCutEveryTrue;
+extern NSString * __nonnull const BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseStringPrioritizeAutoCutLastFalse;
+extern NSString * __nonnull const BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseString__Null;
+@interface BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalse : NSObject
++ (nonnull NSString*)convertToString:(BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumber)num;
++ (BFElementModelCapabilityAutoCutSettingPriorityWhenEveryTrueLastFalseNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+

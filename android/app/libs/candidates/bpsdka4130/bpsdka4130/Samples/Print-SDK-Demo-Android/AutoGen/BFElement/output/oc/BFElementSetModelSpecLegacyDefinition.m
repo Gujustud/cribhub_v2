@@ -1,0 +1,328 @@
+
+
+#import "BFElementSetModelSpecLegacyDefinition.h"
+
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelMajor = @"ModelMajor";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelInterface = @"ModelInterface";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyBatteryCommandType = @"ModelSpecLegacyBatteryCommandType";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyBitOrderOfBitmapIsLittle = @"ModelSpecLegacyBitOrderOfBitmapIsLittle";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyChangeStatusMode = @"ModelSpecLegacyChangeStatusMode";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyFirmUpdateShouldChangeCommandMode = @"ModelSpecLegacyFirmUpdateShouldChangeCommandMode";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyGraphicCommandType = @"ModelSpecLegacyGraphicCommandType";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyHeadPin = @"ModelSpecLegacyHeadPin";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyHeadPinWhenPrintTube = @"ModelSpecLegacyHeadPinWhenPrintTube";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyIgnorePaperEmptyWhenPrintEnd = @"ModelSpecLegacyIgnorePaperEmptyWhenPrintEnd";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyWaitForPaperInsertionWhenPaperEmpty = @"ModelSpecLegacyWaitForPaperInsertionWhenPaperEmpty";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyImageHalftoneShouldGammaAdjust = @"ModelSpecLegacyImageHalftoneShouldGammaAdjust";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyMainVersionCommandType = @"ModelSpecLegacyMainVersionCommandType";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyMediaSizeShouldCheck = @"ModelSpecLegacyMediaSizeShouldCheck";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyMinPrintMerginPerTenthMM = @"ModelSpecLegacyMinPrintMerginPerTenthMM";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyMinPrintPaperLengthPerTenthMM = @"ModelSpecLegacyMinPrintPaperLengthPerTenthMM";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyMode9CompressionMaxByteSize = @"ModelSpecLegacyMode9CompressionMaxByteSize";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyMode9ShouldFlipHorizontal = @"ModelSpecLegacyMode9ShouldFlipHorizontal";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyModelCode = @"ModelSpecLegacyModelCode";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyModelName = @"ModelSpecLegacyModelName";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyNullCommandLength = @"ModelSpecLegacyNullCommandLength";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyPageEndCommandType = @"ModelSpecLegacyPageEndCommandType";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyPaperListKind = @"ModelSpecLegacyPaperListKind";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyPrintCompressType = @"ModelSpecLegacyPrintCompressType";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyPrinterSettingCategoryBluetooth = @"ModelSpecLegacyPrinterSettingCategoryBluetooth";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyPrinterSettingCategoryNetwork = @"ModelSpecLegacyPrinterSettingCategoryNetwork";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyPrinterSettingCategoryPower = @"ModelSpecLegacyPrinterSettingCategoryPower";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyPrinterSettingCategoryPrint = @"ModelSpecLegacyPrinterSettingCategoryPrint";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyPrintPageCommandType = @"ModelSpecLegacyPrintPageCommandType";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyPrintShouldDensityCommand = @"ModelSpecLegacyPrintShouldDensityCommand";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyPrintShouldPrinterInfoCommand = @"ModelSpecLegacyPrintShouldPrinterInfoCommand";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyPrintShouldSpaceCommand = @"ModelSpecLegacyPrintShouldSpaceCommand";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySeriesCode = @"ModelSpecLegacySeriesCode";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyStatusIndexOfPaperBackgroundColor = @"ModelSpecLegacyStatusIndexOfPaperBackgroundColor";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyStatusIndexOfPaperTextColor = @"ModelSpecLegacyStatusIndexOfPaperTextColor";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyStatusIndexOfTubeRibbon = @"ModelSpecLegacyStatusIndexOfTubeRibbon";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportAdjustPaperPosition = @"ModelSpecLegacySupportAdjustPaperPosition";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportAdvanceModeCommand = @"ModelSpecLegacySupportAdvanceModeCommand";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportChangeDpi = @"ModelSpecLegacySupportChangeDpi";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportCommandProtocolVersion = @"ModelSpecLegacySupportCommandProtocolVersion";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportFunc = @"ModelSpecLegacySupportFunc";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportGetBatteryWeak = @"ModelSpecLegacySupportGetBatteryWeak";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportGetMediaInfoVersion = @"ModelSpecLegacySupportGetMediaInfoVersion";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportGetSerialNumber = @"ModelSpecLegacySupportGetSerialNumber";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportMode9Compression = @"ModelSpecLegacySupportMode9Compression";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportMultiColorLabel = @"ModelSpecLegacySupportMultiColorLabel";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportPJFeedMode = @"ModelSpecLegacySupportPJFeedMode";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportPJRollCase = @"ModelSpecLegacySupportPJRollCase";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportPJSpeedCommand = @"ModelSpecLegacySupportPJSpeedCommand";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportTube = @"ModelSpecLegacySupportTube";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacySupportVariousModeCommand = @"ModelSpecLegacySupportVariousModeCommand";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateLimited = @"ModelSpecLegacyTemplateLimited";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateLimitedFirmName = @"ModelSpecLegacyTemplateLimitedFirmName";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateLimitedFirmType = @"ModelSpecLegacyTemplateLimitedFirmType";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateMaxObjectSize = @"ModelSpecLegacyTemplateMaxObjectSize";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateShouldChangeCommandMode = @"ModelSpecLegacyTemplateShouldChangeCommandMode";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyUSBDeviceProductID = @"ModelSpecLegacyUSBDeviceProductID";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyValidCommunicationBidirectional = @"ModelSpecLegacyValidCommunicationBidirectional";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyValidResponseAfterFirmUpdate = @"ModelSpecLegacyValidResponseAfterFirmUpdate";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyXdpi = @"ModelSpecLegacyXdpi";
+NSString * __nonnull const BFElementSetModelSpecLegacyStringModelSpecLegacyYdpi = @"ModelSpecLegacyYdpi";
+NSString * __nonnull const BFElementSetModelSpecLegacyString__Null = @"__Null";
+@implementation BFElementSetModelSpecLegacy
++ (nonnull NSString*)convertToString:(BFElementSetModelSpecLegacyNumber)num {
+  switch(num) {
+  case BFElementSetModelSpecLegacyNumberModelMajor: return BFElementSetModelSpecLegacyStringModelMajor;
+  case BFElementSetModelSpecLegacyNumberModelInterface: return BFElementSetModelSpecLegacyStringModelInterface;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyBatteryCommandType: return BFElementSetModelSpecLegacyStringModelSpecLegacyBatteryCommandType;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyBitOrderOfBitmapIsLittle: return BFElementSetModelSpecLegacyStringModelSpecLegacyBitOrderOfBitmapIsLittle;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyChangeStatusMode: return BFElementSetModelSpecLegacyStringModelSpecLegacyChangeStatusMode;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyFirmUpdateShouldChangeCommandMode: return BFElementSetModelSpecLegacyStringModelSpecLegacyFirmUpdateShouldChangeCommandMode;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyGraphicCommandType: return BFElementSetModelSpecLegacyStringModelSpecLegacyGraphicCommandType;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyHeadPin: return BFElementSetModelSpecLegacyStringModelSpecLegacyHeadPin;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyHeadPinWhenPrintTube: return BFElementSetModelSpecLegacyStringModelSpecLegacyHeadPinWhenPrintTube;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyIgnorePaperEmptyWhenPrintEnd: return BFElementSetModelSpecLegacyStringModelSpecLegacyIgnorePaperEmptyWhenPrintEnd;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyWaitForPaperInsertionWhenPaperEmpty: return BFElementSetModelSpecLegacyStringModelSpecLegacyWaitForPaperInsertionWhenPaperEmpty;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyImageHalftoneShouldGammaAdjust: return BFElementSetModelSpecLegacyStringModelSpecLegacyImageHalftoneShouldGammaAdjust;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyMainVersionCommandType: return BFElementSetModelSpecLegacyStringModelSpecLegacyMainVersionCommandType;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyMediaSizeShouldCheck: return BFElementSetModelSpecLegacyStringModelSpecLegacyMediaSizeShouldCheck;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyMinPrintMerginPerTenthMM: return BFElementSetModelSpecLegacyStringModelSpecLegacyMinPrintMerginPerTenthMM;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyMinPrintPaperLengthPerTenthMM: return BFElementSetModelSpecLegacyStringModelSpecLegacyMinPrintPaperLengthPerTenthMM;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyMode9CompressionMaxByteSize: return BFElementSetModelSpecLegacyStringModelSpecLegacyMode9CompressionMaxByteSize;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyMode9ShouldFlipHorizontal: return BFElementSetModelSpecLegacyStringModelSpecLegacyMode9ShouldFlipHorizontal;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyModelCode: return BFElementSetModelSpecLegacyStringModelSpecLegacyModelCode;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyModelName: return BFElementSetModelSpecLegacyStringModelSpecLegacyModelName;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyNullCommandLength: return BFElementSetModelSpecLegacyStringModelSpecLegacyNullCommandLength;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyPageEndCommandType: return BFElementSetModelSpecLegacyStringModelSpecLegacyPageEndCommandType;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyPaperListKind: return BFElementSetModelSpecLegacyStringModelSpecLegacyPaperListKind;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyPrintCompressType: return BFElementSetModelSpecLegacyStringModelSpecLegacyPrintCompressType;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyPrinterSettingCategoryBluetooth: return BFElementSetModelSpecLegacyStringModelSpecLegacyPrinterSettingCategoryBluetooth;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyPrinterSettingCategoryNetwork: return BFElementSetModelSpecLegacyStringModelSpecLegacyPrinterSettingCategoryNetwork;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyPrinterSettingCategoryPower: return BFElementSetModelSpecLegacyStringModelSpecLegacyPrinterSettingCategoryPower;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyPrinterSettingCategoryPrint: return BFElementSetModelSpecLegacyStringModelSpecLegacyPrinterSettingCategoryPrint;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyPrintPageCommandType: return BFElementSetModelSpecLegacyStringModelSpecLegacyPrintPageCommandType;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyPrintShouldDensityCommand: return BFElementSetModelSpecLegacyStringModelSpecLegacyPrintShouldDensityCommand;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyPrintShouldPrinterInfoCommand: return BFElementSetModelSpecLegacyStringModelSpecLegacyPrintShouldPrinterInfoCommand;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyPrintShouldSpaceCommand: return BFElementSetModelSpecLegacyStringModelSpecLegacyPrintShouldSpaceCommand;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySeriesCode: return BFElementSetModelSpecLegacyStringModelSpecLegacySeriesCode;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyStatusIndexOfPaperBackgroundColor: return BFElementSetModelSpecLegacyStringModelSpecLegacyStatusIndexOfPaperBackgroundColor;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyStatusIndexOfPaperTextColor: return BFElementSetModelSpecLegacyStringModelSpecLegacyStatusIndexOfPaperTextColor;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyStatusIndexOfTubeRibbon: return BFElementSetModelSpecLegacyStringModelSpecLegacyStatusIndexOfTubeRibbon;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportAdjustPaperPosition: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportAdjustPaperPosition;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportAdvanceModeCommand: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportAdvanceModeCommand;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportChangeDpi: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportChangeDpi;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportCommandProtocolVersion: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportCommandProtocolVersion;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportFunc: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportFunc;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportGetBatteryWeak: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportGetBatteryWeak;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportGetMediaInfoVersion: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportGetMediaInfoVersion;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportGetSerialNumber: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportGetSerialNumber;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportMode9Compression: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportMode9Compression;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportMultiColorLabel: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportMultiColorLabel;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportPJFeedMode: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportPJFeedMode;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportPJRollCase: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportPJRollCase;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportPJSpeedCommand: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportPJSpeedCommand;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportTube: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportTube;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacySupportVariousModeCommand: return BFElementSetModelSpecLegacyStringModelSpecLegacySupportVariousModeCommand;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyTemplateLimited: return BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateLimited;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyTemplateLimitedFirmName: return BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateLimitedFirmName;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyTemplateLimitedFirmType: return BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateLimitedFirmType;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyTemplateMaxObjectSize: return BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateMaxObjectSize;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyTemplateShouldChangeCommandMode: return BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateShouldChangeCommandMode;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyUSBDeviceProductID: return BFElementSetModelSpecLegacyStringModelSpecLegacyUSBDeviceProductID;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyValidCommunicationBidirectional: return BFElementSetModelSpecLegacyStringModelSpecLegacyValidCommunicationBidirectional;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyValidResponseAfterFirmUpdate: return BFElementSetModelSpecLegacyStringModelSpecLegacyValidResponseAfterFirmUpdate;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyXdpi: return BFElementSetModelSpecLegacyStringModelSpecLegacyXdpi;
+  case BFElementSetModelSpecLegacyNumberModelSpecLegacyYdpi: return BFElementSetModelSpecLegacyStringModelSpecLegacyYdpi;
+  case BFElementSetModelSpecLegacyNumber__Null: return BFElementSetModelSpecLegacyString__Null;
+  }
+  return BFElementSetModelSpecLegacyString__Null;
+}
++ (BFElementSetModelSpecLegacyNumber)convertToNumber:(nonnull NSString*)str {
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelMajor]) {
+    return BFElementSetModelSpecLegacyNumberModelMajor;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelInterface]) {
+    return BFElementSetModelSpecLegacyNumberModelInterface;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyBatteryCommandType]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyBatteryCommandType;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyBitOrderOfBitmapIsLittle]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyBitOrderOfBitmapIsLittle;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyChangeStatusMode]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyChangeStatusMode;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyFirmUpdateShouldChangeCommandMode]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyFirmUpdateShouldChangeCommandMode;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyGraphicCommandType]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyGraphicCommandType;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyHeadPin]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyHeadPin;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyHeadPinWhenPrintTube]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyHeadPinWhenPrintTube;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyIgnorePaperEmptyWhenPrintEnd]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyIgnorePaperEmptyWhenPrintEnd;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyWaitForPaperInsertionWhenPaperEmpty]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyWaitForPaperInsertionWhenPaperEmpty;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyImageHalftoneShouldGammaAdjust]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyImageHalftoneShouldGammaAdjust;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyMainVersionCommandType]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyMainVersionCommandType;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyMediaSizeShouldCheck]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyMediaSizeShouldCheck;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyMinPrintMerginPerTenthMM]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyMinPrintMerginPerTenthMM;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyMinPrintPaperLengthPerTenthMM]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyMinPrintPaperLengthPerTenthMM;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyMode9CompressionMaxByteSize]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyMode9CompressionMaxByteSize;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyMode9ShouldFlipHorizontal]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyMode9ShouldFlipHorizontal;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyModelCode]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyModelCode;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyModelName]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyModelName;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyNullCommandLength]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyNullCommandLength;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyPageEndCommandType]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyPageEndCommandType;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyPaperListKind]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyPaperListKind;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyPrintCompressType]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyPrintCompressType;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyPrinterSettingCategoryBluetooth]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyPrinterSettingCategoryBluetooth;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyPrinterSettingCategoryNetwork]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyPrinterSettingCategoryNetwork;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyPrinterSettingCategoryPower]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyPrinterSettingCategoryPower;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyPrinterSettingCategoryPrint]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyPrinterSettingCategoryPrint;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyPrintPageCommandType]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyPrintPageCommandType;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyPrintShouldDensityCommand]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyPrintShouldDensityCommand;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyPrintShouldPrinterInfoCommand]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyPrintShouldPrinterInfoCommand;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyPrintShouldSpaceCommand]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyPrintShouldSpaceCommand;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySeriesCode]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySeriesCode;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyStatusIndexOfPaperBackgroundColor]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyStatusIndexOfPaperBackgroundColor;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyStatusIndexOfPaperTextColor]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyStatusIndexOfPaperTextColor;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyStatusIndexOfTubeRibbon]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyStatusIndexOfTubeRibbon;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportAdjustPaperPosition]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportAdjustPaperPosition;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportAdvanceModeCommand]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportAdvanceModeCommand;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportChangeDpi]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportChangeDpi;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportCommandProtocolVersion]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportCommandProtocolVersion;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportFunc]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportFunc;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportGetBatteryWeak]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportGetBatteryWeak;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportGetMediaInfoVersion]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportGetMediaInfoVersion;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportGetSerialNumber]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportGetSerialNumber;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportMode9Compression]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportMode9Compression;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportMultiColorLabel]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportMultiColorLabel;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportPJFeedMode]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportPJFeedMode;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportPJRollCase]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportPJRollCase;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportPJSpeedCommand]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportPJSpeedCommand;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportTube]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportTube;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacySupportVariousModeCommand]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacySupportVariousModeCommand;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateLimited]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyTemplateLimited;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateLimitedFirmName]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyTemplateLimitedFirmName;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateLimitedFirmType]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyTemplateLimitedFirmType;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateMaxObjectSize]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyTemplateMaxObjectSize;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyTemplateShouldChangeCommandMode]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyTemplateShouldChangeCommandMode;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyUSBDeviceProductID]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyUSBDeviceProductID;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyValidCommunicationBidirectional]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyValidCommunicationBidirectional;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyValidResponseAfterFirmUpdate]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyValidResponseAfterFirmUpdate;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyXdpi]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyXdpi;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyStringModelSpecLegacyYdpi]) {
+    return BFElementSetModelSpecLegacyNumberModelSpecLegacyYdpi;
+  }
+  if ([str isEqualToString:BFElementSetModelSpecLegacyString__Null]) {
+    return BFElementSetModelSpecLegacyNumber__Null;
+  }
+  return BFElementSetModelSpecLegacyNumber__Null;
+}
++ (nonnull NSString*)key {
+  return @"ModelSpecLegacy";
+}
+@end
+

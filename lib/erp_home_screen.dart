@@ -76,7 +76,7 @@ class ErpHomeScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.store_outlined),
             title: const Text('Suppliers (tooling & vendors)'),
-            subtitle: const Text('Existing CribHub suppliers — use for vendor-style contacts today.'),
+            subtitle: const Text('Existing DharmaCore suppliers — use for vendor-style contacts today.'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.push(

@@ -1,6 +1,6 @@
 # Purchase Section – Full Technical Write-up
 
-This document describes how the **Purchase** feature was built in the Cribhub Flutter app: data model, backend (PocketBase), API layer, screens, navigation, and integration with the rest of the app. Use it to understand or fix the purchase screen with Claude or another assistant.
+This document describes how the **Purchase** feature was built in the DharmaCore Flutter app: data model, backend (PocketBase), API layer, screens, navigation, and integration with the rest of the app. Use it to understand or fix the purchase screen with Claude or another assistant.
 
 ---
 

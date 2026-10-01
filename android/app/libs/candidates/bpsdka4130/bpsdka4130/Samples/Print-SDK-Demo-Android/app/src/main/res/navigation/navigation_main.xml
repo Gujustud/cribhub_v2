@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/navigation_main"
+    app:startDestination="@id/fragment_main">
+
+    <fragment
+        android:id="@+id/fragment_main"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.MainFragment"
+        tools:layout="@layout/fragment_main">
+        <action
+            android:id="@+id/to_print_image"
+            app:destination="@id/fragment_print_image" />
+
+        <action
+            android:id="@+id/to_print_pdf"
+            app:destination="@id/fragment_print_pdf" />
+
+        <action
+            android:id="@+id/to_transfer_files"
+            app:destination="@id/fragment_transfer_files" />
+        <action
+            android:id="@+id/to_printer_info"
+            app:destination="@id/fragment_printer_info" />
+        <action
+            android:id="@+id/to_select_printer"
+            app:destination="@id/fragment_select_printer" />
+        <action
+            android:id="@+id/to_about"
+            app:destination="@id/fragment_about" />
+        <action
+            android:id="@+id/to_print_template"
+            app:destination="@id/fragment_print_template" />
+        <action
+            android:id="@+id/to_file_analyze"
+            app:destination="@id/fragment_file_analyze" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/fragment_print_image"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.PrintImageFragment"
+        tools:layout="@layout/fragment_container">
+        <action
+            android:id="@+id/to_print_settings"
+            app:destination="@id/fragment_print_settings" />
+        <action
+            android:id="@+id/to_show_result"
+            app:destination="@id/fragment_show_result" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/fragment_print_pdf"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.PrintPDFFragment"
+        tools:layout="@layout/fragment_container">
+        <action
+            android:id="@+id/to_input_pages"
+            app:destination="@id/fragment_input_pdf_pages" />
+        <action
+            android:id="@+id/to_print_settings"
+            app:destination="@id/fragment_print_settings" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/fragment_print_template"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.PrintTemplateFragment">
+        <action
+            android:id="@+id/to_input_template_key_fragment"
+            app:destination="@id/fragment_template_key" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/fragment_select_template_encoding"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.TemplatePrintSettingsFragment"
+        tools:layout="@layout/fragment_container">
+        <action
+            android:id="@+id/to_edit_template_fragment"
+            app:destination="@id/fragment_edit_template" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/fragment_transfer_files"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.TransferFilesFragment"
+        tools:layout="@layout/fragment_container">
+        <action
+            android:id="@+id/to_result_fragment"
+            app:destination="@id/fragment_show_result" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/fragment_printer_info"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.PrinterInfoFragment"
+        tools:layout="@layout/fragment_container">
+        <action
+            android:id="@+id/to_show_result"
+            app:destination="@id/fragment_show_result" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/fragment_file_analyze"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.FileAnalyzeFragment"
+        tools:layout="@layout/fragment_file_analyze" />
+
+    <fragment
+        android:id="@+id/fragment_select_printer"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.SelectPrinterFragment"
+        tools:layout="@layout/fragment_container">
+        <action
+            android:id="@+id/to_print_settings"
+            app:destination="@id/fragment_print_settings" />
+        <action
+            android:id="@+id/to_show_result"
+            app:destination="@id/fragment_show_result" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/fragment_printer_interface"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.PrinterInterfaceFragment"
+        tools:layout="@layout/fragment_container">
+        <action
+            android:id="@+id/to_printer_list"
+            app:destination="@id/fragment_printer_list" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/fragment_printer_list"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.PrinterListFragment"
+        tools:layout="@layout/fragment_printer_list" />
+
+    <fragment
+        android:id="@+id/fragment_print_settings"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.PrintSettingsFragment"
+        tools:layout="@layout/fragment_print_settings">
+        <action
+            android:id="@+id/to_show_result"
+            app:destination="@id/fragment_show_result" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/fragment_about"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.AboutFragment"
+        tools:layout="@layout/fragment_about" />
+
+    <fragment
+        android:id="@+id/fragment_template_key"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.InputTemplateKeyFragment"
+        tools:layout="@layout/fragment_container">
+
+        <action
+            android:id="@+id/to_select_template_encoding_fragment"
+            app:destination="@id/fragment_select_template_encoding" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/fragment_show_result"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.components.ShowResultFragment"
+        tools:layout="@layout/fragment_show_result" />
+    
+    <fragment
+        android:id="@+id/fragment_get_int"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.GetIntFragment" />
+
+    <fragment
+        android:id="@+id/fragment_get_int_list"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.GetIntListFragment" />
+    <fragment
+        android:id="@+id/fragment_search_selector"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.components.SelectorWithSearchFragment" />
+
+    <fragment
+        android:id="@+id/fragment_input_int"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.components.InputIntFragment"
+        tools:layout="@layout/fragment_input_int" />
+
+    <fragment
+        android:id="@+id/fragment_select_enum"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.components.SelectEnumFragment"
+        tools:layout="@layout/fragment_select_enum" />
+
+    <fragment
+        android:id="@+id/fragment_input_int_list"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.components.InputIntListFragment"
+        tools:layout="@layout/fragment_input_int_list" />
+
+    <fragment
+        android:id="@+id/fragment_edit_template"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.EditTemplateFragment"
+        tools:layout="@layout/fragment_edit_template">
+        <action
+            android:id="@+id/to_show_result"
+            app:destination="@id/fragment_show_result" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/fragment_input_pdf_pages"
+        android:name="com.brother.ptouch.sdk.printdemo.ui.InputPDFPageFragment"
+        tools:layout="@layout/fragment_container">
+        <action
+            android:id="@+id/to_print_settings"
+            app:destination="@id/fragment_print_settings" />
+    </fragment><action android:id="@+id/action_global_fragment_show_result" app:destination="@id/fragment_show_result"/>
+    <action
+        android:id="@+id/action_global_fragment_get_int"
+        app:destination="@id/fragment_get_int" /><action android:id="@+id/action_global_fragment_get_int_list" app:destination="@id/fragment_get_int_list"/>
+</navigation>

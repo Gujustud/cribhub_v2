@@ -1,0 +1,63 @@
+{# --- explanation of args --- #}
+{# mainNamespace : name of main namespace #}
+{# subNamespaceElement : name of sub namespace of element#}
+{# subNamespaceElementSet : name of sub namespace of elementSet#}
+{# stringClass : name of string identifier class #}
+{# enumClass : name of enum identifier class #}
+{# sections : names of sections #}
+{# elementSetDictionary : Dictionary of (meta: elementSet) #}
+{#       　　　　　　　　 * ElementSet - meta : meta key #}
+{#       　　　　　　　　              - keys : Array of key #}
+{#       　　　　　　　　              - elements : array of Element #}
+{#                                      * Element - key : name of element #}
+{#                  　　　　　　　　                - type : any one of ( enum, int, float, bool, string ) #}
+{#                  　　　　　　　　                - values : array of possible values #}
+
+#import <XCTest/XCTest.h>
+#include <string>
+
+{% for elementSetKey in elementSetDictionary.keys() %}
+#include "{{ mainNamespace }}_{{ subNamespaceElementSet }}_{{ snakeCase(elementSetKey) }}_definition.hpp"
+#import "{{ mainNamespace.upper() }}{{ camelCase(subNamespaceElementSet.title()) }}{{ elementSetKey }}Definition.h"
+{% endfor %}
+{% for section in sections %}
+#include "{{ mainNamespace }}_{{ subNamespaceElement }}_{{ section }}_definition.hpp"
+#import "{{ mainNamespace.upper() }}{{ camelCase(subNamespaceElement.title()) }}{{ section.title().replace("_", "") }}Definition.h"
+{% endfor %}
+
+#include "bsi_print_settings_structs.hpp"
+#import "BSIPrintSettingsStructs.h"
+
+@interface {{ mainNamespace.upper() }}{{ subNamespaceElementSet.title().replace("_", "") }}Test : XCTestCase
+
+@end
+
+@implementation {{ mainNamespace.upper() }}{{ subNamespaceElementSet.title().replace("_", "") }}Test
+
+- (void)setUp {
+    [super setUp];
+    // Put setup code here. This method is called before the invocation of each test method in the class.
+}
+
+- (void)tearDown {
+    // Put teardown code here. This method is called after the invocation of each test method in the class.
+    [super tearDown];
+}
+
+{% macro prefix(element) -%}
+{{ mainNamespace.upper() }}{{ subNamespaceElement.title().replace("_", "") }}{{ inSyntax(element.key) }}
+{%- endmacro %}
+{% macro prefixSet(elementSet) -%}
+{{ mainNamespace.upper() }}{{ subNamespaceElementSet.title().replace("_", "") }}{{ inSyntax(elementSet.meta) }}
+{%- endmacro %}
+
+{% for elementSetKey in elementSetDictionary.keys() %}
+- (void)testElementSet{{ elementSetKey }}KeyCheck {
+{% for element in elementSetDictionary[elementSetKey].elements %}
+    XCTAssert([{{ prefix(element) }}.key isEqualToString:{{ prefixSet(elementSetDictionary[elementSetKey]) }}{{ stringClass }}{{ element.key }}], @"{{ prefixSet(elementSetDictionary[elementSetKey]) }}{{ stringClass }}{{ element.key }} is mismach");
+    XCTAssert({{ mainNamespace }}::{{ subNamespaceElement }}::{{ inSyntax(element.key) }}::key == {{ mainNamespace }}::{{ subNamespaceElementSet }}::{{ inSyntax(elementSetDictionary[elementSetKey].meta) }}::{{ stringClass }}::{{ element.key }}, @"{{ mainNamespace }}::{{ subNamespaceElementSet }}::{{ inSyntax(elementSetDictionary[elementSetKey].meta) }}::{{ stringClass }}::{{ element.key }} is mismach");
+{% endfor %}
+}
+
+{% endfor %}
+@end

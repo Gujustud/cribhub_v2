@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="net_boot_mode_array">
+        <item>@string/config_on</item>
+        <item>@string/config_off</item>
+        <item>@string/keep_current_state</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="net_boot_mode_value_array">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="net_interface_array">
+        <item>Wireless LAN only</item>
+        <item>Wireless Direct only</item>
+        <item>Wireless LAN &amp; Wireless Direct</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="net_interface_value_array">
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="enable_array">
+        <item>@string/disable</item>
+        <item>@string/enable</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="enable_array_value">
+        <item>0</item>
+        <item>1</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="net_ipv4_boot_method_array">
+        <item>Auto</item>
+        <item>DHCP</item>
+        <item>Bootp</item>
+        <item>RARP</item>
+        <item>Static</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="net_ipv4_boot_method_value_array">
+        <item>0</item>
+        <item>3</item>
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="net_dns_ipv4_boot_method_array">
+        <item>@string/config_auto</item>
+        <item>@string/config_static</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="net_dns_ipv4_boot_method_value_array">
+        <item>2</item>
+        <item>1</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="net_used_ipv6_array">
+        <item>@string/disable</item>
+        <item>@string/enable</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="net_used_ipv6_value_array">
+        <item>0</item>
+        <item>1</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="net_priority_ipv6_array">
+        <item>@string/disable</item>
+        <item>@string/enable</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="net_priority_ipv6_value_array">
+        <item>0</item>
+        <item>1</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="net_wireless_direct_key_array">
+        <item>@string/config_auto</item>
+        <item>@string/config_static</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="net_wireless_direct_key_value_array">
+        <item>1</item>
+        <item>0</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="bt_discoverable_array">
+        <item>@string/disable</item>
+        <item>@string/enable</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="bt_discoverable_value_array">
+        <item>0</item>
+        <item>1</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="bt_boot_mode_array">
+        <item>@string/config_on</item>
+        <item>@string/config_off</item>
+        <item>@string/keep_current_state</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="bt_boot_mode_value_array">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="bt_auto_connection_array">
+        <item>@string/disable</item>
+        <item>@string/enable</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="bt_auto_connection_value_array">
+        <item>0</item>
+        <item>1</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="print_jpeg_halftone_array">
+        <item>Simple Binary</item>
+        <item>Error Diffusion</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="print_jpeg_halftone_value_array">
+        <item>0</item>
+        <item>1</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="print_jpeg_scale_array">
+        <item>@string/disable</item>
+        <item>@string/enable</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="print_jpeg_scale_value_array">
+        <item>0</item>
+        <item>1</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="authentication_method_array">
+        <item>Open System</item>
+        <item>Shared Key</item>
+        <item>WPA/WPA2-PSK	</item>
+        <item>LEAP CKIP	</item>
+        <item>EAP-FAST/NONE	</item>
+        <item>EAP-FAST/MS-CHAPv2</item>
+        <item>EAP-FAST/GTC</item>
+        <item>PEAP/MS-CHAPv2</item>
+        <item>PEAP/GTC</item>
+        <item>EAP-TTLS/CHAP</item>
+        <item>EAP-TTLS/MS-CHAP</item>
+        <item>EAP-TTLS/MS-CHAPv2</item>
+        <item>EAP-TTLS/PAP TKIP</item>
+        <item>EAP-TLS</item>
+        <item>WPA3-SAE	</item>
+        <item>WPA/WPA2-PSK/WPA3-SAE	</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="authentication_method_array_value">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+        <item>8</item>
+        <item>9</item>
+        <item>10</item>
+        <item>11</item>
+        <item>12</item>
+        <item>13</item>
+        <item>18</item>
+        <item>19</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="communication_mode_array">
+        <item>Ad hoc</item>
+        <item>Infrastructure</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="communication_mode_array_value">
+        <item>2</item>
+        <item>1</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="net_encryption_mode_array">
+        <item>None</item>
+        <item>WEP</item>
+        <item>TKIP+AES</item>
+        <item>AES</item>
+        <item>CKIP</item>
+        <item>TKIP</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="net_encryption_mode_array_value">
+        <item>1</item>
+        <item>2</item>
+        <item>8</item>
+        <item>4</item>
+        <item>5</item>
+        <item>3</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="chanel_array">
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+        <item>8</item>
+        <item>9</item>
+        <item>10</item>
+        <item>11</item>
+        <item>12</item>
+        <item>13</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="chanel_array_value">
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+        <item>8</item>
+        <item>9</item>
+        <item>10</item>
+        <item>11</item>
+        <item>12</item>
+        <item>13</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="pj_density_array">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+        <item>8</item>
+        <item>9</item>
+        <item>10</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="pj_density_array_value">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+        <item>8</item>
+        <item>9</item>
+        <item>10</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="density_array">
+        <item>-5</item>
+        <item>-4</item>
+        <item>-3</item>
+        <item>-2</item>
+        <item>-1</item>
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="density_array_value">
+        <item>-5</item>
+        <item>-4</item>
+        <item>-3</item>
+        <item>-2</item>
+        <item>-1</item>
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="pj_speed_array">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="pj_speed_array_value">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="rj_speed_array1">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="rj_speed_array1_value">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="rj_speed_array2">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="rj_speed_array2_value">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="td_speed_array1">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="td_speed_array1_value">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item></item>
+    </string-array>
+
+    <string-array name="td_speed_array2">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>@string/text_no_data</item>
+    </string-array>
+    <string-array name="td_speed_array2_value">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item></item>
+    </string-array>
+
+</resources>

@@ -1,10 +1,10 @@
-# CribHub - Shop Tool Inventory Management
+# DharmaCore - Shop ERP and Tool Inventory
 
 A modern, cross-platform inventory management system for workshop tools built with Flutter and PocketBase.
 
 ## 🎯 Overview
 
-CribHub helps workshop technicians efficiently track and manage tool inventory. From tool crib storage to machine locations, CribHub provides real-time visibility into tool locations, quantities, and movement history.
+DharmaCore helps workshop teams manage tool inventory and ERP workflows in one place. From tool crib storage to quotes, jobs, purchasing, and customer records, DharmaCore provides real-time visibility into operational status.
 
 ## 🛠️ Technology Stack
 
@@ -175,4 +175,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-**CribHub** - Making workshop inventory management simple and efficient! 🔧✨
+**DharmaCore** - Shop ERP and inventory, unified. 🔧✨

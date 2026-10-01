@@ -1,0 +1,97 @@
+
+
+#pragma once
+#import <Foundation/Foundation.h>
+
+typedef NS_ENUM(NSUInteger, BFElementSetPrintSettingsNumber) {
+  BFElementSetPrintSettingsNumberMediaSize,
+  BFElementSetPrintSettingsNumberImageOrientation,
+  BFElementSetPrintSettingsNumberPrintScalingMode,
+  BFElementSetPrintSettingsNumberImageHalftone,
+  BFElementSetPrintSettingsNumberImageBrightness,
+  BFElementSetPrintSettingsNumberImageContrast,
+  BFElementSetPrintSettingsNumberImageRedEnhancement,
+  BFElementSetPrintSettingsNumberImageGreenEnhancement,
+  BFElementSetPrintSettingsNumberImageBlueEnhancement,
+  BFElementSetPrintSettingsNumberPrintHorizontalAlign,
+  BFElementSetPrintSettingsNumberPrintVerticalAlign,
+  BFElementSetPrintSettingsNumberPrintTopMargin,
+  BFElementSetPrintSettingsNumberPrintLeftMargin,
+  BFElementSetPrintSettingsNumberMediaTextColor,
+  BFElementSetPrintSettingsNumberMediaBackgroundColor,
+  BFElementSetPrintSettingsNumberPrintScalingValue,
+  BFElementSetPrintSettingsNumberPrintAutoCutLast,
+  BFElementSetPrintSettingsNumberPrintAutoCutEvery,
+  BFElementSetPrintSettingsNumberPrintAutoCutEveryCyclePerPage,
+  BFElementSetPrintSettingsNumberPrintAutoCutDisableForSpecialTape,
+  BFElementSetPrintSettingsNumberPrintAutoHalfCut,
+  BFElementSetPrintSettingsNumberPrintDensity,
+  BFElementSetPrintSettingsNumberPrintSpeed,
+  BFElementSetPrintSettingsNumberPrintDashLine,
+  BFElementSetPrintSettingsNumberPrintUsingCarbonCopyPaper,
+  BFElementSetPrintSettingsNumberPrintFeedMode,
+  BFElementSetPrintSettingsNumberPrintQuality,
+  BFElementSetPrintSettingsNumberMediaPJRollCase,
+  BFElementSetPrintSettingsNumberMediaPaperInsertionPosition,
+  BFElementSetPrintSettingsNumberMediaPJPaperType,
+  BFElementSetPrintSettingsNumberMediaPJCustomSize,
+  BFElementSetPrintSettingsNumberMediaPJForceStretchPrintableArea,
+  BFElementSetPrintSettingsNumberPrintExtraFeedDots,
+  BFElementSetPrintSettingsNumberPrintCopies,
+  BFElementSetPrintSettingsNumberPrintBidirectionalCommunication,
+  BFElementSetPrintSettingsNumberImageTrimBlankDataFromTail,
+  BFElementSetPrintSettingsNumberPrintPolicyOfProcessingPrintData,
+  BFElementSetPrintSettingsNumberPrintCollate,
+  BFElementSetPrintSettingsNumberPrintCheckMediaTextColor,
+  BFElementSetPrintSettingsNumberPrintCheckMediaBackgroundColor,
+  BFElementSetPrintSettingsNumberPrintCutPause,
+  BFElementSetPrintSettingsNumber__Null,
+};
+extern NSString * __nonnull const BFElementSetPrintSettingsStringMediaSize;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringImageOrientation;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintScalingMode;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringImageHalftone;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringImageBrightness;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringImageContrast;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringImageRedEnhancement;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringImageGreenEnhancement;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringImageBlueEnhancement;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintHorizontalAlign;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintVerticalAlign;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintTopMargin;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintLeftMargin;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringMediaTextColor;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringMediaBackgroundColor;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintScalingValue;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintAutoCutLast;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintAutoCutEvery;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintAutoCutEveryCyclePerPage;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintAutoCutDisableForSpecialTape;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintAutoHalfCut;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintDensity;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintSpeed;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintDashLine;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintUsingCarbonCopyPaper;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintFeedMode;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintQuality;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringMediaPJRollCase;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringMediaPaperInsertionPosition;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringMediaPJPaperType;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringMediaPJCustomSize;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringMediaPJForceStretchPrintableArea;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintExtraFeedDots;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintCopies;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintBidirectionalCommunication;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringImageTrimBlankDataFromTail;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintPolicyOfProcessingPrintData;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintCollate;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintCheckMediaTextColor;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintCheckMediaBackgroundColor;
+extern NSString * __nonnull const BFElementSetPrintSettingsStringPrintCutPause;
+extern NSString * __nonnull const BFElementSetPrintSettingsString__Null;
+@interface BFElementSetPrintSettings : NSObject
++ (nonnull NSString*)convertToString:(BFElementSetPrintSettingsNumber)num;
++ (BFElementSetPrintSettingsNumber)convertToNumber:(nonnull NSString*)str;
++ (nonnull NSString*)key;
+@end
+
