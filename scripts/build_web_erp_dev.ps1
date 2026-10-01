@@ -25,6 +25,7 @@ Write-Host ""
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 flutter build web `
+  --no-tree-shake-icons `
   --dart-define=POCKETBASE_URL=$pocketBaseUrl `
   --dart-define=MCP_URL=$mcpUrl
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

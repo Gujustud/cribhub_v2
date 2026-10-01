@@ -10,5 +10,6 @@ Set-Location $repoRoot
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 flutter build web `
+  --no-tree-shake-icons `
   --dart-define=POCKETBASE_URL=https://cribhub.sscadcam.com/ `
   --dart-define=MCP_URL=https://cribhub.sscadcam.com/mcp
