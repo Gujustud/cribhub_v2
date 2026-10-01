@@ -26,6 +26,19 @@ class AuthService {
 
   bool get isJobsOnly => role == 'jobs_only';
 
+  bool _boolFlag(String name) {
+    final v = user?.data[name];
+    return v == true || v == 1 || v == 'true';
+  }
+
+  /// PocketBase `users.wiki_owner` — can see owner-only wiki pages.
+  bool get isWikiOwner => _boolFlag('wiki_owner');
+
+  /// PocketBase `users.wiki_readonly` — can read wiki, cannot create/edit/delete.
+  bool get isWikiReadonly => _boolFlag('wiki_readonly');
+
+  bool get canEditWiki => isLoggedIn && !isWikiReadonly;
+
   Future<void> login({required String email, required String password}) async {
     await _pb.collection('users').authWithPassword(email.trim(), password);
   }

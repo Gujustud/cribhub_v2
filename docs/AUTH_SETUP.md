@@ -1,12 +1,16 @@
-# Cribhub authentication
+# DharmaCore authentication
 
 ## Overview
 
-Cribhub uses PocketBase **`users`** auth (same model as DharmaCore):
+DharmaCore uses PocketBase **`users`** auth (same model as DharmaCore):
 
 - Email + password login in the app
 - Optional **`role`** on each user: `full` (default) or `jobs_only`
+- Optional **`wiki_owner`** (bool): can read **owner-only** wiki pages
+- Optional **`wiki_readonly`** (bool): can read the wiki but not create/edit/delete
 - API rules enforce login; `jobs_only` cannot access `quotes` / `quote_line_items`
+
+Wiki (`wiki_pages`): nested **parent** tree, markdown **body**, **visibility** `everyone` | `staff` | `owner`. `staff` is hidden from `jobs_only`. `owner` requires `wiki_owner`. Files in **attachments**.
 
 ## PocketBase setup
 
@@ -23,6 +27,7 @@ After migrations, the app requires sign-in. Create at least one user in PocketBa
 - `lib/auth_service.dart` — login, logout, role helpers
 - `lib/login_screen.dart` — sign-in UI
 - `lib/auth_gate.dart` — wraps the app home until authenticated
+- `lib/wiki_screen.dart` / `lib/wiki_edit_screen.dart` — wiki under Shop ERP
 
 ## `jobs_only` (step 2+)
 

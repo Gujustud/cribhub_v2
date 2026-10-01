@@ -12,6 +12,7 @@ import 'customers_screen.dart';
 import 'jobs_screen.dart';
 import 'inventory_home_screen.dart';
 import 'quotes_screen.dart';
+import 'wiki_screen.dart';
 import 'auth_gate.dart';
 import 'auth_service.dart';
 import 'dashboard_navigation.dart';
@@ -177,6 +178,19 @@ class AppDrawer extends StatelessWidget {
               context,
               MaterialPageRoute<void>(
                 builder: (context) => const JobsScreen(),
+              ),
+            );
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.menu_book_outlined),
+          title: const Text('Wiki'),
+          onTap: () {
+            maybeCloseDrawer(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (context) => const WikiScreen(),
               ),
             );
           },

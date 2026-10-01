@@ -245,22 +245,27 @@ async function authAdmin(pb, email, password, label) {
     // PocketBase admin auth endpoint differs across versions (or can be disabled).
     // When we get a 404, fall back to regular user authentication.
     if (e?.response?.status === 404) {
-      console.warn(
-        `${label}: admin auth endpoint not found (404). Falling back to users.authWithPassword.`,
-      );
       try {
-        await pb.collection('users').authWithPassword(email, password);
+        await pb.collection('_superusers').authWithPassword(email, password);
         return;
-      } catch (e2) {
-        console.error(`Auth failed (${label}) via users auth fallback`, {
-          email,
-          passwordLength: password?.length,
-          errorMessage: e2?.message,
-          responseStatus: e2?.response?.status,
-          responseData: e2?.response?.data,
-          rawError: e2,
-        });
-        throw e2;
+      } catch (eSu) {
+        console.warn(
+          `${label}: _superusers auth failed; trying users.authWithPassword.`,
+        );
+        try {
+          await pb.collection('users').authWithPassword(email, password);
+          return;
+        } catch (e2) {
+          console.error(`Auth failed (${label}) via users auth fallback`, {
+            email,
+            passwordLength: password?.length,
+            errorMessage: e2?.message,
+            responseStatus: e2?.response?.status,
+            responseData: e2?.response?.data,
+            rawError: e2,
+          });
+          throw e2;
+        }
       }
     }
     // Avoid printing password; include enough context to diagnose the PocketBase auth failure.

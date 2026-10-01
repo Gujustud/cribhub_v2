@@ -44,6 +44,8 @@ dependencies:
   url_launcher: ^6.2.5
   qr: ^4.0.0
   image: ^4.1.7
+  flutter_markdown: ^0.7.7+1
+  markdown: ^7.3.0
 
 dev_dependencies:
   flutter_test:
