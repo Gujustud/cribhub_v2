@@ -6,6 +6,7 @@ import 'workspace_layout.dart';
 import 'workspace_scaffold.dart';
 import 'tool_import_config_screen.dart'; // NEW
 import 'quote_management_settings_screen.dart';
+import 'app_theme.dart';
 import 'theme_controller.dart';
 import 'drawer_behavior.dart';
 import 'drawer_data_cache.dart';
@@ -25,6 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutoOpenDrawerMixi
   bool _useCategoryButtons = false;
   bool _enableToolImport = false; // NEW
   bool _darkMode = false;
+  AppSkin _skin = AppSkin.graphite;
   bool _keepDrawerOpen = DrawerDataCache.keepDrawerOpen;
   String? _settingsId;
   String? _shopSettingsId;
@@ -41,6 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen> with AutoOpenDrawerMixi
     super.initState();
     _loadSettings();
     _darkMode = ThemeController.instance.themeMode.value == ThemeMode.dark;
+    _skin = ThemeController.instance.skin.value;
   }
 
   @override
@@ -70,13 +73,14 @@ class _SettingsScreenState extends State<SettingsScreen> with AutoOpenDrawerMixi
         _showToolDetailsInList = settings.data['show_tool_details_in_list'] ?? true;
         _useCategoryButtons = settings.data['use_category_buttons'] ?? false;
         _enableToolImport = settings.data['enable_tool_import'] ?? false; // NEW
-        _keepDrawerOpen = settings.data['keep_drawer_open'] ?? false;
+        _keepDrawerOpen = DrawerDataCache.readKeepDrawerOpen(settings);
         _autoLogoutMinutes.text = logoutRaw < 0 ? '0' : '$logoutRaw';
         _isLoading = false;
       });
 
       // Keep in-memory drawer cache in sync so new behavior applies immediately
       DrawerDataCache.keepDrawerOpen = _keepDrawerOpen;
+      DrawerDataCache.notifyKeepDrawerOpenListeners();
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -295,6 +299,12 @@ class _SettingsScreenState extends State<SettingsScreen> with AutoOpenDrawerMixi
   Future<void> _updateKeepDrawerOpen(bool value) async {
     if (_settingsId == null) return;
 
+    final previous = _keepDrawerOpen;
+    // Optimistic: rebuild this screen and any mounted WorkspaceScaffold (dashboard).
+    setState(() => _keepDrawerOpen = value);
+    DrawerDataCache.keepDrawerOpen = value;
+    DrawerDataCache.notifyKeepDrawerOpenListeners();
+
     try {
       final pbService = PocketBaseService();
       await pbService.updateAppSettings(
@@ -306,22 +316,89 @@ class _SettingsScreenState extends State<SettingsScreen> with AutoOpenDrawerMixi
         keepDrawerOpen: value,
       );
 
-      setState(() {
-        _keepDrawerOpen = value;
-      });
+      // PB silently drops unknown fields — confirm the value actually stuck.
+      final settings = await pbService.getAppSettings();
+      final persisted = DrawerDataCache.readKeepDrawerOpen(settings);
+      if (persisted != value) {
+        if (!mounted) return;
+        setState(() => _keepDrawerOpen = previous);
+        DrawerDataCache.keepDrawerOpen = previous;
+        DrawerDataCache.notifyKeepDrawerOpenListeners();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not save "keep side menu open". Check that app_settings '
+              'has boolean keep_drawer_open and your user can update that record.',
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 8),
+          ),
+        );
+        return;
+      }
 
-      // Update drawer cache immediately so new screens respect the setting
-      DrawerDataCache.keepDrawerOpen = value;
-    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error updating setting: $e'),
-            backgroundColor: Colors.red,
+            content: Text(
+              value
+                  ? 'Side menu will stay open on desktop'
+                  : 'Side menu will auto-hide on desktop',
+            ),
+            backgroundColor: Colors.green,
           ),
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _keepDrawerOpen = previous);
+      DrawerDataCache.keepDrawerOpen = previous;
+      DrawerDataCache.notifyKeepDrawerOpenListeners();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating setting: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
+  }
+
+  Future<void> _pickSkin() async {
+    final selected = await showModalBottomSheet<AppSkin>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ListTile(
+                title: Text(
+                  'Choose skin',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              for (final option in AppSkin.values)
+                ListTile(
+                  leading: Icon(
+                    _skin == option
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  title: Text(option.label),
+                  subtitle: Text(option.subtitle),
+                  onTap: () => Navigator.pop(context, option),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+    if (selected == null || selected == _skin) return;
+    setState(() => _skin = selected);
+    await ThemeController.instance.setSkin(selected);
   }
 
   @override
@@ -524,11 +601,14 @@ class _SettingsScreenState extends State<SettingsScreen> with AutoOpenDrawerMixi
                       ),
                       const Divider(height: 1),
                       ListTile(
-                        leading: const Icon(Icons.palette, color: Colors.grey),
-                        title: const Text('Theme'),
-                        subtitle: const Text('Coming soon'),
-                        enabled: false,
+                        leading: Icon(
+                          Icons.palette,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        title: const Text('Skin'),
+                        subtitle: Text('${_skin.label} — ${_skin.subtitle}'),
                         trailing: const Icon(Icons.chevron_right),
+                        onTap: _pickSkin,
                       ),
                     ],
                   ),

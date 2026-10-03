@@ -7,6 +7,8 @@ import 'drawer_data_cache.dart';
 const double kPinnedDrawerBreakpointPx = 900;
 
 /// Whether the current route should show the menu as a fixed left panel.
+/// Reads the current [DrawerDataCache.keepDrawerOpen] value; prefer building
+/// under [WorkspaceScaffold], which listens for changes.
 bool usePinnedDrawer(BuildContext context) {
   return MediaQuery.sizeOf(context).width >= kPinnedDrawerBreakpointPx &&
       DrawerDataCache.keepDrawerOpen;

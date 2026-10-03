@@ -10,7 +10,18 @@ class AddPurchaseScreen extends StatefulWidget {
   /// When non-null, opens in edit mode for this purchase.
   final Purchase? purchase;
 
-  const AddPurchaseScreen({super.key, this.purchase});
+  /// When true, render as an inline panel (no app shell / drawer).
+  final bool embedded;
+
+  /// Called when the panel should close. [saved] is true after save/delete.
+  final ValueChanged<bool>? onClosed;
+
+  const AddPurchaseScreen({
+    super.key,
+    this.purchase,
+    this.embedded = false,
+    this.onClosed,
+  });
 
   @override
   State<AddPurchaseScreen> createState() => _AddPurchaseScreenState();
@@ -287,10 +298,10 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
     try {
       await PocketBaseService().deletePurchase(widget.purchase!.id);
       if (mounted) {
-        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Purchase deleted'), backgroundColor: Colors.green),
         );
+        _close(saved: true);
       }
     } catch (e) {
       if (mounted) {
@@ -298,6 +309,14 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
+    }
+  }
+
+  void _close({required bool saved}) {
+    if (widget.embedded) {
+      widget.onClosed?.call(saved);
+    } else if (Navigator.canPop(context)) {
+      Navigator.pop(context);
     }
   }
 
@@ -386,13 +405,13 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
         );
       }
       if (mounted) {
-        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(widget.purchase != null ? 'Purchase updated' : 'Purchase added'),
             backgroundColor: Colors.green,
           ),
         );
+        _close(saved: true);
       }
     } catch (e) {
       if (mounted) {
@@ -403,32 +422,23 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return WorkspaceScaffold(
-      scaffoldKey: _scaffoldKey,
-      appBar: AppBar(
-        title: Text(widget.purchase != null ? 'Edit Purchase' : 'Add Purchase'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: workspaceMenuLeading(context),
-        actions: [
-          if (widget.purchase != null)
-            TextButton(
-              onPressed: _isLoadingData ? null : _delete,
-              child: const Text('Delete', style: TextStyle(color: Colors.red)),
-            ),
-        ],
-      ),
-      body: _isLoadingData
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 900),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+  String get _title =>
+      widget.purchase != null ? 'Edit Purchase' : 'Add Purchase';
+
+  Widget _buildFormBody() {
+    if (_isLoadingData) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: widget.embedded ? 720 : 900,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
                   // Date: type or tap calendar
                   TextField(
                     controller: _dateController,
@@ -546,9 +556,11 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                     maxLines: 2,
                   ),
                   const SizedBox(height: 24),
-                  const Text(
+                  Text(
                     'Line items',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
                   const SizedBox(height: 12),
                   ...List.generate(_lineItems.length, (i) {
@@ -668,10 +680,14 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                               subtitle: t.modelNumber != null
                                                   ? Text(
                                                       t.modelNumber!,
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.grey[600],
-                                                      ),
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .bodySmall
+                                                          ?.copyWith(
+                                                            color: Theme.of(context)
+                                                                .colorScheme
+                                                                .onSurfaceVariant,
+                                                          ),
                                                     )
                                                   : null,
                                               onTap: () => onSelected(t),
@@ -732,10 +748,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                 ),
                                 child: Text(
                                   _lineTotal(i),
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Theme.of(context).colorScheme.onSurface,
-                                  ),
+                                  style: Theme.of(context).textTheme.bodyMedium,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -827,7 +840,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                     setState(() {});
                                   },
                                   tooltip: 'Remove line',
-                                  color: Colors.grey[700],
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(),
                                 ),
@@ -838,7 +851,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                     icon: const Icon(Icons.add, size: 18),
                                     onPressed: i == _lineItems.length - 1 ? _addLine : null,
                                     tooltip: 'Add line item',
-                                    color: Colors.grey[700],
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(),
                                   ),
@@ -885,7 +898,9 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                           const SizedBox(height: 4),
                           Text(
                             'Total: \$${(_subtotalItems() + _totalTaxAndShipping()).toStringAsFixed(2)}',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
                         ],
                       ),
@@ -897,29 +912,101 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      ElevatedButton(
+                      FilledButton(
                         onPressed: _isLoadingData ? null : _save,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                        child: const Text(
-                          'SAVE PURCHASE',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
+                        child: const Text('Save purchase'),
                       ),
+                      if (widget.purchase != null) ...[
+                        const SizedBox(width: 12),
+                        FilledButton(
+                          onPressed: _isLoadingData ? null : _delete,
+                          style: FilledButton.styleFrom(
+                            backgroundColor:
+                                Theme.of(context).colorScheme.error,
+                            foregroundColor:
+                                Theme.of(context).colorScheme.onError,
+                          ),
+                          child: const Text('Delete'),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 24),
                 ],
-                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmbeddedHeader(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surface,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: scheme.outlineVariant),
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text(
+                  _title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
+            IconButton(
+              tooltip: 'Close',
+              onPressed: () => _close(saved: false),
+              icon: const Icon(Icons.close),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final form = _buildFormBody();
+
+    if (widget.embedded) {
+      final scheme = Theme.of(context).colorScheme;
+      return Material(
+        color: scheme.surface,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(color: scheme.outlineVariant),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildEmbeddedHeader(context),
+              Expanded(child: form),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
+      appBar: AppBar(
+        title: Text(_title),
+        leading: workspaceMenuLeading(context),
+      ),
+      body: form,
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_drawer.dart';
 import 'dashboard_navigation.dart';
+import 'drawer_data_cache.dart';
 import 'workspace_layout.dart';
 
 /// Standard app shell: optional pinned side menu + [Scaffold] content.
@@ -25,6 +26,15 @@ class WorkspaceScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Rebuild when keep-drawer-open changes so the root dashboard (and any
+    // already-mounted route) picks up the setting without a full remount.
+    return ValueListenableBuilder<bool>(
+      valueListenable: DrawerDataCache.keepDrawerOpenListenable,
+      builder: (context, _, _) => _buildShell(context),
+    );
+  }
+
+  Widget _buildShell(BuildContext context) {
     if (usePinnedDrawer(context)) {
       final bar = appBar is AppBar ? appBar! as AppBar : null;
       final pageTitle = _titleText(bar?.title);
@@ -53,7 +63,6 @@ class WorkspaceScaffold extends StatelessWidget {
                     closeOnTap: false,
                     showBrandHeader: false,
                   ),
-                  const VerticalDivider(width: 1),
                   Expanded(child: body),
                 ],
               ),
@@ -117,65 +126,69 @@ class WorkspaceTopBar extends StatelessWidget implements PreferredSizeWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final appBarTheme = theme.appBarTheme;
-    final bg = colorScheme.inversePrimary;
+    final bg = appBarTheme.backgroundColor ?? colorScheme.surface;
     final fg = appBarTheme.foregroundColor ?? colorScheme.onSurface;
+    final titleStyle = appBarTheme.titleTextStyle ??
+        theme.textTheme.titleMedium?.copyWith(
+          color: fg,
+          fontWeight: FontWeight.w600,
+        );
 
     return Material(
       color: bg,
-      child: SafeArea(
-        bottom: false,
-        child: SizedBox(
-          height: kToolbarHeight,
-          child: Row(
-            children: [
-              SizedBox(
-                width: kAppDrawerWidth,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: InkWell(
-                      onTap: () => goToDashboard(context),
-                      borderRadius: BorderRadius.circular(4),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Text(
-                          'DharmaCore',
-                          style: TextStyle(
-                            color: fg,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: colorScheme.outlineVariant),
+          ),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: SizedBox(
+            height: kToolbarHeight,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: kAppDrawerWidth,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: InkWell(
+                        onTap: () => goToDashboard(context),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Text(
+                            'DharmaCore',
+                            style: titleStyle?.copyWith(fontSize: 16),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              const VerticalDivider(width: 1, thickness: 1),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 24, right: 8),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: pageTitle.isEmpty ||
-                            pageTitle.toLowerCase() == 'dharmacore'
-                        ? const SizedBox.shrink()
-                        : Text(
-                            pageTitle,
-                            style: TextStyle(
-                              color: fg,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w500,
+                const VerticalDivider(width: 1, thickness: 1),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 24, right: 8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: pageTitle.isEmpty ||
+                              pageTitle.toLowerCase() == 'dharmacore'
+                          ? const SizedBox.shrink()
+                          : Text(
+                              pageTitle,
+                              style: titleStyle,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                    ),
                   ),
                 ),
-              ),
-              ...actions,
-            ],
+                ...actions,
+              ],
+            ),
           ),
         ),
       ),

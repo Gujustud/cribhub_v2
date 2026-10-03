@@ -40,6 +40,10 @@ class _AuthGateState extends State<AuthGate> {
   void initState() {
     super.initState();
     _pb = PocketBaseService().pb;
+    // onChange does not fire for an already-restored session — refresh now.
+    if (AuthService.instance.isLoggedIn) {
+      DrawerDataCache.refresh();
+    }
     _pb.authStore.onChange.listen((_) async {
       if (AuthService.instance.isLoggedIn) {
         await DrawerDataCache.refresh();
