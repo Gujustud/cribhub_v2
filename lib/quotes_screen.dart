@@ -544,9 +544,9 @@ class _QuotesScreenState extends State<QuotesScreen> with AutoOpenDrawerMixin {
                   onTap: () => _openQuote(q),
                   child: Text(
                     job.isEmpty ? '—' : job,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: QuoteSidebarTheme.primaryFrom,
+                      color: QuoteSidebarTheme.primary(context),
                     ),
                   ),
                 ),

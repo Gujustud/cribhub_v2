@@ -1,15 +1,17 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 import 'auth_gate.dart' show AuthGate, dharmaCoreNavigatorKey;
 import 'combined_home_screen.dart';
 import 'drawer_data_cache.dart';
 import 'http_client_factory.dart';
 import 'app_config.dart';
+import 'pocketbase_service.dart';
 import 'theme_controller.dart';
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await HttpClientFactory.init;
+  await PocketBaseService.init;
   await ThemeController.instance.load();
   await DrawerDataCache.preload();
   final hasInvalidReleaseConfig = kReleaseMode &&
@@ -21,7 +23,6 @@ Future<void> main() async {
   }
   runApp(const DharmaCoreApp());
 }
-
 bool _isLocalhostEndpoint(String rawUrl) {
   final trimmed = rawUrl.trim().toLowerCase();
   if (trimmed.isEmpty) return false;
@@ -33,11 +34,11 @@ bool _isLocalhostEndpoint(String rawUrl) {
 
 class _MisconfiguredReleaseApp extends StatelessWidget {
   const _MisconfiguredReleaseApp();
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'DharmaCore',
+      theme: AppTheme.of(AppSkin.graphite, Brightness.light),
       home: Scaffold(
         appBar: AppBar(title: const Text('DharmaCore configuration error')),
         body: Padding(
@@ -61,45 +62,23 @@ class _MisconfiguredReleaseApp extends StatelessWidget {
 
 class DharmaCoreApp extends StatelessWidget {
   const DharmaCoreApp({super.key});
-
-  ThemeData _buildLightTheme() {
-    return ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: Colors.blue,
-        brightness: Brightness.light,
-      ).copyWith(
-        inversePrimary: Colors.grey.shade400,
-      ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.grey,
-        foregroundColor: Color(0xFF1a1a1a),
-      ),
-      useMaterial3: true,
-    );
-  }
-
-  ThemeData _buildDarkTheme() {
-    return ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: Colors.blueGrey,
-        brightness: Brightness.dark,
-      ),
-      useMaterial3: true,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: ThemeController.instance.themeMode,
-      builder: (context, mode, _) {
-        return MaterialApp(
-          navigatorKey: dharmaCoreNavigatorKey,
-          title: 'DharmaCore',
-          theme: _buildLightTheme(),
-          darkTheme: _buildDarkTheme(),
-          themeMode: mode,
-          home: const AuthGate(child: CombinedHomeScreen()),
+    return ValueListenableBuilder<AppSkin>(
+      valueListenable: ThemeController.instance.skin,
+      builder: (context, skin, _) {
+        return ValueListenableBuilder<ThemeMode>(
+          valueListenable: ThemeController.instance.themeMode,
+          builder: (context, mode, _) {
+            return MaterialApp(
+              navigatorKey: dharmaCoreNavigatorKey,
+              title: 'DharmaCore',
+              theme: AppTheme.of(skin, Brightness.light),
+              darkTheme: AppTheme.of(skin, Brightness.dark),
+              themeMode: mode,
+              home: const AuthGate(child: CombinedHomeScreen()),
+            );
+          },
         );
       },
     );

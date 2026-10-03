@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'pocketbase_service.dart';
+import 'list_toolbar_widgets.dart';
 import 'workspace_layout.dart';
 import 'workspace_scaffold.dart';
 import 'drawer_behavior.dart';
@@ -90,40 +91,57 @@ class _SuppliersScreenState extends State<SuppliersScreen> with AutoOpenDrawerMi
   @override
   Widget build(BuildContext context) {
     maybeAutoOpenDrawer();
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final muted = textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant);
+    final titleStyle = textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600);
 
     return WorkspaceScaffold(
       scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Suppliers'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         leading: workspaceMenuLeading(context),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      final changed = await Navigator.push<bool>(
-                        context,
-                        MaterialPageRoute(builder: (context) => const SupplierDetailScreen()),
-                      );
-                      if (changed == true) _loadData();
-                    },
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add Supplier'),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: scheme.surface,
+                    border: Border(
+                      bottom: BorderSide(color: scheme.outlineVariant),
+                    ),
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1200),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: InventoryListActionButton(
+                          label: 'Add Supplier',
+                          onPressed: () async {
+                            final changed = await Navigator.push<bool>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SupplierDetailScreen(),
+                              ),
+                            );
+                            if (changed == true) _loadData();
+                          },
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-                const Divider(height: 1),
                 Expanded(
                   child: _suppliers.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Text(
                             'No suppliers yet.\nClick "Add Supplier" above to get started.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 16, color: Colors.grey),
+                            style: muted,
                           ),
                         )
                       : ListView.builder(
@@ -135,22 +153,31 @@ class _SuppliersScreenState extends State<SuppliersScreen> with AutoOpenDrawerMi
                               child: ListTile(
                                 title: Text(
                                   supplier.data['company_name'] ?? 'Unknown',
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                  style: titleStyle,
                                 ),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    if (supplier.data['contact'] != null && supplier.data['contact'] != '')
-                                      Text('Contact: ${supplier.data['contact']}'),
-                                    if (supplier.data['tel'] != null && supplier.data['tel'] != '')
-                                      Text('Tel: ${supplier.data['tel']}'),
+                                    if (supplier.data['contact'] != null &&
+                                        supplier.data['contact'] != '')
+                                      Text(
+                                        'Contact: ${supplier.data['contact']}',
+                                        style: muted,
+                                      ),
+                                    if (supplier.data['tel'] != null &&
+                                        supplier.data['tel'] != '')
+                                      Text(
+                                        'Tel: ${supplier.data['tel']}',
+                                        style: muted,
+                                      ),
                                   ],
                                 ),
                                 onTap: () async {
                                   final changed = await Navigator.push<bool>(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (context) => SupplierDetailScreen(supplier: supplier),
+                                      builder: (context) =>
+                                          SupplierDetailScreen(supplier: supplier),
                                     ),
                                   );
                                   if (changed == true) _loadData();
@@ -159,10 +186,13 @@ class _SuppliersScreenState extends State<SuppliersScreen> with AutoOpenDrawerMi
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     IconButton(
-                                      icon: const Icon(Icons.delete, color: Colors.red),
+                                      icon: Icon(Icons.delete, color: scheme.error),
                                       onPressed: () => _deleteSupplier(supplier),
                                     ),
-                                    const Icon(Icons.chevron_right, color: Colors.grey),
+                                    Icon(
+                                      Icons.chevron_right,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
                                   ],
                                 ),
                               ),

@@ -13,6 +13,7 @@ import 'jobs_screen.dart';
 import 'inventory_home_screen.dart';
 import 'quotes_screen.dart';
 import 'wiki_screen.dart';
+import 'maintenance_screen.dart';
 import 'auth_gate.dart';
 import 'auth_service.dart';
 import 'dashboard_navigation.dart';
@@ -21,8 +22,98 @@ import 'drawer_data_cache.dart';
 /// Width of the side menu panel (pinned or slide-out).
 const double kAppDrawerWidth = 240;
 
-const double kDrawerTileMinVerticalPadding = 2;
-const EdgeInsets kDrawerSectionHeaderPadding = EdgeInsets.all(10);
+/// Section label in the side nav (shadcn-like muted chrome).
+class DrawerSectionLabel extends StatelessWidget {
+  final String label;
+
+  const DrawerSectionLabel(this.label, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 6),
+      child: Text(
+        label.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.8,
+              fontSize: 11,
+            ),
+      ),
+    );
+  }
+}
+
+/// Single nav row with hover / press chrome that matches the theme.
+class DrawerNavTile extends StatefulWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+  final bool danger;
+
+  const DrawerNavTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  @override
+  State<DrawerNavTile> createState() => _DrawerNavTileState();
+}
+
+class _DrawerNavTileState extends State<DrawerNavTile> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fg = widget.danger ? scheme.error : scheme.onSurface;
+    final iconColor =
+        widget.danger ? scheme.error : scheme.onSurfaceVariant;
+    final bg = _hovered ? scheme.secondaryContainer : Colors.transparent;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: Material(
+          color: bg,
+          borderRadius: BorderRadius.circular(6),
+          child: InkWell(
+            onTap: widget.onTap,
+            borderRadius: BorderRadius.circular(6),
+            hoverColor: Colors.transparent,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(widget.icon, size: 18, color: iconColor),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: fg,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13.5,
+                          ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class AppDrawer extends StatelessWidget {
   /// If true, this widget is used in `Scaffold.drawer` and will
@@ -51,9 +142,8 @@ class AppDrawer extends StatelessWidget {
     final isJobsOnly = AuthService.instance.isJobsOnly;
     final colorScheme = Theme.of(context).colorScheme;
     final appBarTheme = Theme.of(context).appBarTheme;
-    // Use same background as app bar so drawer header matches top bar
-    final headerBg = colorScheme.inversePrimary;
-    final headerFg = appBarTheme.foregroundColor ?? colorScheme.onPrimary;
+    final headerBg = appBarTheme.backgroundColor ?? colorScheme.surface;
+    final headerFg = appBarTheme.foregroundColor ?? colorScheme.onSurface;
 
     void maybeCloseDrawer(BuildContext context) {
       if (closeOnTap && Navigator.canPop(context)) {
@@ -61,77 +151,71 @@ class AppDrawer extends StatelessWidget {
       }
     }
 
-    final content = ListTileTheme(
-      data: ListTileTheme.of(context).copyWith(
-        minVerticalPadding: kDrawerTileMinVerticalPadding,
-      ),
+    final content = ColoredBox(
+      color: colorScheme.surface,
       child: ListView(
-      padding: EdgeInsets.zero,
-      children: [
-        if (showBrandHeader) ...[
-          Container(
-            decoration: BoxDecoration(color: headerBg),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-            child: Text(
-              'DharmaCore',
-              style: TextStyle(
-                color: headerFg,
-                fontSize: 24,
-                fontWeight: FontWeight.w500,
+        padding: const EdgeInsets.only(bottom: 16),
+        children: [
+          if (showBrandHeader) ...[
+            Container(
+              decoration: BoxDecoration(
+                color: headerBg,
+                border: Border(
+                  bottom: BorderSide(color: colorScheme.outlineVariant),
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+              child: Text(
+                'DharmaCore',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: headerFg,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
               ),
             ),
+          ],
+          const SizedBox(height: 8),
+          DrawerNavTile(
+            icon: Icons.home_outlined,
+            title: 'Dashboard',
+            onTap: () {
+              maybeCloseDrawer(context);
+              goToDashboard(context);
+            },
           ),
-          const Divider(),
-        ],
-        ListTile(
-          leading: const Icon(Icons.home),
-          title: const Text('Dashboard'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            goToDashboard(context);
-          },
-        ),
-        const Padding(
-          padding: kDrawerSectionHeaderPadding,
-          child: Text(
-            'Inventory',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
-            ),
-          ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.search),
-          title: const Text('Inventory home'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const MainScreen()),
-            );
-          },
-        ),
-        if (showAllInventory)
-          ListTile(
-            leading: const Icon(Icons.inventory),
-            title: const Text('All Inventory'),
+          const DrawerSectionLabel('Inventory'),
+          DrawerNavTile(
+            icon: Icons.search,
+            title: 'Inventory home',
             onTap: () {
               maybeCloseDrawer(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const InventoryScreen(),
-                ),
+                MaterialPageRoute(builder: (context) => const MainScreen()),
               );
             },
           ),
-        // Dynamic categories from database (sorted by sort_order, excluding 0)
-        ...categories
-            .where((cat) => (cat.data['sort_order'] ?? 0) > 0)
-            .map((category) => ListTile(
-                  leading: const Icon(Icons.build),
-                  title: Text(category.data['name']),
+          if (showAllInventory)
+            DrawerNavTile(
+              icon: Icons.inventory_2_outlined,
+              title: 'All Inventory',
+              onTap: () {
+                maybeCloseDrawer(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const InventoryScreen(),
+                  ),
+                );
+              },
+            ),
+          ...categories
+              .where((cat) => (cat.data['sort_order'] ?? 0) > 0)
+              .map(
+                (category) => DrawerNavTile(
+                  icon: Icons.build_outlined,
+                  title: '${category.data['name']}',
                   onTap: () {
                     maybeCloseDrawer(context);
                     Navigator.push(
@@ -143,209 +227,226 @@ class AppDrawer extends StatelessWidget {
                       ),
                     );
                   },
-                )),
-        const Divider(),
-        const Padding(
-          padding: kDrawerSectionHeaderPadding,
-          child: Text(
-            'Shop ERP',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
+                ),
+              ),
+          const DrawerSectionLabel('Shop ERP'),
+          if (!isJobsOnly)
+            DrawerNavTile(
+              icon: Icons.request_quote_outlined,
+              title: 'Quotes',
+              onTap: () {
+                maybeCloseDrawer(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (context) => const QuotesScreen(),
+                  ),
+                );
+              },
             ),
-          ),
-        ),
-        if (!isJobsOnly)
-          ListTile(
-            leading: const Icon(Icons.request_quote_outlined),
-            title: const Text('Quotes'),
+          DrawerNavTile(
+            icon: Icons.work_outline,
+            title: 'Jobs',
             onTap: () {
               maybeCloseDrawer(context);
               Navigator.push(
                 context,
                 MaterialPageRoute<void>(
-                  builder: (context) => const QuotesScreen(),
+                  builder: (context) => const JobsScreen(),
                 ),
               );
             },
           ),
-        ListTile(
-          leading: const Icon(Icons.work_outline),
-          title: const Text('Jobs'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (context) => const JobsScreen(),
-              ),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.menu_book_outlined),
-          title: const Text('Wiki'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (context) => const WikiScreen(),
-              ),
-            );
-          },
-        ),
-        const Divider(),
-        const Padding(
-          padding: kDrawerSectionHeaderPadding,
-          child: Text(
-            'Management',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
-            ),
+          DrawerNavTile(
+            icon: Icons.menu_book_outlined,
+            title: 'Wiki',
+            onTap: () {
+              maybeCloseDrawer(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (context) => const WikiScreen(),
+                ),
+              );
+            },
           ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.people_outline),
-          title: const Text('Customers'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (context) => const CustomersScreen(),
-              ),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.label),
-          title: const Text('Brands'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const BrandsScreen()),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.store),
-          title: const Text('Suppliers'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const SuppliersScreen()),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.shopping_cart),
-          title: const Text('Purchases'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const PurchasesScreen()),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.playlist_add_check),
-          title: const Text('Buy List'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const BuyListScreen()),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.location_on),
-          title: const Text('Locations'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const LocationManagementScreen()),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.settings),
-          title: const Text('Settings'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const SettingsScreen()),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.logout),
-          title: const Text('Sign out'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            signOut(context);
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.info),
-          title: const Text('About'),
-          onTap: () {
-            maybeCloseDrawer(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const AboutScreen()),
-            );
-          },
-        ),
-      ],
+          DrawerNavTile(
+            icon: Icons.build_circle_outlined,
+            title: 'Maintenance',
+            onTap: () {
+              maybeCloseDrawer(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (context) => const MaintenanceScreen(),
+                ),
+              );
+            },
+          ),
+          const DrawerSectionLabel('Management'),
+          DrawerNavTile(
+            icon: Icons.people_outline,
+            title: 'Customers',
+            onTap: () {
+              maybeCloseDrawer(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (context) => const CustomersScreen(),
+                ),
+              );
+            },
+          ),
+          DrawerNavTile(
+            icon: Icons.label_outline,
+            title: 'Brands',
+            onTap: () {
+              maybeCloseDrawer(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const BrandsScreen()),
+              );
+            },
+          ),
+          DrawerNavTile(
+            icon: Icons.store_outlined,
+            title: 'Suppliers',
+            onTap: () {
+              maybeCloseDrawer(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SuppliersScreen(),
+                ),
+              );
+            },
+          ),
+          DrawerNavTile(
+            icon: Icons.shopping_cart_outlined,
+            title: 'Purchases',
+            onTap: () {
+              maybeCloseDrawer(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PurchasesScreen(),
+                ),
+              );
+            },
+          ),
+          DrawerNavTile(
+            icon: Icons.playlist_add_check,
+            title: 'Buy List',
+            onTap: () {
+              maybeCloseDrawer(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const BuyListScreen()),
+              );
+            },
+          ),
+          DrawerNavTile(
+            icon: Icons.location_on_outlined,
+            title: 'Locations',
+            onTap: () {
+              maybeCloseDrawer(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const LocationManagementScreen(),
+                ),
+              );
+            },
+          ),
+          const DrawerSectionLabel('Account'),
+          DrawerNavTile(
+            icon: Icons.settings_outlined,
+            title: 'Settings',
+            onTap: () {
+              maybeCloseDrawer(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+          ),
+          DrawerNavTile(
+            icon: Icons.info_outline,
+            title: 'About',
+            onTap: () {
+              maybeCloseDrawer(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AboutScreen()),
+              );
+            },
+          ),
+          DrawerNavTile(
+            icon: Icons.logout,
+            title: 'Sign out',
+            danger: true,
+            onTap: () {
+              maybeCloseDrawer(context);
+              signOut(context);
+            },
+          ),
+        ],
       ),
     );
 
-    // Slide-out drawer for mobile / default.
     if (asDrawer) {
       return SizedBox(
         width: kAppDrawerWidth,
         child: Drawer(
+          backgroundColor: colorScheme.surface,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+            side: BorderSide(color: colorScheme.outlineVariant),
+          ),
           child: content,
         ),
       );
     }
 
-    // Fixed side panel version for wide layouts.
+    // Fixed side panel for wide layouts — flat, bordered like shadcn sidebar.
     return Material(
-      elevation: 2,
-      child: SizedBox(
-        width: kAppDrawerWidth,
-        child: content,
+      color: colorScheme.surface,
+      elevation: 0,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            right: BorderSide(color: colorScheme.outlineVariant),
+          ),
+        ),
+        child: SizedBox(
+          width: kAppDrawerWidth,
+          child: content,
+        ),
       ),
     );
   }
 }
 
-// NEW: Wrapper widget to enable hover-to-open drawer on desktop
+/// Wrapper widget to enable hover-to-open drawer on desktop.
 class DrawerWithHover extends StatefulWidget {
   final Widget child;
   final Widget drawer;
 
   const DrawerWithHover({
-    Key? key,
+    super.key,
     required this.child,
     required this.drawer,
-  }) : super(key: key);
+  });
 
   @override
   State<DrawerWithHover> createState() => _DrawerWithHoverState();
 }
 
 class _DrawerWithHoverState extends State<DrawerWithHover> {
-  bool _isHovering = false;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
@@ -356,27 +457,16 @@ class _DrawerWithHoverState extends State<DrawerWithHover> {
       body: Stack(
         children: [
           widget.child,
-          // NEW: Hover detection area on left edge (desktop only)
           Positioned(
             left: 0,
             top: 0,
             bottom: 0,
-            width: 20, // Hover zone width
+            width: 20,
             child: MouseRegion(
               onEnter: (_) {
-                setState(() {
-                  _isHovering = true;
-                });
                 _scaffoldKey.currentState?.openDrawer();
               },
-              onExit: (_) {
-                setState(() {
-                  _isHovering = false;
-                });
-              },
-              child: Container(
-                color: Colors.transparent,
-              ),
+              child: const ColoredBox(color: Colors.transparent),
             ),
           ),
         ],

@@ -2,6 +2,8 @@
 
 Build and deploy the CribHub **web app** to the Proxmox / PocketBase server at `https://cribhub.sscadcam.com`.
 
+**Other targets:** live shop CT **105** → **`DEPLOY_SHOP.md`**; erp-dev CT **103** → **`DEPLOY_ERP.md`**.
+
 **Stack:** Flutter web → `build/web/` → zip → server. Static files live in `/opt/pocketbase/pb_public`; Nginx serves them.
 
 ---

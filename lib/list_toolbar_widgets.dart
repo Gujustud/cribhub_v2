@@ -30,12 +30,13 @@ class InventoryListActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-        backgroundColor: Colors.grey[700],
-        foregroundColor: Colors.white,
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
         minimumSize: const Size(0, 52),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),

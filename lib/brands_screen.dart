@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'pocketbase_service.dart';
+import 'list_toolbar_widgets.dart';
 import 'workspace_layout.dart';
 import 'workspace_scaffold.dart';
 import 'drawer_behavior.dart';
@@ -192,9 +193,11 @@ class _BrandsScreenState extends State<BrandsScreen> with AutoOpenDrawerMixin {
                 // Scraper Configuration Section
                 const Divider(),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Auto-Import Configuration',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                 ),
                 const SizedBox(height: 12),
                 
@@ -364,76 +367,83 @@ class _BrandsScreenState extends State<BrandsScreen> with AutoOpenDrawerMixin {
   @override
   Widget build(BuildContext context) {
     maybeAutoOpenDrawer();
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final muted = textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant);
+    final titleStyle = textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600);
 
     return WorkspaceScaffold(
       scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Brand Management'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         leading: workspaceMenuLeading(context),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: scheme.surface,
+                    border: Border(
+                      bottom: BorderSide(color: scheme.outlineVariant),
+                    ),
+                  ),
                   child: Center(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _showAddEditBrandDialog(),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add Brand'),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1200),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: InventoryListActionButton(
+                          label: 'Add Brand',
+                          onPressed: () => _showAddEditBrandDialog(),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-                const Divider(height: 1),
                 Expanded(
                   child: _brands.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.factory, size: 64, color: Colors.grey.shade400),
-                              const SizedBox(height: 16),
-                              Text(
-                                'No brands yet',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.grey.shade600,
-                                ),
+                              Icon(
+                                Icons.factory,
+                                size: 48,
+                                color: scheme.onSurfaceVariant,
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 12),
+                              Text('No brands yet', style: titleStyle),
+                              const SizedBox(height: 4),
                               Text(
                                 'Click "Add Brand" above to get started.',
-                                style: TextStyle(color: Colors.grey.shade500),
+                                style: muted,
                               ),
                             ],
                           ),
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(8),
                           itemCount: _brands.length,
                           itemBuilder: (context, index) {
                             final brand = _brands[index];
                             final name = brand.data['name'] ?? 'Unknown';
                             final scraperEnabled = brand.data['scraper_enabled'] == true;
                             final urlPattern = brand.data['url_pattern'] ?? '';
-                            
+
                             return Card(
-                              margin: const EdgeInsets.only(bottom: 8),
                               child: ListTile(
-                                title: Text(
-                                  name,
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
+                                title: Text(name, style: titleStyle),
                                 subtitle: scraperEnabled && urlPattern.isNotEmpty
                                     ? Padding(
                                         padding: const EdgeInsets.only(top: 4),
                                         child: Text(
                                           urlPattern,
-                                          style: const TextStyle(
-                                            fontSize: 11,
+                                          style: textTheme.bodySmall?.copyWith(
                                             fontFamily: 'monospace',
+                                            color: scheme.onSurfaceVariant,
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
@@ -441,36 +451,39 @@ class _BrandsScreenState extends State<BrandsScreen> with AutoOpenDrawerMixin {
                                       )
                                     : null,
                                 trailing: PopupMenuButton(
-                                      itemBuilder: (context) => [
-                                        const PopupMenuItem(
-                                          value: 'edit',
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.edit, size: 20),
-                                              SizedBox(width: 8),
-                                              Text('Edit'),
-                                            ],
-                                          ),
-                                        ),
-                                        const PopupMenuItem(
-                                          value: 'delete',
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.delete, size: 20, color: Colors.red),
-                                              SizedBox(width: 8),
-                                              Text('Delete', style: TextStyle(color: Colors.red)),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                      onSelected: (value) {
-                                        if (value == 'edit') {
-                                          _showAddEditBrandDialog(brand: brand);
-                                        } else if (value == 'delete') {
-                                          _deleteBrand(brand);
-                                        }
-                                      },
+                                  itemBuilder: (context) => [
+                                    const PopupMenuItem(
+                                      value: 'edit',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.edit, size: 20),
+                                          SizedBox(width: 8),
+                                          Text('Edit'),
+                                        ],
+                                      ),
                                     ),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.delete, size: 20, color: scheme.error),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Delete',
+                                            style: TextStyle(color: scheme.error),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  onSelected: (value) {
+                                    if (value == 'edit') {
+                                      _showAddEditBrandDialog(brand: brand);
+                                    } else if (value == 'delete') {
+                                      _deleteBrand(brand);
+                                    }
+                                  },
+                                ),
                                 onTap: () => _showAddEditBrandDialog(brand: brand),
                               ),
                             );

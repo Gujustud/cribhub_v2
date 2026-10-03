@@ -289,14 +289,6 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
                 children: [
                   ElevatedButton(
                     onPressed: _onAddTool,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      backgroundColor: Colors.grey[700],
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -309,14 +301,6 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
                   const SizedBox(width: 12),
                   ElevatedButton(
                     onPressed: _onReturnTool,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      backgroundColor: Colors.grey[700],
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [

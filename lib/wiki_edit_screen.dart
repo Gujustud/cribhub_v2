@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:intl/intl.dart';
 import 'package:pocketbase/pocketbase.dart';
 
@@ -8,6 +9,27 @@ import 'auth_service.dart';
 import 'pocketbase_service.dart';
 import 'workspace_scaffold.dart';
 import 'wiki_page_utils.dart';
+
+MediaType? _wikiUploadContentType(String filename) {
+  final lower = filename.toLowerCase();
+  if (lower.endsWith('.pdf')) return MediaType('application', 'pdf');
+  if (lower.endsWith('.png')) return MediaType('image', 'png');
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+    return MediaType('image', 'jpeg');
+  }
+  if (lower.endsWith('.gif')) return MediaType('image', 'gif');
+  if (lower.endsWith('.webp')) return MediaType('image', 'webp');
+  return null;
+}
+
+http.MultipartFile _wikiAttachmentPart(String filename, List<int> bytes) {
+  return http.MultipartFile.fromBytes(
+    'attachments+', // append; bare "attachments" replaces in PB 0.23+
+    bytes,
+    filename: filename,
+    contentType: _wikiUploadContentType(filename),
+  );
+}
 
 /// Create or edit a wiki page (markdown body + attachments).
 class WikiEditScreen extends StatefulWidget {
@@ -215,26 +237,20 @@ class _WikiEditScreenState extends State<WikiEditScreen> {
 
     setState(() => _uploading = true);
     try {
-      final col = PocketBaseService().pb.collection('wiki_pages');
-      var last = record;
-      var count = names.length;
+      final remaining = 12 - names.length;
+      final uploads = <http.MultipartFile>[];
       for (final f in result.files) {
-        if (count >= 12) break;
+        if (uploads.length >= remaining) break;
         final bytes = f.bytes;
         if (bytes == null || bytes.isEmpty) continue;
-        last = await col.update(
-          last.id,
-          files: [
-            http.MultipartFile.fromBytes(
-              'attachments',
-              bytes,
-              filename: f.name,
-            ),
-          ],
-        );
-        count++;
+        uploads.add(_wikiAttachmentPart(f.name, bytes));
       }
-      if (mounted) setState(() => _record = last);
+      if (uploads.isEmpty) return;
+      final updated = await PocketBaseService().pb.collection('wiki_pages').update(
+        record.id,
+        files: uploads,
+      );
+      if (mounted) setState(() => _record = updated);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -274,36 +290,26 @@ class _WikiEditScreenState extends State<WikiEditScreen> {
     setState(() => _uploading = true);
     try {
       final pb = PocketBaseService().pb;
-      final col = pb.collection('wiki_pages');
-      var last = record!;
-      final before = wikiAttachmentNames(last).toSet();
-      final snippets = <String>[];
-      var count = before.length;
-
+      final before = wikiAttachmentNames(record).toSet();
+      final remaining = 12 - before.length;
+      final uploads = <http.MultipartFile>[];
       for (final f in result.files) {
-        if (count >= 12) break;
+        if (uploads.length >= remaining) break;
         final bytes = f.bytes;
         if (bytes == null || bytes.isEmpty) continue;
-        last = await col.update(
-          last.id,
-          files: [
-            http.MultipartFile.fromBytes(
-              'attachments',
-              bytes,
-              filename: f.name,
-            ),
-          ],
-        );
-        count++;
-        final after = wikiAttachmentNames(last);
-        final added = after.where((n) => !before.contains(n)).toList();
-        before.addAll(after);
-        for (final name in added) {
-          final url = pb.files.getUrl(last, name).toString();
-          final alt = name.replaceAll(RegExp(r'\.[^.]+$'), '');
-          snippets.add('![$alt]($url)');
-        }
+        uploads.add(_wikiAttachmentPart(f.name, bytes));
       }
+      if (uploads.isEmpty) return;
+
+      final last = await pb.collection('wiki_pages').update(
+        record.id,
+        files: uploads,
+      );
+      final added = wikiAttachmentNames(last).where((n) => !before.contains(n));
+      final snippets = <String>[
+        for (final name in added)
+          '![${name.replaceAll(RegExp(r'\.[^.]+$'), '')}](${pb.files.getUrl(last, name)})',
+      ];
 
       if (mounted) {
         setState(() {
@@ -502,7 +508,8 @@ class _WikiEditScreenState extends State<WikiEditScreen> {
                       minLines: 12,
                       maxLines: 24,
                       decoration: const InputDecoration(
-                        hintText: 'Select text, then use B / I / U — or type markdown',
+                        hintText:
+                            'B / I / U on selection. Images: ![alt](url) or ![alt](url#400x300) to set size',
                         alignLabelWithHint: true,
                         border: OutlineInputBorder(),
                       ),

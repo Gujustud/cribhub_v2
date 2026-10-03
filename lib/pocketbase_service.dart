@@ -1,5 +1,6 @@
 import 'package:pocketbase/pocketbase.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'dart:typed_data';
@@ -8,17 +9,49 @@ import 'http_client_factory.dart';
 import 'models.dart';
 
 class PocketBaseService {
+  static const _authPrefsKey = 'pb_auth';
+
   static final PocketBaseService _instance = PocketBaseService._internal();
-  late final PocketBase pb;
+  static Future<void>? _initFuture;
+
+  PocketBase? _pb;
 
   factory PocketBaseService() {
     return _instance;
   }
 
-  PocketBaseService._internal() {
+  PocketBaseService._internal();
+
+  /// PocketBase client. Call [init] from [main] before first use.
+  PocketBase get pb {
+    final client = _pb;
+    if (client == null) {
+      throw StateError('PocketBaseService.init() must be awaited before use');
+    }
+    return client;
+  }
+
+  /// Loads persisted auth (survives hard refresh) then creates the client.
+  static Future<void> get init {
+    return _initFuture ??= _instance._doInit();
+  }
+
+  Future<void> _doInit() async {
+    final prefs = await SharedPreferences.getInstance();
+    final authStore = AsyncAuthStore(
+      save: (String data) async {
+        await prefs.setString(_authPrefsKey, data);
+      },
+      initial: prefs.getString(_authPrefsKey),
+      clear: () async {
+        await prefs.remove(_authPrefsKey);
+      },
+    );
+
     final baseUrl = AppConfig.pocketBaseUrl;
-    pb = PocketBase(
+    _pb = PocketBase(
       baseUrl,
+      authStore: authStore,
       httpClientFactory: baseUrl.startsWith('https')
           ? () => HttpClientFactory.getHttpClient()
           : null,
@@ -2066,6 +2099,285 @@ class PocketBaseService {
     } catch (e) {
       print('Error deleting purchase item: $e');
       rethrow;
+    }
+  }
+
+  Future<List<dynamic>> getMaintenanceMachines() async {
+    try {
+      return await pb.collection('maintenance_machines').getFullList(
+        sort: 'sort_order,name',
+      );
+    } catch (e) {
+      print('Error getting maintenance machines: $e');
+      rethrow;
+    }
+  }
+
+  Future<dynamic> createMaintenanceMachine({
+    required String name,
+    int? sortOrder,
+  }) async {
+    try {
+      return await pb.collection('maintenance_machines').create(body: {
+        'name': name.trim(),
+        if (sortOrder != null) 'sort_order': sortOrder,
+      });
+    } catch (e) {
+      print('Error creating maintenance machine: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateMaintenanceMachine({
+    required String id,
+    required String name,
+    int? sortOrder,
+  }) async {
+    try {
+      await pb.collection('maintenance_machines').update(id, body: {
+        'name': name.trim(),
+        if (sortOrder != null) 'sort_order': sortOrder,
+      });
+    } catch (e) {
+      print('Error updating maintenance machine: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteMaintenanceMachine(String id) async {
+    try {
+      await pb.collection('maintenance_machines').delete(id);
+    } catch (e) {
+      print('Error deleting maintenance machine: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<dynamic>> getMaintenanceRecords() async {
+    try {
+      // Sort by completed_date only — multi-field sorts including -created
+      // returned 400 on the live shop PB build.
+      return await pb.collection('maintenance_records').getFullList(
+        sort: '-completed_date',
+        expand: 'machine',
+      );
+    } catch (e) {
+      print('Error getting maintenance records: $e');
+      rethrow;
+    }
+  }
+
+  Future<dynamic> createMaintenanceRecord({
+    required String name,
+    required String machineId,
+    String? completedDate,
+    String? note,
+    String? updatedByEmail,
+    String? scheduleId,
+  }) async {
+    try {
+      return await pb.collection('maintenance_records').create(body: {
+        'name': name.trim(),
+        'machine': machineId,
+        if (completedDate != null && completedDate.isNotEmpty)
+          'completed_date': completedDate,
+        if (note != null) 'note': note,
+        if (updatedByEmail != null && updatedByEmail.isNotEmpty)
+          'updated_by_email': updatedByEmail,
+        if (scheduleId != null && scheduleId.isNotEmpty) 'schedule': scheduleId,
+      });
+    } catch (e) {
+      print('Error creating maintenance record: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateMaintenanceRecord({
+    required String id,
+    required String name,
+    required String machineId,
+    String? completedDate,
+    String? note,
+    String? updatedByEmail,
+  }) async {
+    try {
+      await pb.collection('maintenance_records').update(id, body: {
+        'name': name.trim(),
+        'machine': machineId,
+        'completed_date':
+            (completedDate != null && completedDate.isNotEmpty) ? completedDate : null,
+        'note': note ?? '',
+        if (updatedByEmail != null && updatedByEmail.isNotEmpty)
+          'updated_by_email': updatedByEmail,
+      });
+    } catch (e) {
+      print('Error updating maintenance record: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteMaintenanceRecord(String id) async {
+    try {
+      await pb.collection('maintenance_records').delete(id);
+    } catch (e) {
+      print('Error deleting maintenance record: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<dynamic>> getMaintenanceSchedules() async {
+    try {
+      return await pb.collection('maintenance_schedules').getFullList(
+        sort: 'next_due_date',
+        expand: 'machine',
+      );
+    } catch (e) {
+      print('Error getting maintenance schedules: $e');
+      rethrow;
+    }
+  }
+
+  Future<dynamic> createMaintenanceSchedule({
+    required String name,
+    required String machineId,
+    required int frequencyValue,
+    required String frequencyUnit,
+    required String nextDueDate,
+    String? note,
+    int leadDays = 7,
+    bool active = true,
+    String? updatedByEmail,
+  }) async {
+    try {
+      return await pb.collection('maintenance_schedules').create(body: {
+        'name': name.trim(),
+        'machine': machineId,
+        'frequency_value': frequencyValue < 1 ? 1 : frequencyValue,
+        'frequency_unit': frequencyUnit,
+        'next_due_date': nextDueDate,
+        'lead_days': leadDays,
+        'active': active,
+        if (note != null) 'note': note,
+        if (updatedByEmail != null && updatedByEmail.isNotEmpty)
+          'updated_by_email': updatedByEmail,
+      });
+    } catch (e) {
+      print('Error creating maintenance schedule: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateMaintenanceSchedule({
+    required String id,
+    required String name,
+    required String machineId,
+    required int frequencyValue,
+    required String frequencyUnit,
+    required String nextDueDate,
+    String? lastCompletedDate,
+    String? note,
+    int leadDays = 7,
+    bool active = true,
+    String? updatedByEmail,
+  }) async {
+    try {
+      await pb.collection('maintenance_schedules').update(id, body: {
+        'name': name.trim(),
+        'machine': machineId,
+        'frequency_value': frequencyValue < 1 ? 1 : frequencyValue,
+        'frequency_unit': frequencyUnit,
+        'next_due_date': nextDueDate,
+        'last_completed_date':
+            (lastCompletedDate != null && lastCompletedDate.isNotEmpty)
+                ? lastCompletedDate
+                : null,
+        'lead_days': leadDays,
+        'active': active,
+        'note': note ?? '',
+        if (updatedByEmail != null && updatedByEmail.isNotEmpty)
+          'updated_by_email': updatedByEmail,
+      });
+    } catch (e) {
+      print('Error updating maintenance schedule: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteMaintenanceSchedule(String id) async {
+    try {
+      await pb.collection('maintenance_schedules').delete(id);
+    } catch (e) {
+      print('Error deleting maintenance schedule: $e');
+      rethrow;
+    }
+  }
+
+  /// Log a completion and advance [next_due_date] from the completed date.
+  Future<void> completeMaintenanceSchedule({
+    required String scheduleId,
+    required String name,
+    required String machineId,
+    required int frequencyValue,
+    required String frequencyUnit,
+    required String completedDate,
+    String? note,
+    int leadDays = 7,
+    bool active = true,
+    String? updatedByEmail,
+  }) async {
+    try {
+      await createMaintenanceRecord(
+        name: name,
+        machineId: machineId,
+        completedDate: completedDate,
+        note: note,
+        updatedByEmail: updatedByEmail,
+        scheduleId: scheduleId,
+      );
+
+      final completed = DateTime.parse(completedDate);
+      final from = DateTime(completed.year, completed.month, completed.day);
+      final next = _advanceMaintenanceDue(
+        from: from,
+        frequencyValue: frequencyValue,
+        frequencyUnit: frequencyUnit,
+      );
+      final nextStr =
+          '${next.year.toString().padLeft(4, '0')}-${next.month.toString().padLeft(2, '0')}-${next.day.toString().padLeft(2, '0')}';
+
+      await pb.collection('maintenance_schedules').update(scheduleId, body: {
+        'last_completed_date': completedDate,
+        'next_due_date': nextStr,
+        'lead_days': leadDays,
+        'active': active,
+        if (updatedByEmail != null && updatedByEmail.isNotEmpty)
+          'updated_by_email': updatedByEmail,
+      });
+    } catch (e) {
+      print('Error completing maintenance schedule: $e');
+      rethrow;
+    }
+  }
+
+  DateTime _advanceMaintenanceDue({
+    required DateTime from,
+    required int frequencyValue,
+    required String frequencyUnit,
+  }) {
+    final n = frequencyValue < 1 ? 1 : frequencyValue;
+    switch (frequencyUnit) {
+      case 'weeks':
+        return from.add(Duration(days: 7 * n));
+      case 'months':
+        final month = from.month - 1 + n;
+        final year = from.year + month ~/ 12;
+        final monthNorm = month % 12 + 1;
+        final dim = DateTime(year, monthNorm + 1, 0).day;
+        final day = from.day > dim ? dim : from.day;
+        return DateTime(year, monthNorm, day);
+      case 'days':
+      default:
+        return from.add(Duration(days: n));
     }
   }
   }

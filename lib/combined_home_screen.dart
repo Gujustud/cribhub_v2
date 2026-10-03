@@ -212,14 +212,18 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
     });
   }
 
-  ButtonStyle get _greyActionButtonStyle => ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        backgroundColor: Colors.grey[700],
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      );
+  ButtonStyle _primaryActionButtonStyle(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ElevatedButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      backgroundColor: scheme.primary,
+      foregroundColor: scheme.onPrimary,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+  }
 
   void _openJob(dynamic job) {
     Navigator.push(
@@ -405,9 +409,9 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
   TextStyle _dashboardLinkStyle({FontWeight? weight}) {
     return TextStyle(
       fontWeight: weight ?? FontWeight.w500,
-      color: QuoteSidebarTheme.primaryFrom,
+      color: QuoteSidebarTheme.primary(context),
       decoration: TextDecoration.underline,
-      decorationColor: QuoteSidebarTheme.primaryFrom,
+      decorationColor: QuoteSidebarTheme.primary(context),
     );
   }
 
@@ -479,7 +483,7 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
                       MaterialPageRoute(builder: (context) => const AddToolScreen()),
                     );
                   },
-                  style: _greyActionButtonStyle,
+                  style: _primaryActionButtonStyle(context),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -497,7 +501,7 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
                       builder: (context) => const ReturnDialog(),
                     );
                   },
-                  style: _greyActionButtonStyle,
+                  style: _primaryActionButtonStyle(context),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -537,7 +541,7 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
                 children: [
                   ElevatedButton(
                     onPressed: _openNewQuote,
-                    style: _greyActionButtonStyle,
+                    style: _primaryActionButtonStyle(context),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [

@@ -12,6 +12,7 @@ This document freezes **ownership** and **naming** so Flutter and PocketBase sta
 | **Customers** (people/companies you quote) | **New** `customers` collection (Week 1) | Not the same as `suppliers` unless you explicitly merge workflows. |
 | **Quotes** and **quote line items** | **New** `quotes`, `quote_line_items` (Week 2) | Links to `customers`; totals snapshotted on the quote where possible. Line-item relations `material_vendor`, `subcontractor_1`, `subcontractor_2` use `suppliers` (DharmaCore used `vendors`). |
 | **Wiki** (shop docs) | **`wiki_pages`** | Nested pages, markdown, visibility `everyone` / `staff` / `owner`. |
+| **Maintenance** (log + schedules) | **`maintenance_records`**, **`maintenance_machines`**, **`maintenance_schedules`** | Log = completed work (ad-hoc OK). Schedules = recurring days/weeks/months with `next_due_date`; Mark done writes a log row and advances next due. Optional `schedule` on records. Everyone logged in can CRUD. |
 
 ## Cross-app references
 

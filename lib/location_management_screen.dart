@@ -121,10 +121,9 @@ class _LocationContentsHoverIconState extends State<_LocationContentsHoverIcon> 
               child: namesWithQty.isEmpty
                   ? Text(
                       'No tools at this location.',
-                      style: TextStyle(
-                        color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                        fontSize: 13,
-                      ),
+                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                          ),
                     )
                   : Column(
                       mainAxisSize: MainAxisSize.min,
@@ -991,9 +990,11 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
         content: SizedBox(
           width: 360,
           child: records.isEmpty
-              ? const Text(
+              ? Text(
                   'No tools at this location.',
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                 )
               : SizedBox(
                   height: listHeight,
@@ -1215,7 +1216,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
       case 'recycle':
         return Colors.red;
       default:
-        return Colors.grey;
+        return Theme.of(context).colorScheme.onSurfaceVariant;
     }
   }
 
@@ -1345,15 +1346,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
                               _selectedType != null
                                   ? '${_selectedType!.toUpperCase()} LOCATIONS'
                                   : 'Select a type',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             if (_selectedType != null)
-                              ElevatedButton.icon(
+                              FilledButton.icon(
                                 onPressed: () => _showAddLocationDialog(),
-                                icon: const Icon(Icons.add),
+                                icon: const Icon(Icons.add, size: 18),
                                 label: const Text('Add Location'),
                               ),
                           ],
@@ -1363,13 +1363,22 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
                       // Locations tree
                       Expanded(
                         child: _selectedType == null
-                            ? const Center(child: Text('Select a location type'))
+                            ? Center(
+                                child: Text(
+                                  'Select a location type',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              )
                             : _getRootLocationsByType().isEmpty
                                 ? Center(
                                     child: Text(
                                       'No ${_selectedType!} locations yet.\nClick "Add Location" to create one.',
                                       textAlign: TextAlign.center,
-                                      style: TextStyle(fontSize: 16, color: colorScheme.onSurfaceVariant),
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
                                     ),
                                   )
                                 : ListView(
@@ -1389,7 +1398,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
       scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Locations'),
-        backgroundColor: colorScheme.inversePrimary,
         leading: workspaceMenuLeading(context),
       ),
       body: bodyContent,

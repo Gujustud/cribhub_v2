@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'auth_service.dart';
+import 'native_login_fields.dart';
 
 /// Email/password sign-in (PocketBase `users` collection).
 class LoginScreen extends StatefulWidget {
@@ -25,8 +27,29 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  bool _validate() {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    // Non-web TextFormFields also run their validators when Form is present.
+    _formKey.currentState?.validate();
+
+    if (email.isEmpty) {
+      setState(() => _error = 'Email is required');
+      return false;
+    }
+    if (!email.contains('@')) {
+      setState(() => _error = 'Enter a valid email');
+      return false;
+    }
+    if (password.isEmpty) {
+      setState(() => _error = 'Password is required');
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_validate()) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -36,6 +59,8 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text,
         password: _passwordController.text,
       );
+      // Lets password managers (Bitwarden, etc.) save/update the credential.
+      TextInput.finishAutofillContext(shouldSave: true);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -82,36 +107,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        autocorrect: false,
-                        textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (v) {
-                          final t = v?.trim() ?? '';
-                          if (t.isEmpty) return 'Email is required';
-                          if (!t.contains('@')) return 'Enter a valid email';
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        textInputAction: TextInputAction.done,
-                        onFieldSubmitted: (_) => _loading ? null : _submit(),
-                        decoration: const InputDecoration(
-                          labelText: 'Password',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (v) {
-                          if ((v ?? '').isEmpty) return 'Password is required';
-                          return null;
-                        },
+                      NativeLoginFields(
+                        emailController: _emailController,
+                        passwordController: _passwordController,
+                        enabled: !_loading,
+                        onSubmit: _loading ? null : _submit,
                       ),
                       if (_error != null) ...[
                         const SizedBox(height: 12),

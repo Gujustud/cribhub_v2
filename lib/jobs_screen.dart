@@ -569,9 +569,9 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
                   onTap: () => _openJob(job),
                   child: Text(
                     jobNum.isEmpty ? '—' : jobNum,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: QuoteSidebarTheme.primaryFrom,
+                      color: QuoteSidebarTheme.primary(context),
                     ),
                   ),
                 ),
@@ -604,9 +604,9 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
                           _linkedQuoteLabel(job),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: QuoteSidebarTheme.primaryFrom,
+                            color: QuoteSidebarTheme.primary(context),
                           ),
                         ),
                       )

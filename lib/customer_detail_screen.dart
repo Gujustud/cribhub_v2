@@ -581,9 +581,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with AutoOp
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: QuoteSidebarTheme.primaryFrom,
+            color: QuoteSidebarTheme.primary(context),
             decoration: TextDecoration.underline,
-            decorationColor: QuoteSidebarTheme.primaryFrom,
+            decorationColor: QuoteSidebarTheme.primary(context),
           ),
         ),
       ),

@@ -1,6 +1,6 @@
 # DharmaCore ERP dev deployment (`erp-dev`)
 
-Deploy the **Flutter web** build to the **erp-dev** Proxmox LXC (shop ERP / PocketBase experiments). This is separate from production DharmaCore; see **`DEPLOY.md`** for `cribhub.sscadcam.com`.
+Deploy the **Flutter web** build to the **erp-dev** Proxmox LXC (shop ERP / PocketBase experiments). This is separate from the **live shop** (CT **105** → **`DEPLOY_SHOP.md`**) and from CribHub production (**`DEPLOY.md`** / `cribhub.sscadcam.com`).
 
 **Stack on the CT:** Flutter static files → `/opt/pocketbase-erp-dev/pb_public/` → Nginx (port 80). PocketBase dev instance → `/opt/pocketbase-erp-dev/`, HTTP **`0.0.0.0:8091`** (systemd unit **`pocketbase-erp-dev.service`**).
 

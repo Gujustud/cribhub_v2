@@ -152,6 +152,10 @@ Widget wikiMarkdownView(BuildContext context, String markdown) {
     decoration: TextDecoration.underline,
   );
 
+  // Cap wide screens so a single photo doesn't dominate the page.
+  final maxImageWidth =
+      (MediaQuery.sizeOf(context).width * 0.9).clamp(240.0, 720.0);
+
   return MarkdownBody(
     data: prepared.isEmpty ? '_No content yet._' : prepared,
     selectable: true,
@@ -164,6 +168,10 @@ Widget wikiMarkdownView(BuildContext context, String markdown) {
         ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
       ],
     ),
+    sizedImageBuilder: (config) => _WikiMarkdownImage(
+      config: config,
+      maxWidth: maxImageWidth,
+    ),
     onTapLink: (text, href, title) async {
       if (href == null || href.isEmpty) return;
       final uri = Uri.tryParse(href);
@@ -171,6 +179,42 @@ Widget wikiMarkdownView(BuildContext context, String markdown) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     },
   );
+}
+
+/// Renders markdown images with optional `![alt](url#400x300)` sizing.
+/// A zero width/height means “auto” for that axis; images are also capped by [maxWidth].
+class _WikiMarkdownImage extends StatelessWidget {
+  final MarkdownImageConfig config;
+  final double maxWidth;
+
+  const _WikiMarkdownImage({
+    required this.config,
+    required this.maxWidth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final requestedW = (config.width != null && config.width! > 0) ? config.width : null;
+    final requestedH = (config.height != null && config.height! > 0) ? config.height : null;
+    final width = requestedW == null ? null : requestedW.clamp(1.0, maxWidth);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: Image.network(
+          config.uri.toString(),
+          width: width,
+          height: requestedH,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => Text(
+            config.alt?.isNotEmpty == true ? config.alt! : 'Image failed to load',
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _WikiUnderlineSyntax extends md.InlineSyntax {

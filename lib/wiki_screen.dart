@@ -155,36 +155,51 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: inventoryListSearchDecoration(
-                      context,
-                      hintText: 'Search titles and page text',
-                    ),
-                    onChanged: (v) => setState(() {
-                      _query = v;
-                      if (v.trim().isNotEmpty) {
-                        // Expand ancestors of search hits so matches are visible.
-                        for (final p in _pages) {
-                          if (wikiMatchesQuery(p, v)) {
-                            _expandedIds.addAll(wikiAncestorIds(_pages, p.id));
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1200),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Flexible(
+                      flex: 3,
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: inventoryListSearchDecoration(
+                          context,
+                          hintText: 'Search titles and page text',
+                        ),
+                        onChanged: (v) => setState(() {
+                          _query = v;
+                          if (v.trim().isNotEmpty) {
+                            // Expand ancestors of search hits so matches are visible.
+                            for (final p in _pages) {
+                              if (wikiMatchesQuery(p, v)) {
+                                _expandedIds.addAll(wikiAncestorIds(_pages, p.id));
+                              }
+                            }
                           }
-                        }
-                      }
-                    }),
-                  ),
+                        }),
+                      ),
+                    ),
+                    if (_canEdit) ...[
+                      const SizedBox(width: 12),
+                      InventoryListActionButton(
+                        label: 'New page',
+                        onPressed: () => _openEditor(parentId: _selectedId),
+                      ),
+                      const SizedBox(width: 12),
+                      InventoryListActionButton(
+                        label: 'Edit',
+                        icon: Icons.edit_outlined,
+                        onPressed: selected == null
+                            ? null
+                            : () => _openEditor(page: selected),
+                      ),
+                    ],
+                  ],
                 ),
-                if (_canEdit) ...[
-                  const SizedBox(width: 12),
-                  InventoryListActionButton(
-                    label: 'New page',
-                    onPressed: () => _openEditor(parentId: _selectedId),
-                  ),
-                ],
-              ],
+              ),
             ),
           ),
           if (AuthService.instance.isWikiReadonly)
@@ -344,12 +359,6 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
                     ),
               ),
             ),
-            if (_canEdit)
-              IconButton(
-                tooltip: 'Edit',
-                icon: const Icon(Icons.edit_outlined),
-                onPressed: () => _openEditor(page: page),
-              ),
           ],
         ),
         const SizedBox(height: 16),

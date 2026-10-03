@@ -12,6 +12,8 @@ DharmaCore uses PocketBase **`users`** auth (same model as DharmaCore):
 
 Wiki (`wiki_pages`): nested **parent** tree, markdown **body**, **visibility** `everyone` | `staff` | `owner`. `staff` is hidden from `jobs_only`. `owner` requires `wiki_owner`. Files in **attachments**.
 
+Maintenance (`maintenance_records` + `maintenance_machines` + `maintenance_schedules`): any logged-in user can list/create/edit/delete. Machines are additive. Schedules alert due/overdue in-app (lead_days, default 7).
+
 ## PocketBase setup
 
 1. Run migrations on your PocketBase instance (restart `pocketbase serve` so `pb_migrations/1774000000_erp_auth_and_jobs_only_role.js` applies).
@@ -25,9 +27,11 @@ After migrations, the app requires sign-in. Create at least one user in PocketBa
 ## Flutter
 
 - `lib/auth_service.dart` — login, logout, role helpers
-- `lib/login_screen.dart` — sign-in UI
+- `lib/login_screen.dart` — sign-in UI (autofill hints for password managers)
 - `lib/auth_gate.dart` — wraps the app home until authenticated
+- `lib/pocketbase_service.dart` — persists PocketBase auth via `AsyncAuthStore` + SharedPreferences (`pb_auth`), so sessions survive hard refresh
 - `lib/wiki_screen.dart` / `lib/wiki_edit_screen.dart` — wiki under Shop ERP
+- `lib/maintenance_screen.dart` — maintenance records + machines under Shop ERP
 
 ## `jobs_only` (step 2+)
 

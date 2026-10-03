@@ -5,6 +5,7 @@ import 'workspace_scaffold.dart';
 import 'models.dart';
 import 'pocketbase_service.dart';
 import 'drawer_behavior.dart';
+import 'list_toolbar_widgets.dart';
 import 'add_tool_screen.dart';
 
 class BuyListScreen extends StatefulWidget {
@@ -214,14 +215,37 @@ class _BuyListScreenState extends State<BuyListScreen> with AutoOpenDrawerMixin 
     }
   }
 
+  Widget _qtyChip(BuildContext context, String label) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: scheme.onPrimaryContainer,
+            ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     maybeAutoOpenDrawer();
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final muted = textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant);
+    final titleStyle = textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600);
+    final sectionStyle = textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
+
     return WorkspaceScaffold(
       scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Buy List'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         leading: workspaceMenuLeading(context),
         actions: [
           IconButton(
@@ -238,114 +262,114 @@ class _BuyListScreenState extends State<BuyListScreen> with AutoOpenDrawerMixin 
                   padding: const EdgeInsets.all(16),
                   child: Text(
                     _error!,
-                    style: const TextStyle(color: Colors.red),
+                    style: TextStyle(color: scheme.error),
                   ),
                 )
               : Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: ElevatedButton.icon(
-                        onPressed: _loading ? null : () => _showManualItemDialog(),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add custom item'),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: scheme.surface,
+                        border: Border(
+                          bottom: BorderSide(color: scheme.outlineVariant),
+                        ),
+                      ),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1200),
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: InventoryListActionButton(
+                              label: 'Add custom item',
+                              onPressed:
+                                  _loading ? null : () => _showManualItemDialog(),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                     Expanded(
                       child: _tools.isEmpty && _manualItems.isEmpty
-                          ? const Center(
+                          ? Center(
                               child: Text(
                                 'No items in the Buy List.',
-                                style: TextStyle(color: Colors.grey),
+                                style: muted,
                               ),
                             )
                           : ListView(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.all(8),
                               children: [
                                 if (_tools.isNotEmpty) ...[
-                          const Text(
-                            'Inventory tools',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 8),
-                          ..._tools.map((t) {
-                            final qtyToBuy = t.restockQty ?? 1;
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: Card(
-                                child: ListTile(
-                                  title: Text(
-                                    t.toolName,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                  subtitle: Text(
-                                    [
-                                      if (t.modelNumber != null && t.modelNumber!.isNotEmpty)
-                                        'Model: ${t.modelNumber}',
-                                      if (t.brand != null && t.brand!.isNotEmpty)
-                                        'Brand: ${t.brand}',
-                                      if (t.supplier != null && t.supplier!.isNotEmpty)
-                                        'Supplier: ${t.supplier}',
-                                      if (t.restockNotes != null &&
-                                          t.restockNotes!.toString().trim().isNotEmpty)
-                                        'Notes: ${t.restockNotes}',
-                                    ].join(' • '),
-                                  ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.primaryContainer,
-                                          borderRadius: BorderRadius.circular(999),
-                                        ),
-                                        child: Text(
-                                          'Qty: $qtyToBuy',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            color:
-                                                Theme.of(context).colorScheme.onPrimaryContainer,
+                                  Text('Inventory tools', style: sectionStyle),
+                                  const SizedBox(height: 8),
+                                  ..._tools.map((t) {
+                                    final qtyToBuy = t.restockQty ?? 1;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: Card(
+                                        child: ListTile(
+                                          title: Text(t.toolName, style: titleStyle),
+                                          subtitle: Text(
+                                            [
+                                              if (t.modelNumber != null &&
+                                                  t.modelNumber!.isNotEmpty)
+                                                'Model: ${t.modelNumber}',
+                                              if (t.brand != null && t.brand!.isNotEmpty)
+                                                'Brand: ${t.brand}',
+                                              if (t.supplier != null &&
+                                                  t.supplier!.isNotEmpty)
+                                                'Supplier: ${t.supplier}',
+                                              if (t.restockNotes != null &&
+                                                  t.restockNotes!
+                                                      .toString()
+                                                      .trim()
+                                                      .isNotEmpty)
+                                                'Notes: ${t.restockNotes}',
+                                            ].join(' • '),
+                                            style: muted,
                                           ),
+                                          trailing: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              _qtyChip(context, 'Qty: $qtyToBuy'),
+                                              const SizedBox(width: 8),
+                                              IconButton(
+                                                tooltip: 'Remove from Buy List',
+                                                icon: Icon(
+                                                  Icons.check_circle,
+                                                  color: scheme.primary,
+                                                ),
+                                                onPressed: () => _updateRestock(
+                                                  tool: t,
+                                                  needsRestock: false,
+                                                  qty: null,
+                                                ),
+                                              ),
+                                              IconButton(
+                                                tooltip: 'Edit tool',
+                                                icon: const Icon(Icons.edit),
+                                                onPressed: () => _openTool(t),
+                                              ),
+                                            ],
+                                          ),
+                                          onTap: () => _openTool(t),
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
-                                      IconButton(
-                                        tooltip: 'Remove from Buy List',
-                                        icon: const Icon(Icons.check_circle, color: Colors.green),
-                                        onPressed: () => _updateRestock(
-                                          tool: t,
-                                          needsRestock: false,
-                                          qty: null,
-                                        ),
-                                      ),
-                                      IconButton(
-                                        tooltip: 'Edit tool',
-                                        icon: const Icon(Icons.edit),
-                                        onPressed: () => _openTool(t),
-                                      ),
-                                    ],
-                                  ),
-                                  onTap: () => _openTool(t),
-                                ),
-                              ),
-                            );
-                          }),
-                        ],
+                                    );
+                                  }),
+                                ],
                                 if (_manualItems.isNotEmpty) ...[
                                   if (_tools.isNotEmpty) const SizedBox(height: 16),
-                                  const Text(
-                                    'Custom items',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                                  ),
+                                  Text('Custom items', style: sectionStyle),
                                   const SizedBox(height: 8),
                                   ..._manualItems.map((m) => Padding(
-                                        padding: const EdgeInsets.only(bottom: 10),
+                                        padding: const EdgeInsets.only(bottom: 8),
                                         child: Card(
                                           child: ListTile(
                                             title: Text(
                                               m.description,
-                                              style: const TextStyle(fontWeight: FontWeight.bold),
+                                              style: titleStyle,
                                             ),
                                             subtitle: Builder(
                                               builder: (context) {
@@ -357,7 +381,8 @@ class _BuyListScreenState extends State<BuyListScreen> with AutoOpenDrawerMixin 
                                                     final sup = _suppliers
                                                         .firstWhere((s) => s.id == supplierId);
                                                     supplierName =
-                                                        (sup.data['company_name'] ?? sup.id)
+                                                        (sup.data['company_name'] ??
+                                                                sup.id)
                                                             .toString();
                                                   } catch (_) {
                                                     supplierName = supplierId;
@@ -368,51 +393,39 @@ class _BuyListScreenState extends State<BuyListScreen> with AutoOpenDrawerMixin 
                                                   'Qty: ${m.qty}',
                                                   if (supplierName.trim().isNotEmpty)
                                                     'Supplier: $supplierName',
-                                                  if (notes.trim().isNotEmpty) 'Notes: $notes',
+                                                  if (notes.trim().isNotEmpty)
+                                                    'Notes: $notes',
                                                 ];
-                                                return Text(parts.join(' • '));
+                                                return Text(
+                                                  parts.join(' • '),
+                                                  style: muted,
+                                                );
                                               },
                                             ),
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 10, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .primaryContainer,
-                                            borderRadius: BorderRadius.circular(999),
-                                          ),
-                                          child: Text(
-                                            'Qty: ${m.qty}',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onPrimaryContainer,
+                                            trailing: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                _qtyChip(context, 'Qty: ${m.qty}'),
+                                                const SizedBox(width: 8),
+                                                IconButton(
+                                                  tooltip: 'Remove from Buy List',
+                                                  icon: Icon(
+                                                    Icons.check_circle,
+                                                    color: scheme.primary,
+                                                  ),
+                                                  onPressed: () async {
+                                                    await _pb.deleteManualBuyItem(m.id);
+                                                    await _load();
+                                                  },
+                                                ),
+                                                IconButton(
+                                                  tooltip: 'Edit item',
+                                                  icon: const Icon(Icons.edit),
+                                                  onPressed: () =>
+                                                      _showManualItemDialog(existing: m),
+                                                ),
+                                              ],
                                             ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        IconButton(
-                                          tooltip: 'Remove from Buy List',
-                                          icon: const Icon(Icons.check_circle,
-                                              color: Colors.green),
-                                          onPressed: () async {
-                                            await _pb.deleteManualBuyItem(m.id);
-                                            await _load();
-                                          },
-                                        ),
-                                        IconButton(
-                                          tooltip: 'Edit item',
-                                          icon: const Icon(Icons.edit),
-                                          onPressed: () =>
-                                              _showManualItemDialog(existing: m),
-                                        ),
-                                      ],
-                                    ),
                                           ),
                                         ),
                                       )),

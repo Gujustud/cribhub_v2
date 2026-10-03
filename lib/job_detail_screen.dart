@@ -541,7 +541,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
             color: c.bg,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: selected ? QuoteSidebarTheme.primaryFrom : c.border,
+              color: selected ? QuoteSidebarTheme.primary(context) : c.border,
               width: selected ? 2 : 1,
             ),
           ),
@@ -569,7 +569,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
             color: c.bg,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: selected ? QuoteSidebarTheme.primaryFrom : c.border,
+              color: selected ? QuoteSidebarTheme.primary(context) : c.border,
               width: selected ? 2 : 1,
             ),
           ),
@@ -867,9 +867,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
                             onTap: () => _openExternalUrl(link1),
                             child: Text(
                               _shortLinkLabel(link1, 45),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 14,
-                                color: QuoteSidebarTheme.primaryFrom,
+                                color: QuoteSidebarTheme.primary(context),
                                 decoration: TextDecoration.underline,
                               ),
                             ),
@@ -913,9 +913,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
                         onTap: () => _openExternalUrl(link2),
                         child: Text(
                           _shortLinkLabel(link2, 45),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: QuoteSidebarTheme.primaryFrom,
+                            color: QuoteSidebarTheme.primary(context),
                             decoration: TextDecoration.underline,
                           ),
                         ),
