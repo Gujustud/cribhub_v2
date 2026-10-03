@@ -466,6 +466,7 @@ class Purchase {
   final String? notes;
   final double? total;
   final String? supplierName;
+  final List<String> attachmentNames;
 
   Purchase({
     required this.id,
@@ -475,6 +476,7 @@ class Purchase {
     this.notes,
     this.total,
     this.supplierName,
+    this.attachmentNames = const [],
   });
 
   factory Purchase.fromRecord(dynamic record) {
@@ -500,6 +502,45 @@ class Purchase {
       notes: data['notes'],
       total: data['total']?.toDouble(),
       supplierName: supplierName,
+      attachmentNames: _fileNamesFrom(data['attachments']),
+    );
+  }
+}
+
+/// Shop material catalog entry (grade + form + size). Named to avoid Flutter [Material].
+class ShopMaterial {
+  final String id;
+  final String grade;
+  final String form;
+  final String sizeLabel;
+  final String unit;
+  final String? notes;
+
+  ShopMaterial({
+    required this.id,
+    required this.grade,
+    required this.form,
+    required this.sizeLabel,
+    this.unit = 'ea',
+    this.notes,
+  });
+
+  String get displayLabel {
+    final g = grade.trim();
+    final f = form.trim();
+    final s = sizeLabel.trim();
+    return '$g · $f · $s';
+  }
+
+  factory ShopMaterial.fromRecord(dynamic record) {
+    final data = record.data as Map<String, dynamic>? ?? {};
+    return ShopMaterial(
+      id: record.id,
+      grade: (data['grade'] ?? '').toString(),
+      form: (data['form'] ?? 'other').toString(),
+      sizeLabel: (data['size_label'] ?? '').toString(),
+      unit: (data['unit'] ?? 'ea').toString(),
+      notes: data['notes']?.toString(),
     );
   }
 }
@@ -507,22 +548,31 @@ class Purchase {
 class PurchaseItem {
   final String id;
   final String purchaseId;
-  final String? toolId;       // null for tax/shipping lines
-  final int quantity;
+  final String? toolId; // null for tax/shipping/material lines
+  final String? materialId;
+  final num quantity;
   final double? unitCost;
   final String? toolName;
-  final String lineType;      // 'item' | 'tax' | 'shipping'
-  final String? description;  // e.g. 'GST', 'PST', 'Shipping'
+  final String? materialLabel;
+  final String lineType; // 'item' | 'material' | 'misc' | 'tax' | 'shipping'
+  final String? description; // e.g. 'GST', 'PST', 'Shipping', misc text
+  final String? heatLot;
+  /// Mill cert filenames on this line (`purchase_items.mill_certs`).
+  final List<String> millCertNames;
 
   PurchaseItem({
     required this.id,
     required this.purchaseId,
     this.toolId,
+    this.materialId,
     required this.quantity,
     this.unitCost,
     this.toolName,
+    this.materialLabel,
     this.lineType = 'item',
     this.description,
+    this.heatLot,
+    this.millCertNames = const [],
   });
 
   factory PurchaseItem.fromRecord(dynamic record) {
@@ -542,23 +592,52 @@ class PurchaseItem {
         }
         if (name != null && name.isNotEmpty) {
           final hasModel = model != null && model.trim().isNotEmpty;
-          toolName = hasModel ? '$name (${model!.trim()})' : name;
+          toolName = hasModel ? '$name (${model.trim()})' : name;
         }
       }
     } catch (_) {}
+
+    String? materialLabel;
+    try {
+      if (record.expand != null && record.expand['material'] != null) {
+        final m = record.expand['material'];
+        final raw = (m is List && m.isNotEmpty) ? m[0] : m;
+        materialLabel = ShopMaterial.fromRecord(raw).displayLabel;
+      }
+    } catch (_) {}
+
+    final qtyRaw = data['quantity'];
+    final quantity = qtyRaw is num
+        ? qtyRaw
+        : num.tryParse('$qtyRaw') ?? 0;
+
     return PurchaseItem(
       id: record.id,
       purchaseId: data['purchase'] ?? '',
       toolId: data['tool'],
-      quantity: (data['quantity'] ?? 0).toInt(),
+      materialId: data['material']?.toString(),
+      quantity: quantity,
       unitCost: data['unit_cost']?.toDouble(),
       toolName: toolName,
+      materialLabel: materialLabel,
       lineType: data['line_type'] ?? 'item',
       description: data['description'],
+      heatLot: data['heat_lot']?.toString(),
+      millCertNames: _fileNamesFrom(data['mill_certs']),
     );
   }
 
   bool get isItem => lineType == 'item';
+  bool get isMaterial => lineType == 'material';
   bool get isTax => lineType == 'tax';
   bool get isShipping => lineType == 'shipping';
+}
+
+List<String> _fileNamesFrom(dynamic v) {
+  if (v is List) {
+    return v.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+  }
+  if (v == null) return [];
+  final s = v.toString();
+  return s.isEmpty ? [] : [s];
 }

@@ -104,103 +104,103 @@ class _SuppliersScreenState extends State<SuppliersScreen> with AutoOpenDrawerMi
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: scheme.surface,
-                    border: Border(
-                      bottom: BorderSide(color: scheme.outlineVariant),
+          : workspaceContentFrame(
+              Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: scheme.surface,
+                      border: Border(
+                        bottom: BorderSide(color: scheme.outlineVariant),
+                      ),
                     ),
-                  ),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1200),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: InventoryListActionButton(
-                          label: 'Add Supplier',
-                          onPressed: () async {
-                            final changed = await Navigator.push<bool>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const SupplierDetailScreen(),
-                              ),
-                            );
-                            if (changed == true) _loadData();
-                          },
-                        ),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: InventoryListActionButton(
+                        label: 'Add Supplier',
+                        onPressed: () async {
+                          final changed = await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SupplierDetailScreen(),
+                            ),
+                          );
+                          if (changed == true) _loadData();
+                        },
                       ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: _suppliers.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No suppliers yet.\nClick "Add Supplier" above to get started.',
-                            textAlign: TextAlign.center,
-                            style: muted,
+                  Expanded(
+                    child: _suppliers.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No suppliers yet.\nClick "Add Supplier" above to get started.',
+                              textAlign: TextAlign.center,
+                              style: muted,
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(8),
+                            itemCount: _suppliers.length,
+                            itemBuilder: (context, index) {
+                              final supplier = _suppliers[index];
+                              return Card(
+                                child: ListTile(
+                                  title: Text(
+                                    supplier.data['company_name'] ?? 'Unknown',
+                                    style: titleStyle,
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      if (supplier.data['contact'] != null &&
+                                          supplier.data['contact'] != '')
+                                        Text(
+                                          'Contact: ${supplier.data['contact']}',
+                                          style: muted,
+                                        ),
+                                      if (supplier.data['tel'] != null &&
+                                          supplier.data['tel'] != '')
+                                        Text(
+                                          'Tel: ${supplier.data['tel']}',
+                                          style: muted,
+                                        ),
+                                    ],
+                                  ),
+                                  onTap: () async {
+                                    final changed = await Navigator.push<bool>(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            SupplierDetailScreen(
+                                                supplier: supplier),
+                                      ),
+                                    );
+                                    if (changed == true) _loadData();
+                                  },
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: Icon(Icons.delete,
+                                            color: scheme.error),
+                                        onPressed: () =>
+                                            _deleteSupplier(supplier),
+                                      ),
+                                      Icon(
+                                        Icons.chevron_right,
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
                           ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(8),
-                          itemCount: _suppliers.length,
-                          itemBuilder: (context, index) {
-                            final supplier = _suppliers[index];
-                            return Card(
-                              child: ListTile(
-                                title: Text(
-                                  supplier.data['company_name'] ?? 'Unknown',
-                                  style: titleStyle,
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (supplier.data['contact'] != null &&
-                                        supplier.data['contact'] != '')
-                                      Text(
-                                        'Contact: ${supplier.data['contact']}',
-                                        style: muted,
-                                      ),
-                                    if (supplier.data['tel'] != null &&
-                                        supplier.data['tel'] != '')
-                                      Text(
-                                        'Tel: ${supplier.data['tel']}',
-                                        style: muted,
-                                      ),
-                                  ],
-                                ),
-                                onTap: () async {
-                                  final changed = await Navigator.push<bool>(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          SupplierDetailScreen(supplier: supplier),
-                                    ),
-                                  );
-                                  if (changed == true) _loadData();
-                                },
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: Icon(Icons.delete, color: scheme.error),
-                                      onPressed: () => _deleteSupplier(supplier),
-                                    ),
-                                    Icon(
-                                      Icons.chevron_right,
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
     );
   }

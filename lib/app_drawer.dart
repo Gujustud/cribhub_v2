@@ -5,6 +5,7 @@ import 'location_management_screen.dart';
 import 'brands_screen.dart';
 import 'suppliers_screen.dart';
 import 'purchases_screen.dart';
+import 'material_history_screen.dart';
 import 'buy_list_screen.dart';
 import 'settings_screen.dart';
 import 'about_screen.dart';
@@ -20,7 +21,7 @@ import 'dashboard_navigation.dart';
 import 'drawer_data_cache.dart';
 
 /// Width of the side menu panel (pinned or slide-out).
-const double kAppDrawerWidth = 240;
+const double kAppDrawerWidth = 200;
 
 /// Section label in the side nav (shadcn-like muted chrome).
 class DrawerSectionLabel extends StatelessWidget {
@@ -283,6 +284,43 @@ class AppDrawer extends StatelessWidget {
               );
             },
           ),
+          DrawerNavTile(
+            icon: Icons.shopping_cart_outlined,
+            title: 'Purchases',
+            onTap: () {
+              maybeCloseDrawer(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PurchasesScreen(),
+                ),
+              );
+            },
+          ),
+          DrawerNavTile(
+            icon: Icons.view_in_ar_outlined,
+            title: 'Material',
+            onTap: () {
+              maybeCloseDrawer(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const MaterialHistoryScreen(),
+                ),
+              );
+            },
+          ),
+          DrawerNavTile(
+            icon: Icons.playlist_add_check,
+            title: 'Buy List',
+            onTap: () {
+              maybeCloseDrawer(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const BuyListScreen()),
+              );
+            },
+          ),
           const DrawerSectionLabel('Management'),
           DrawerNavTile(
             icon: Icons.people_outline,
@@ -318,30 +356,6 @@ class AppDrawer extends StatelessWidget {
                 MaterialPageRoute(
                   builder: (context) => const SuppliersScreen(),
                 ),
-              );
-            },
-          ),
-          DrawerNavTile(
-            icon: Icons.shopping_cart_outlined,
-            title: 'Purchases',
-            onTap: () {
-              maybeCloseDrawer(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const PurchasesScreen(),
-                ),
-              );
-            },
-          ),
-          DrawerNavTile(
-            icon: Icons.playlist_add_check,
-            title: 'Buy List',
-            onTap: () {
-              maybeCloseDrawer(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const BuyListScreen()),
               );
             },
           ),

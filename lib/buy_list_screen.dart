@@ -265,7 +265,8 @@ class _BuyListScreenState extends State<BuyListScreen> with AutoOpenDrawerMixin 
                     style: TextStyle(color: scheme.error),
                   ),
                 )
-              : Column(
+              : workspaceContentFrame(
+                  Column(
                   children: [
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -275,17 +276,12 @@ class _BuyListScreenState extends State<BuyListScreen> with AutoOpenDrawerMixin 
                           bottom: BorderSide(color: scheme.outlineVariant),
                         ),
                       ),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1200),
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: InventoryListActionButton(
-                              label: 'Add custom item',
-                              onPressed:
-                                  _loading ? null : () => _showManualItemDialog(),
-                            ),
-                          ),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: InventoryListActionButton(
+                          label: 'Add custom item',
+                          onPressed:
+                              _loading ? null : () => _showManualItemDialog(),
                         ),
                       ),
                     ),
@@ -434,6 +430,7 @@ class _BuyListScreenState extends State<BuyListScreen> with AutoOpenDrawerMixin 
                             ),
                     ),
                   ],
+                ),
                 ),
     );
   }

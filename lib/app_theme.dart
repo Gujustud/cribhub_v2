@@ -8,6 +8,9 @@ enum AppSkin {
 
   /// Zinc surfaces + steel-blue primary (clean ops).
   precision,
+
+  /// Zinc surfaces + teal primary.
+  mint,
 }
 
 extension AppSkinLabel on AppSkin {
@@ -17,6 +20,8 @@ extension AppSkinLabel on AppSkin {
         return 'Machine Shop Graphite';
       case AppSkin.precision:
         return 'Precision Cool';
+      case AppSkin.mint:
+        return 'Cool Mint';
     }
   }
 
@@ -26,6 +31,8 @@ extension AppSkinLabel on AppSkin {
         return 'Zinc chrome, amber accent';
       case AppSkin.precision:
         return 'Zinc chrome, steel blue accent';
+      case AppSkin.mint:
+        return 'Zinc chrome, teal accent';
     }
   }
 }
@@ -43,6 +50,8 @@ class AppTheme {
         return _build(_zincScheme(brightness, accent: const Color(0xFFD97706)));
       case AppSkin.precision:
         return _build(_zincScheme(brightness, accent: const Color(0xFF3B82A0)));
+      case AppSkin.mint:
+        return _build(_zincScheme(brightness, accent: const Color(0xFF0D9488)));
     }
   }
 

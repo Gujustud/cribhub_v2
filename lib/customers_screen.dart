@@ -154,7 +154,8 @@ class _CustomersScreenState extends State<CustomersScreen> with AutoOpenDrawerMi
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
+          : workspaceContentFrame(
+              Column(
               children: [
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -164,50 +165,39 @@ class _CustomersScreenState extends State<CustomersScreen> with AutoOpenDrawerMi
                       bottom: BorderSide(color: scheme.outlineVariant),
                     ),
                   ),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1200),
-                      child: isNarrow
-                          ? Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                TextField(
-                                  controller: _searchController,
-                                  decoration: inventoryListSearchDecoration(
-                                    context,
-                                    hintText: 'Search customers...',
-                                  ),
-                                  onChanged: _onSearchChanged,
-                                ),
-                                const SizedBox(height: 12),
-                                InventoryListActionButton(
-                                  label: 'Add Customer',
-                                  onPressed: _openAddCustomer,
-                                ),
-                              ],
-                            )
-                          : Row(
-                              children: [
-                                Flexible(
-                                  flex: 3,
-                                  child: TextField(
-                                    controller: _searchController,
-                                    decoration: inventoryListSearchDecoration(
-                                      context,
-                                      hintText: 'Search customers...',
-                                    ),
-                                    onChanged: _onSearchChanged,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                InventoryListActionButton(
-                                  label: 'Add Customer',
-                                  onPressed: _openAddCustomer,
-                                ),
-                              ],
+                  child: isNarrow
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            InventoryListSearchField(
+                              controller: _searchController,
+                              hintText: 'Search customers...',
+                              onChanged: _onSearchChanged,
                             ),
-                    ),
-                  ),
+                            const SizedBox(height: 12),
+                            InventoryListActionButton(
+                              label: 'Add Customer',
+                              onPressed: _openAddCustomer,
+                            ),
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            Flexible(
+                              flex: 3,
+                              child: InventoryListSearchField(
+                                controller: _searchController,
+                                hintText: 'Search customers...',
+                                onChanged: _onSearchChanged,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            InventoryListActionButton(
+                              label: 'Add Customer',
+                              onPressed: _openAddCustomer,
+                            ),
+                          ],
+                        ),
                 ),
                 Expanded(
                   child: RefreshIndicator(
@@ -299,7 +289,8 @@ class _CustomersScreenState extends State<CustomersScreen> with AutoOpenDrawerMi
                 ),
               ],
             ),
+            ),
     );
   }
 }
-
+

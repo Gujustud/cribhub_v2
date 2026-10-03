@@ -48,11 +48,27 @@ Keep **log** (what was done) separate from **schedules** (what is due next). Ad-
 
 **Decision (2026-10-01):** Refresh the look with **Material theme skins**, not a full rewrite onto `shadcn_ui` / Forui yet.
 
-- **Done (first pass):** Named skins + tokens in `lib/app_theme.dart`. Default **Machine Shop Graphite** (charcoal + amber). Alternate **Precision Cool** (steel blue). Settings → Display → **Skin** picker + dark mode. Quote sidebar CTAs / list action buttons use `ColorScheme` (no indigo→violet gradient).
+- **Done (first pass):** Named skins + tokens in `lib/app_theme.dart`. Default **Machine Shop Graphite** (charcoal + amber). Alternates **Precision Cool** (steel blue), **Cool Mint** (teal). Settings → Display → **Skin** picker + dark mode. Quote sidebar CTAs / list action buttons use `ColorScheme` (no indigo→violet gradient).
 - **Done (shadcn-like Material chrome):** Zinc neutrals, Inter font, flat AppBars/cards/dialogs (1px borders, no elevation), outline inputs, denser buttons. Skins now only change the accent; chrome language is shared.
 - **Later (optional):** Middle-path `shadcn_ui` only if forms/dialogs/badges still feel weak — buttons/inputs first, not a full screen rewrite. Skip Forui unless we want bleeding-edge Flutter.
 - **Still to chase:** Hardcoded Tailwind greys / status chip hexes on tables and dense screens as we touch them; more shared chrome on lists/forms. Redeploy via **`DEPLOY_SHOP.md`** when ready.
 - **Done (sidebar chrome):** `DrawerSectionLabel` + `DrawerNavTile` in `app_drawer.dart` — muted section labels, hover rows, flat bordered panel (no Material elevation).
+- **Done (list toolbar alignment):** Search fields and primary list actions share `kListToolbarControlHeight` (**48**) via `InventoryListSearchField` + `InventoryListActionButton` in `lib/list_toolbar_widgets.dart`.
+
+### Workspace layout tokens
+
+Shared numbers live in `lib/ui_breakpoints.dart`, `lib/workspace_layout.dart`, and `lib/list_toolbar_widgets.dart` — prefer those constants over hardcoding.
+
+| Token | Value | Use |
+|-------|------:|-----|
+| `kWorkspaceContentMaxWidth` | **1400** | Primary content for **Shop ERP** and **Management** list/workspace screens. Wrap with `workspaceContentFrame(...)`. |
+| `kWorkspacePanelContentMaxWidth` | **420** | Master-list column when a detail panel is open (e.g. Purchases). Detail gets ~70% (`flex` 3/7); date/total move to hover tooltip on list rows. |
+| `kAppDrawerWidth` (`app_drawer.dart`) | **200** | Fixed side menu width. |
+| `kPinnedDrawerBreakpointPx` | **900** | Pin drawer when viewport ≥ this and keep-drawer-open is on. |
+| `kWorkspaceWideBreakpointPx` | **1024** | Two-column / master-detail layouts. |
+| `kListToolbarControlHeight` | **48** | List search field + `InventoryListActionButton` height (same row). Use `InventoryListSearchField` (not a bare `TextField`) so height is locked. |
+
+Detail/editor screens may use smaller form widths. New Shop ERP / Management screens should use `workspaceContentFrame` and not invent a new content max width. List toolbars should use `InventoryListSearchField` + `InventoryListActionButton` so heights stay matched.
 
 ## Ops (only if it bites you)
 

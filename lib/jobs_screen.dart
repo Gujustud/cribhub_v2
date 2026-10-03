@@ -689,10 +689,8 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1400),
-            child: Column(
+        child: workspaceContentFrame(
+            Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
@@ -702,12 +700,9 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
                       flex: 3,
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 480),
-                        child: TextField(
+                        child: InventoryListSearchField(
                           controller: _searchController,
-                          decoration: inventoryListSearchDecoration(
-                            context,
-                            hintText: 'Search…',
-                          ),
+                          hintText: 'Search…',
                           onChanged: _onSearchChanged,
                         ),
                       ),
@@ -822,7 +817,6 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
                               ),
               ],
             ),
-          ),
         ),
       ),
     );

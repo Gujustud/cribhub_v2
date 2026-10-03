@@ -1,10 +1,34 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:pocketbase/pocketbase.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'pocketbase_service.dart';
 import 'models.dart';
+import 'shop_material_editor.dart';
+import 'ui_breakpoints.dart';
 import 'workspace_layout.dart';
 import 'workspace_scaffold.dart';
 import 'drawer_behavior.dart';
+
+http.MultipartFile _purchaseCertPart(String filename, List<int> bytes) {
+  return http.MultipartFile.fromBytes(
+    'attachments+',
+    bytes,
+    filename: filename,
+  );
+}
+
+http.MultipartFile _lineMillCertPart(String filename, List<int> bytes) {
+  return http.MultipartFile.fromBytes(
+    'mill_certs+',
+    bytes,
+    filename: filename,
+  );
+}
+
+typedef _PendingCert = ({String name, List<int> bytes});
 
 class AddPurchaseScreen extends StatefulWidget {
   /// When non-null, opens in edit mode for this purchase.
@@ -35,6 +59,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
 
   List<dynamic> _suppliers = [];
   List<Tool> _tools = [];
+  List<ShopMaterial> _materials = [];
   bool _isLoadingData = true;
 
   DateTime _purchaseDate = DateTime.now();
@@ -43,11 +68,15 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
   final _notesController = TextEditingController();
   late final TextEditingController _dateController;
 
-  // Line items: type 'item'|'shipping' only (tax is GST/PST checkboxes below)
+  // Line items: type 'item'|'material'|'misc'|'shipping' (tax is GST/PST checkboxes)
   final List<Map<String, dynamic>> _lineItems = [];
 
   bool _gstChecked = false;
   bool _pstChecked = false;
+
+  RecordModel? _purchaseRecord;
+  final List<_PendingCert> _pendingCerts = [];
+  bool _uploadingCerts = false;
 
   static const double _gstRate = 0.05; // 5%
   static const double _pstRate = 0.07; // 7%
@@ -65,14 +94,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
     _dateController = TextEditingController(text: DateFormat.yMMMd().format(_purchaseDate));
     _loadData();
     if (p == null) {
-      _lineItems.add({
-        'type': 'item',
-        'toolId': null as String?,
-        'toolName': '',
-        'quantity': 1,
-        'unitCost': null as double?,
-        'description': '',
-      });
+      _lineItems.add(_newLineMap());
     }
   }
 
@@ -90,6 +112,14 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
       final unitCtrl = item['unitCostController'];
       if (unitCtrl is TextEditingController) {
         unitCtrl.dispose();
+      }
+      final heatCtrl = item['heatLotController'];
+      if (heatCtrl is TextEditingController) {
+        heatCtrl.dispose();
+      }
+      final descCtrl = item['descriptionController'];
+      if (descCtrl is TextEditingController) {
+        descCtrl.dispose();
       }
     }
     super.dispose();
@@ -135,63 +165,83 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
     }
   }
 
+  num _qtyOf(Map<String, dynamic> item) {
+    final q = item['quantity'];
+    if (q is num) return q;
+    return num.tryParse('$q') ?? 0;
+  }
+
   Future<void> _loadData() async {
     setState(() => _isLoadingData = true);
     try {
       final pbService = PocketBaseService();
       final p = widget.purchase;
-      final futures = [
+      final futures = <Future>[
         pbService.getSuppliers(),
         pbService.getTools(),
+        pbService.getMaterials(),
         if (p != null) pbService.getPurchaseItems(p.id),
+        if (p != null) pbService.getPurchase(p.id),
       ];
       final results = await Future.wait(futures);
       final suppliers = results[0] as List<dynamic>;
       final toolRecords = results[1] as List<dynamic>;
-      List<PurchaseItem> existingItems = [];
-      if (p != null && results.length > 2) {
-        existingItems = (results[2] as List<dynamic>).map((r) => PurchaseItem.fromRecord(r)).toList();
+      final materialRecords = results[2] as List<dynamic>;
+      List<dynamic> existingItemRecords = [];
+      RecordModel? purchaseRecord;
+      var idx = 3;
+      if (p != null) {
+        existingItemRecords = results[idx++] as List<dynamic>;
+        purchaseRecord = results[idx] as RecordModel;
       }
       setState(() {
         _suppliers = suppliers;
         _tools = toolRecords.map((r) => Tool.fromRecord(r)).toList();
-        if (p != null && existingItems.isNotEmpty) {
+        _materials = materialRecords.map(ShopMaterial.fromRecord).toList();
+        _purchaseRecord = purchaseRecord;
+        if (p != null && existingItemRecords.isNotEmpty) {
           _lineItems.clear();
           bool gst = false, pst = false;
-          for (final item in existingItems) {
+          for (final record in existingItemRecords) {
+            final item = PurchaseItem.fromRecord(record);
             if (item.lineType == 'tax') {
               if (item.description == 'GST') gst = true;
               if (item.description == 'PST') pst = true;
               continue;
             }
-            final type = item.lineType == 'shipping' ? 'shipping' : 'item';
+            final raw = item.lineType;
+            final type = raw == 'shipping' ||
+                    raw == 'material' ||
+                    raw == 'misc'
+                ? raw
+                : 'item';
             _lineItems.add({
               'type': type,
               'toolId': item.toolId,
               'toolName': item.toolName ?? '',
+              'materialId': item.materialId,
+              'materialLabel': item.materialLabel ?? '',
               'quantity': item.quantity,
               'unitCost': item.unitCost,
-              // Keep shipping text, but never reuse stale item descriptions like "Shipping".
-              'description': type == 'shipping' ? (item.description ?? '') : '',
-              // Item lines should display from the linked tool (name + model when available).
-              'itemText': type == 'item' ? (item.toolName ?? '') : (item.description ?? ''),
+              'description': (type == 'shipping' || type == 'misc')
+                  ? (item.description ?? '')
+                  : '',
+              'itemText': type == 'item'
+                  ? (item.toolName ?? '')
+                  : (type == 'material' ? (item.materialLabel ?? '') : ''),
+              'heatLot': item.heatLot ?? '',
+              'sourceItemId': item.id,
+              'sourceItemRecord': record,
+              'millCertNames': List<String>.from(item.millCertNames),
+              'pendingMillCerts': <_PendingCert>[],
             });
           }
           _gstChecked = gst;
           _pstChecked = pst;
           if (_lineItems.isEmpty) {
-            _lineItems.add({
-              'type': 'item',
-              'toolId': null as String?,
-              'toolName': '',
-              'quantity': 1,
-              'unitCost': null as double?,
-              'description': '',
-              'itemText': '',
-            });
+            _lineItems.add(_newLineMap());
           }
         } else if (p == null) {
-          // Ensure the starter line has an itemText slot.
           if (_lineItems.isNotEmpty) {
             _lineItems[0]['itemText'] ??= '';
           }
@@ -208,25 +258,190 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
     }
   }
 
-  void _addLine() {
-    setState(() {
-      _lineItems.add({
-        'type': 'item',
+  Map<String, dynamic> _newLineMap({String type = 'item'}) => {
+        'type': type,
         'toolId': null as String?,
         'toolName': '',
+        'materialId': null as String?,
+        'materialLabel': '',
         'quantity': 1,
         'unitCost': null as double?,
         'description': '',
-      });
+        'itemText': '',
+        'heatLot': '',
+        'sourceItemId': null as String?,
+        'sourceItemRecord': null,
+        'millCertNames': <String>[],
+        'pendingMillCerts': <_PendingCert>[],
+      };
+
+  List<_PendingCert> _pendingMillCertsOf(Map<String, dynamic> line) {
+    final raw = line['pendingMillCerts'];
+    if (raw is List<_PendingCert>) return raw;
+    if (raw is List) {
+      final cast = <_PendingCert>[];
+      for (final e in raw) {
+        if (e is _PendingCert) cast.add(e);
+      }
+      line['pendingMillCerts'] = cast;
+      return cast;
+    }
+    final empty = <_PendingCert>[];
+    line['pendingMillCerts'] = empty;
+    return empty;
+  }
+
+  List<String> _millCertNamesOf(Map<String, dynamic> line) {
+    final raw = line['millCertNames'];
+    if (raw is List<String>) return raw;
+    if (raw is List) {
+      return raw.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+    }
+    return const [];
+  }
+
+  /// Pull existing line mill certs into pending bytes so recreate-on-save keeps them.
+  Future<void> _hydrateLineMillCertsForSave() async {
+    final pb = PocketBaseService();
+    for (final line in _lineItems) {
+      if ((line['type'] as String?) != 'material') continue;
+      final pending = _pendingMillCertsOf(line);
+      final names = _millCertNamesOf(line);
+      final source = line['sourceItemRecord'];
+      if (source == null || names.isEmpty) continue;
+      for (final name in names) {
+        if (pending.any((p) => p.name == name)) continue;
+        try {
+          final bytes = await pb.downloadRecordFile(source, name);
+          if (bytes.isEmpty) continue;
+          pending.add((name: name, bytes: bytes));
+        } catch (e) {
+          print('Could not keep mill cert $name: $e');
+        }
+      }
+      line['pendingMillCerts'] = pending;
+    }
+  }
+
+  Future<void> _pickLineMillCerts(int lineIndex) async {
+    final line = _lineItems[lineIndex];
+    final pending = _pendingMillCertsOf(line);
+    final named = _millCertNamesOf(line);
+    final existingCount = named.length + pending.length;
+    if (existingCount >= 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Maximum 8 mill cert files per material line.'),
+        ),
+      );
+      return;
+    }
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp'],
+      allowMultiple: true,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    setState(() {
+      final remaining = 8 - named.length - pending.length;
+      for (final f in result.files) {
+        if (pending.length >= remaining) break;
+        final bytes = f.bytes;
+        if (bytes == null || bytes.isEmpty) continue;
+        pending.add((name: f.name, bytes: bytes));
+      }
+      line['pendingMillCerts'] = pending;
+    });
+  }
+
+  void _removePendingLineMillCert(int lineIndex, int pendingIndex) {
+    setState(() {
+      final pending = _pendingMillCertsOf(_lineItems[lineIndex]);
+      if (pendingIndex < 0 || pendingIndex >= pending.length) return;
+      pending.removeAt(pendingIndex);
+    });
+  }
+
+  void _removeExistingLineMillCertName(int lineIndex, String filename) {
+    setState(() {
+      final names = List<String>.from(_millCertNamesOf(_lineItems[lineIndex]));
+      names.remove(filename);
+      _lineItems[lineIndex]['millCertNames'] = names;
+    });
+  }
+
+  Future<void> _openLineMillCert(int lineIndex, String filename) async {
+    final source = _lineItems[lineIndex]['sourceItemRecord'];
+    if (source == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Save the purchase to open existing mill certs.'),
+        ),
+      );
+      return;
+    }
+    final url = PocketBaseService().pb.files.getUrl(source, filename);
+    final uri = Uri.parse(url.toString());
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
+        mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open $filename')),
+      );
+    }
+  }
+
+  Widget? _buildMaterialLineMillCertChips(int lineIndex) {
+    final line = _lineItems[lineIndex];
+    final named = _millCertNamesOf(line);
+    final pending = _pendingMillCertsOf(line);
+    if (named.isEmpty && pending.isEmpty) return null;
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(left: 128),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          for (final name in named)
+            InputChip(
+              label: Text(name, overflow: TextOverflow.ellipsis),
+              avatar: Icon(Icons.picture_as_pdf, size: 18, color: scheme.primary),
+              onPressed: () => _openLineMillCert(lineIndex, name),
+              onDeleted: () => _removeExistingLineMillCertName(lineIndex, name),
+            ),
+          for (var p = 0; p < pending.length; p++)
+            InputChip(
+              label: Text(
+                '${pending[p].name} (pending)',
+                overflow: TextOverflow.ellipsis,
+              ),
+              avatar: const Icon(Icons.schedule, size: 18),
+              onDeleted: () => _removePendingLineMillCert(lineIndex, p),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _addLine() {
+    setState(() {
+      _lineItems.add(_newLineMap());
     });
   }
 
   static const int _toolSuggestionsMax = 5;
+  static const int _materialSuggestionsMax = 8;
+
+  bool _isQtyCostLine(String type) =>
+      type == 'item' || type == 'material' || type == 'misc';
 
   String _lineTotal(int index) {
     final item = _lineItems[index];
-    if ((item['type'] as String? ?? 'item') != 'item') return '';
-    final qty = (item['quantity'] as int?) ?? 0;
+    final type = item['type'] as String? ?? 'item';
+    if (!_isQtyCostLine(type)) return '';
+    final qty = _qtyOf(item);
     final unit = (item['unitCost'] as double?) ?? 0;
     if (qty <= 0 || unit <= 0) return '';
     return '\$${(qty * unit).toStringAsFixed(2)}';
@@ -235,8 +450,9 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
   double _subtotalItems() {
     double sum = 0;
     for (final item in _lineItems) {
-      if ((item['type'] as String? ?? 'item') != 'item') continue;
-      final qty = (item['quantity'] as int?) ?? 0;
+      final type = item['type'] as String? ?? 'item';
+      if (!_isQtyCostLine(type)) continue;
+      final qty = _qtyOf(item);
       final unit = (item['unitCost'] as double?) ?? 0;
       sum += qty * unit;
     }
@@ -324,7 +540,15 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
     final validLines = _lineItems.where((e) {
       final type = e['type'] as String? ?? 'item';
       if (type == 'item') {
-        return e['toolId'] != null && (e['quantity'] as int) > 0;
+        return e['toolId'] != null && _qtyOf(e) > 0;
+      }
+      if (type == 'material') {
+        return e['materialId'] != null && _qtyOf(e) > 0;
+      }
+      if (type == 'misc') {
+        final desc = (e['description'] as String?)?.trim() ?? '';
+        final unit = (e['unitCost'] as double?) ?? 0;
+        return desc.isNotEmpty && _qtyOf(e) > 0 && unit > 0;
       }
       if (type == 'shipping') {
         final amount = (e['unitCost'] as double?) ?? 0;
@@ -334,15 +558,20 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
     }).toList();
     if (validLines.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one line (item with tool + quantity, or shipping)')),
+        const SnackBar(
+          content: Text(
+            'Add at least one line (tool, material, misc, or shipping)',
+          ),
+        ),
       );
       return;
     }
 
     try {
       final pbService = PocketBaseService();
+      // Keep line mill certs across delete+recreate of purchase_items.
+      await _hydrateLineMillCertsForSave();
       String id;
-      // Compute the grand total upfront so it can be saved to the record
       final subtotal = _subtotalItems();
       final gstAmt = _gstChecked ? subtotal * _gstRate : 0.0;
       final pstAmt = _pstChecked ? subtotal * _pstRate : 0.0;
@@ -369,25 +598,33 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
           total: grandTotal,
         );
         id = record.id;
+        _purchaseRecord = record is RecordModel ? record : null;
       }
       for (final line in validLines) {
         final type = line['type'] as String? ?? 'item';
         final desc = (line['description'] as String?)?.trim();
+        final heat = (line['heatLot'] as String?)?.trim();
+        final pending = type == 'material' ? _pendingMillCertsOf(line) : const <_PendingCert>[];
+        final millFiles = [
+          for (final f in pending) _lineMillCertPart(f.name, f.bytes),
+        ];
         await pbService.createPurchaseItem(
           purchaseId: id,
           toolId: type == 'item' ? (line['toolId'] as String?) : null,
-          quantity: type == 'item' ? (line['quantity'] as int) : 1,
+          materialId: type == 'material' ? (line['materialId'] as String?) : null,
+          quantity: type == 'shipping' ? 1 : _qtyOf(line),
           unitCost: line['unitCost'] as double?,
           lineType: type,
           description: type == 'shipping'
               ? ((desc == null || desc.isEmpty) ? 'Shipping' : desc)
-              : null,
+              : (type == 'misc' ? desc : null),
+          heatLot: type == 'material' ? heat : null,
+          millCertFiles: millFiles.isEmpty ? null : millFiles,
         );
       }
       if (gstAmt > 0) {
         await pbService.createPurchaseItem(
           purchaseId: id,
-          toolId: null,
           quantity: 1,
           unitCost: gstAmt,
           lineType: 'tax',
@@ -397,13 +634,27 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
       if (pstAmt > 0) {
         await pbService.createPurchaseItem(
           purchaseId: id,
-          toolId: null,
           quantity: 1,
           unitCost: pstAmt,
           lineType: 'tax',
           description: 'PST',
         );
       }
+
+      if (_pendingCerts.isNotEmpty) {
+        final uploads = [
+          for (final f in _pendingCerts) _purchaseCertPart(f.name, f.bytes),
+        ];
+        final updated = await pbService.uploadPurchaseAttachments(id, uploads);
+        if (updated is RecordModel) {
+          _purchaseRecord = updated;
+        }
+        _pendingCerts.clear();
+      } else if (_purchaseRecord == null || _purchaseRecord!.id != id) {
+        final fresh = await pbService.getPurchase(id);
+        if (fresh is RecordModel) _purchaseRecord = fresh;
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -422,6 +673,117 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
     }
   }
 
+  List<String> get _existingCertNames {
+    final rec = _purchaseRecord;
+    if (rec == null) return const [];
+    final v = rec.data['attachments'];
+    if (v is List) {
+      return v.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+    }
+    return const [];
+  }
+
+  Future<void> _pickMillCerts() async {
+    final existing = _existingCertNames.length + _pendingCerts.length;
+    if (existing >= 12) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximum 12 mill cert files per purchase.')),
+      );
+      return;
+    }
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp'],
+      allowMultiple: true,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final purchaseId = _purchaseRecord?.id ?? widget.purchase?.id;
+    if (purchaseId != null) {
+      setState(() => _uploadingCerts = true);
+      try {
+        final remaining = 12 - _existingCertNames.length;
+        final uploads = <http.MultipartFile>[];
+        for (final f in result.files) {
+          if (uploads.length >= remaining) break;
+          final bytes = f.bytes;
+          if (bytes == null || bytes.isEmpty) continue;
+          uploads.add(_purchaseCertPart(f.name, bytes));
+        }
+        if (uploads.isEmpty) return;
+        final updated =
+            await PocketBaseService().uploadPurchaseAttachments(purchaseId, uploads);
+        if (mounted && updated is RecordModel) {
+          setState(() => _purchaseRecord = updated);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Upload failed: $e'), backgroundColor: Colors.red),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _uploadingCerts = false);
+      }
+      return;
+    }
+
+    setState(() {
+      final remaining = 12 - _pendingCerts.length;
+      for (final f in result.files) {
+        if (_pendingCerts.length >= remaining) break;
+        final bytes = f.bytes;
+        if (bytes == null || bytes.isEmpty) continue;
+        _pendingCerts.add((name: f.name, bytes: bytes));
+      }
+    });
+  }
+
+  Future<void> _removeCert(String filename) async {
+    final id = _purchaseRecord?.id ?? widget.purchase?.id;
+    if (id == null) return;
+    try {
+      final updated =
+          await PocketBaseService().removePurchaseAttachment(id, filename);
+      if (mounted && updated is RecordModel) {
+        setState(() => _purchaseRecord = updated);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Remove failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _openCert(String filename) async {
+    final rec = _purchaseRecord;
+    if (rec == null) return;
+    final url = PocketBaseService().pb.files.getUrl(rec, filename);
+    final uri = Uri.parse(url.toString());
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open $filename')),
+      );
+    }
+  }
+
+  Future<ShopMaterial?> _showCreateMaterialDialog() =>
+      showShopMaterialEditor(context);
+
+  Iterable<ShopMaterial> _filterMaterials(String text) {
+    if (text.trim().isEmpty) return _materials.take(_materialSuggestionsMax);
+    final lower = text.toLowerCase();
+    return _materials.where((m) {
+      return m.grade.toLowerCase().contains(lower) ||
+          m.form.toLowerCase().contains(lower) ||
+          m.sizeLabel.toLowerCase().contains(lower) ||
+          m.displayLabel.toLowerCase().contains(lower);
+    }).take(_materialSuggestionsMax);
+  }
+
   String get _title =>
       widget.purchase != null ? 'Edit Purchase' : 'Add Purchase';
 
@@ -434,7 +796,8 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
       child: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: widget.embedded ? 720 : 900,
+            // Embedded panel uses the full detail column; standalone form stays readable.
+            maxWidth: widget.embedded ? kWorkspaceContentMaxWidth : 900,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -568,9 +931,19 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                     final rawType = item['type'] as String? ?? 'item';
                     final lineType = rawType == 'tax' ? 'item' : rawType;
                     // Lazily ensure the visible text backing field exists.
-                    item['itemText'] ??= item['toolName'] ?? '';
+                    item['itemText'] ??= lineType == 'material'
+                        ? (item['materialLabel'] ?? '')
+                        : (item['toolName'] ?? '');
+                    item['heatLotController'] ??= TextEditingController(
+                      text: (item['heatLot'] as String?) ?? '',
+                    );
+                    item['descriptionController'] ??= TextEditingController(
+                      text: (item['description'] as String?) ?? '',
+                    );
                     // Lazily create controllers per line so typing doesn't fight rebuilds.
-                    if (lineType == 'item') {
+                    if (lineType == 'item' ||
+                        lineType == 'material' ||
+                        lineType == 'misc') {
                       item['quantityController'] ??=
                           TextEditingController(text: '${item['quantity']}');
                       item['unitCostController'] ??= TextEditingController(
@@ -589,30 +962,281 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                     return Padding(
                       key: ValueKey('line_$i'),
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                      Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           SizedBox(
-                            width: 115,
+                            width: 120,
                             child: DropdownButtonFormField<String>(
-                              value: lineType,
+                              // ignore: deprecated_member_use
+                              value: lineType == 'tax' ? 'item' : lineType,
                               isExpanded: true,
                               decoration: const InputDecoration(
-                                  floatingLabelBehavior: FloatingLabelBehavior.always,
-                                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                floatingLabelBehavior:
+                                    FloatingLabelBehavior.always,
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 12,
+                                ),
                                 border: OutlineInputBorder(),
                               ),
                               items: const [
-                                DropdownMenuItem(value: 'item', child: Text('Item')),
-                                DropdownMenuItem(value: 'shipping', child: Text('Shipping')),
+                                DropdownMenuItem(
+                                    value: 'item', child: Text('Tool')),
+                                DropdownMenuItem(
+                                    value: 'material', child: Text('Material')),
+                                DropdownMenuItem(
+                                    value: 'misc', child: Text('Misc')),
+                                DropdownMenuItem(
+                                    value: 'shipping', child: Text('Shipping')),
                               ],
                               onChanged: (v) {
-                                if (v != null) setState(() => _lineItems[i]['type'] = v);
+                                if (v != null) {
+                                  setState(() {
+                                    _lineItems[i]['type'] = v;
+                                    if (v == 'material') {
+                                      _lineItems[i]['toolId'] = null;
+                                      _lineItems[i]['itemText'] =
+                                          _lineItems[i]['materialLabel'] ?? '';
+                                    } else if (v == 'item') {
+                                      _lineItems[i]['materialId'] = null;
+                                      _lineItems[i]['itemText'] =
+                                          _lineItems[i]['toolName'] ?? '';
+                                    } else if (v == 'misc') {
+                                      _lineItems[i]['toolId'] = null;
+                                      _lineItems[i]['materialId'] = null;
+                                    }
+                                  });
+                                }
                               },
                             ),
                           ),
                           const SizedBox(width: 8),
-                          if (lineType == 'item') ...[
+                          if (lineType == 'material') ...[
+                            Expanded(
+                              flex: 2,
+                              child: Autocomplete<ShopMaterial>(
+                                key: ValueKey('material_autocomplete_$i'),
+                                optionsBuilder: (textValue) =>
+                                    _filterMaterials(textValue.text),
+                                displayStringForOption: (m) => m.displayLabel,
+                                onSelected: (m) {
+                                  setState(() {
+                                    _lineItems[i]['materialId'] = m.id;
+                                    _lineItems[i]['materialLabel'] =
+                                        m.displayLabel;
+                                    _lineItems[i]['itemText'] = m.displayLabel;
+                                  });
+                                },
+                                fieldViewBuilder: (context, controller,
+                                    focusNode, onFieldSubmitted) {
+                                  final desiredText =
+                                      (item['itemText'] as String?) ?? '';
+                                  if (controller.text != desiredText) {
+                                    controller.text = desiredText;
+                                    controller.selection =
+                                        TextSelection.fromPosition(
+                                      TextPosition(
+                                          offset: controller.text.length),
+                                    );
+                                  }
+                                  return TextField(
+                                    controller: controller,
+                                    focusNode: focusNode,
+                                    decoration: InputDecoration(
+                                      floatingLabelBehavior:
+                                          FloatingLabelBehavior.always,
+                                      labelText: 'Material',
+                                      border: const OutlineInputBorder(),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 12,
+                                      ),
+                                      suffixIcon: IconButton(
+                                        tooltip: 'New material',
+                                        icon: const Icon(Icons.add, size: 20),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(
+                                          minWidth: 40,
+                                          minHeight: 40,
+                                        ),
+                                        onPressed: () async {
+                                          final created =
+                                              await _showCreateMaterialDialog();
+                                          if (created == null) return;
+                                          setState(() {
+                                            _materials = [..._materials, created]
+                                              ..sort(
+                                                (a, b) => a.displayLabel
+                                                    .compareTo(b.displayLabel),
+                                              );
+                                            _lineItems[i]['materialId'] =
+                                                created.id;
+                                            _lineItems[i]['materialLabel'] =
+                                                created.displayLabel;
+                                            _lineItems[i]['itemText'] =
+                                                created.displayLabel;
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                    onChanged: (value) {
+                                      item['itemText'] = value;
+                                    },
+                                  );
+                                },
+                                optionsViewBuilder:
+                                    (context, onSelected, options) {
+                                  return Align(
+                                    alignment: Alignment.topLeft,
+                                    child: Material(
+                                      elevation: 4,
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                            maxHeight: 220),
+                                        child: ListView.builder(
+                                          padding: EdgeInsets.zero,
+                                          shrinkWrap: true,
+                                          itemCount: options.length,
+                                          itemBuilder: (context, index) {
+                                            final m = options.elementAt(index);
+                                            return ListTile(
+                                              dense: true,
+                                              title: Text(
+                                                m.grade,
+                                                style: const TextStyle(
+                                                    fontSize: 14),
+                                              ),
+                                              subtitle: Text(
+                                                '${m.form} · ${m.sizeLabel}',
+                                              ),
+                                              onTap: () => onSelected(m),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              tooltip: 'Line mill cert',
+                              onPressed: () => _pickLineMillCerts(i),
+                              icon: const Icon(Icons.attach_file, size: 20),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 40,
+                                minHeight: 40,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            // Heat/lot before Qty so cost columns align with tool rows.
+                            SizedBox(
+                              width: 90,
+                              child: TextField(
+                                decoration: const InputDecoration(
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
+                                  labelText: 'Heat/lot',
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                controller: item['heatLotController']
+                                    as TextEditingController,
+                                onChanged: (v) {
+                                  _lineItems[i]['heatLot'] = v;
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 70,
+                              child: TextField(
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                  decimal: true,
+                                ),
+                                decoration: const InputDecoration(
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
+                                  labelText: 'Qty',
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                controller: item['quantityController']
+                                    as TextEditingController,
+                                onChanged: (v) {
+                                  _lineItems[i]['quantity'] =
+                                      num.tryParse(v) ?? 1;
+                                  setState(() {});
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 90,
+                              child: TextField(
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                  decimal: true,
+                                ),
+                                decoration: const InputDecoration(
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
+                                  labelText: 'Unit',
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                controller: item['unitCostController']
+                                    as TextEditingController,
+                                onChanged: (v) {
+                                  _lineItems[i]['unitCost'] =
+                                      double.tryParse(v);
+                                  setState(() {});
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 110,
+                              child: InputDecorator(
+                                decoration: const InputDecoration(
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
+                                  labelText: 'Subtotal',
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                child: Text(
+                                  _lineTotal(i),
+                                  style:
+                                      Theme.of(context).textTheme.bodyMedium,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ] else if (lineType == 'item') ...[
                             Expanded(
                               flex: 2,
                               child: Autocomplete<Tool>(
@@ -624,47 +1248,54 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                   setState(() {
                                     _lineItems[i]['toolId'] = tool.id;
                                     _lineItems[i]['toolName'] = tool.toolName;
-                                    // Show "Tool Name (MODEL)" in the field so it matches the tool
-                                    // but still surfaces the model number from the invoice.
                                     final model = tool.modelNumber;
-                                    _lineItems[i]['itemText'] = (model != null && model.isNotEmpty)
-                                        ? '${tool.toolName} ($model)'
-                                        : tool.toolName;
+                                    _lineItems[i]['itemText'] =
+                                        (model != null && model.isNotEmpty)
+                                            ? '${tool.toolName} ($model)'
+                                            : tool.toolName;
                                   });
                                 },
-                                fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                                  // Keep the text field showing whatever the user typed
-                                  // (invoice description / model), not the internal tool name.
-                                  final desiredText = (item['itemText'] as String?) ?? '';
+                                fieldViewBuilder: (context, controller,
+                                    focusNode, onFieldSubmitted) {
+                                  final desiredText =
+                                      (item['itemText'] as String?) ?? '';
                                   if (controller.text != desiredText) {
                                     controller.text = desiredText;
-                                    controller.selection = TextSelection.fromPosition(
-                                      TextPosition(offset: controller.text.length),
+                                    controller.selection =
+                                        TextSelection.fromPosition(
+                                      TextPosition(
+                                          offset: controller.text.length),
                                     );
                                   }
                                   return TextField(
                                     controller: controller,
                                     focusNode: focusNode,
                                     decoration: const InputDecoration(
-                                      floatingLabelBehavior: FloatingLabelBehavior.always,
+                                      floatingLabelBehavior:
+                                          FloatingLabelBehavior.always,
                                       labelText: 'Item',
                                       border: OutlineInputBorder(),
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 12,
+                                      ),
                                       suffixIcon: Icon(Icons.search, size: 20),
                                     ),
                                     onChanged: (value) {
-                                      // Remember the raw invoice text the user wants to see.
                                       item['itemText'] = value;
                                     },
                                   );
                                 },
-                                optionsViewBuilder: (context, onSelected, options) {
+                                optionsViewBuilder:
+                                    (context, onSelected, options) {
                                   return Align(
                                     alignment: Alignment.topLeft,
                                     child: Material(
                                       elevation: 4,
                                       borderRadius: BorderRadius.circular(4),
                                       child: ConstrainedBox(
-                                        constraints: const BoxConstraints(maxHeight: 220),
+                                        constraints: const BoxConstraints(
+                                            maxHeight: 220),
                                         child: ListView.builder(
                                           padding: EdgeInsets.zero,
                                           shrinkWrap: true,
@@ -675,7 +1306,8 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                               dense: true,
                                               title: Text(
                                                 t.toolName,
-                                                style: const TextStyle(fontSize: 14),
+                                                style: const TextStyle(
+                                                    fontSize: 14),
                                               ),
                                               subtitle: t.modelNumber != null
                                                   ? Text(
@@ -684,7 +1316,8 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                                           .textTheme
                                                           .bodySmall
                                                           ?.copyWith(
-                                                            color: Theme.of(context)
+                                                            color: Theme.of(
+                                                                    context)
                                                                 .colorScheme
                                                                 .onSurfaceVariant,
                                                           ),
@@ -706,14 +1339,20 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                               child: TextField(
                                 keyboardType: TextInputType.number,
                                 decoration: const InputDecoration(
-                                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
                                   labelText: 'Qty',
                                   border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
                                 ),
-                                controller: item['quantityController'] as TextEditingController,
+                                controller: item['quantityController']
+                                    as TextEditingController,
                                 onChanged: (v) {
-                                  _lineItems[i]['quantity'] = int.tryParse(v) ?? 1;
+                                  _lineItems[i]['quantity'] =
+                                      int.tryParse(v) ?? 1;
                                   setState(() {});
                                 },
                               ),
@@ -722,16 +1361,25 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                             SizedBox(
                               width: 90,
                               child: TextField(
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                  decimal: true,
+                                ),
                                 decoration: const InputDecoration(
-                                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
                                   labelText: 'Unit',
                                   border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
                                 ),
-                                controller: item['unitCostController'] as TextEditingController,
+                                controller: item['unitCostController']
+                                    as TextEditingController,
                                 onChanged: (v) {
-                                  _lineItems[i]['unitCost'] = double.tryParse(v);
+                                  _lineItems[i]['unitCost'] =
+                                      double.tryParse(v);
                                   setState(() {});
                                 },
                               ),
@@ -741,14 +1389,118 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                               width: 110,
                               child: InputDecorator(
                                 decoration: const InputDecoration(
-                                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
                                   labelText: 'Subtotal',
                                   border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
                                 ),
                                 child: Text(
                                   _lineTotal(i),
-                                  style: Theme.of(context).textTheme.bodyMedium,
+                                  style:
+                                      Theme.of(context).textTheme.bodyMedium,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ] else if (lineType == 'misc') ...[
+                            Expanded(
+                              flex: 2,
+                              child: TextField(
+                                decoration: const InputDecoration(
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
+                                  labelText: 'Description',
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                controller: item['descriptionController']
+                                    as TextEditingController,
+                                onChanged: (v) {
+                                  _lineItems[i]['description'] = v;
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 70,
+                              child: TextField(
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                  decimal: true,
+                                ),
+                                decoration: const InputDecoration(
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
+                                  labelText: 'Qty',
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                controller: item['quantityController']
+                                    as TextEditingController,
+                                onChanged: (v) {
+                                  _lineItems[i]['quantity'] =
+                                      num.tryParse(v) ?? 1;
+                                  setState(() {});
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 90,
+                              child: TextField(
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                  decimal: true,
+                                ),
+                                decoration: const InputDecoration(
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
+                                  labelText: 'Unit',
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                controller: item['unitCostController']
+                                    as TextEditingController,
+                                onChanged: (v) {
+                                  _lineItems[i]['unitCost'] =
+                                      double.tryParse(v);
+                                  setState(() {});
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 110,
+                              child: InputDecorator(
+                                decoration: const InputDecoration(
+                                  floatingLabelBehavior:
+                                      FloatingLabelBehavior.always,
+                                  labelText: 'Subtotal',
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                child: Text(
+                                  _lineTotal(i),
+                                  style:
+                                      Theme.of(context).textTheme.bodyMedium,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -837,6 +1589,15 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                     if (unitCtrl is TextEditingController) {
                                       unitCtrl.dispose();
                                     }
+                                    final heatCtrl = removed['heatLotController'];
+                                    if (heatCtrl is TextEditingController) {
+                                      heatCtrl.dispose();
+                                    }
+                                    final descCtrl =
+                                        removed['descriptionController'];
+                                    if (descCtrl is TextEditingController) {
+                                      descCtrl.dispose();
+                                    }
                                     setState(() {});
                                   },
                                   tooltip: 'Remove line',
@@ -859,6 +1620,22 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                               ],
                             ),
                           ),
+                        ],
+                      ),
+                          if (lineType == 'material') ...[
+                            Builder(
+                              builder: (context) {
+                                final chips = _buildMaterialLineMillCertChips(i);
+                                if (chips == null) {
+                                  return const SizedBox.shrink();
+                                }
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: chips,
+                                );
+                              },
+                            ),
+                          ],
                         ],
                       ),
                     );
@@ -906,6 +1683,60 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                       ),
                       const SizedBox(width: 8),
                       const SizedBox(width: 52),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Mill certs',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Optional purchase-level PDFs. To show a cert on the Material '
+                    'screen, attach it on the material line with “Line mill cert”.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      FilledButton.tonalIcon(
+                        onPressed: _isLoadingData || _uploadingCerts
+                            ? null
+                            : _pickMillCerts,
+                        icon: _uploadingCerts
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.attach_file),
+                        label: const Text('Add mill cert'),
+                      ),
+                      for (final name in _existingCertNames)
+                        InputChip(
+                          label: Text(name, overflow: TextOverflow.ellipsis),
+                          avatar: const Icon(Icons.picture_as_pdf, size: 18),
+                          onPressed: () => _openCert(name),
+                          onDeleted: () => _removeCert(name),
+                        ),
+                      for (var i = 0; i < _pendingCerts.length; i++)
+                        InputChip(
+                          label: Text(
+                            '${_pendingCerts[i].name} (pending)',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          avatar: const Icon(Icons.schedule, size: 18),
+                          onDeleted: () {
+                            setState(() => _pendingCerts.removeAt(i));
+                          },
+                        ),
                     ],
                   ),
                   const SizedBox(height: 24),

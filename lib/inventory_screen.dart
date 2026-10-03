@@ -410,12 +410,9 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        TextField(
+                        InventoryListSearchField(
                           controller: _searchController,
-                          decoration: inventoryListSearchDecoration(
-                            context,
-                            hintText: 'Search tools...',
-                          ),
+                          hintText: 'Search tools...',
                         ),
                         const SizedBox(height: 12),
                         Row(
@@ -443,12 +440,9 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
                       children: [
                         Flexible(
                           flex: 3,
-                          child: TextField(
+                          child: InventoryListSearchField(
                             controller: _searchController,
-                            decoration: inventoryListSearchDecoration(
-                              context,
-                              hintText: 'Search tools...',
-                            ),
+                            hintText: 'Search tools...',
                           ),
                         ),
                         const SizedBox(width: 12),

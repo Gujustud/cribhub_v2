@@ -2044,11 +2044,20 @@ class PocketBaseService {
     }
   }
 
+  Future<dynamic> getPurchase(String id) async {
+    try {
+      return await pb.collection('purchases').getOne(id, expand: 'supplier');
+    } catch (e) {
+      print('Error getting purchase: $e');
+      rethrow;
+    }
+  }
+
   Future<List<dynamic>> getPurchaseItems(String purchaseId) async {
     try {
       return await pb.collection('purchase_items').getFullList(
         filter: 'purchase = "$purchaseId"',
-        expand: 'tool',
+        expand: 'tool,material',
       );
     } catch (e) {
       print('Error getting purchase items: $e');
@@ -2069,13 +2078,29 @@ class PocketBaseService {
     }
   }
 
+  Future<List<dynamic>> getPurchaseItemsByMaterial(String materialId) async {
+    try {
+      return await pb.collection('purchase_items').getFullList(
+        filter: 'material = "$materialId" && line_type = "material"',
+        expand: 'purchase,purchase.supplier,material',
+        sort: '-purchase.purchase_date',
+      );
+    } catch (e) {
+      print('Error getting purchase items by material: $e');
+      rethrow;
+    }
+  }
+
   Future<dynamic> createPurchaseItem({
     required String purchaseId,
     String? toolId,
-    required int quantity,
+    String? materialId,
+    required num quantity,
     double? unitCost,
     String lineType = 'item',
     String? description,
+    String? heatLot,
+    List<http.MultipartFile>? millCertFiles,
   }) async {
     try {
       final body = <String, dynamic>{
@@ -2084,8 +2109,20 @@ class PocketBaseService {
         'line_type': lineType,
       };
       if (toolId != null && toolId.isNotEmpty) body['tool'] = toolId;
+      if (materialId != null && materialId.isNotEmpty) {
+        body['material'] = materialId;
+      }
       if (unitCost != null) body['unit_cost'] = unitCost;
-      if (description != null && description.isNotEmpty) body['description'] = description;
+      if (description != null && description.isNotEmpty) {
+        body['description'] = description;
+      }
+      if (heatLot != null && heatLot.isNotEmpty) body['heat_lot'] = heatLot;
+      if (millCertFiles != null && millCertFiles.isNotEmpty) {
+        return await pb.collection('purchase_items').create(
+          body: body,
+          files: millCertFiles,
+        );
+      }
       return await pb.collection('purchase_items').create(body: body);
     } catch (e) {
       print('Error creating purchase item: $e');
@@ -2093,11 +2130,128 @@ class PocketBaseService {
     }
   }
 
+  /// Download a file field from a record (used when re-saving purchase lines).
+  Future<List<int>> downloadRecordFile(dynamic record, String filename) async {
+    final url = pb.files.getUrl(record, filename);
+    final headers = <String, String>{};
+    final token = pb.authStore.token;
+    if (token.isNotEmpty) {
+      headers['Authorization'] = token;
+    }
+    final response = await http.get(url, headers: headers);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Failed to download $filename (${response.statusCode})',
+      );
+    }
+    return response.bodyBytes;
+  }
+
   Future<void> deletePurchaseItem(String id) async {
     try {
       await pb.collection('purchase_items').delete(id);
     } catch (e) {
       print('Error deleting purchase item: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================================
+  // MATERIALS CATALOG
+  // ============================================================================
+
+  Future<List<dynamic>> getMaterials() async {
+    try {
+      return await pb.collection('materials').getFullList(
+        sort: 'grade,form,size_label',
+      );
+    } catch (e) {
+      print('Error getting materials: $e');
+      rethrow;
+    }
+  }
+
+  Future<dynamic> createMaterial({
+    required String grade,
+    required String form,
+    required String sizeLabel,
+    String unit = 'ea',
+    String? notes,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'grade': grade.trim(),
+        'form': form.trim(),
+        'size_label': sizeLabel.trim(),
+        'unit': unit.trim().isEmpty ? 'ea' : unit.trim(),
+      };
+      if (notes != null && notes.trim().isNotEmpty) {
+        body['notes'] = notes.trim();
+      }
+      return await pb.collection('materials').create(body: body);
+    } catch (e) {
+      print('Error creating material: $e');
+      rethrow;
+    }
+  }
+
+  Future<dynamic> updateMaterial(
+    String id, {
+    required String grade,
+    required String form,
+    required String sizeLabel,
+    String unit = 'ea',
+    String? notes,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'grade': grade.trim(),
+        'form': form.trim(),
+        'size_label': sizeLabel.trim(),
+        'unit': unit.trim().isEmpty ? 'ea' : unit.trim(),
+        'notes': (notes == null || notes.trim().isEmpty) ? '' : notes.trim(),
+      };
+      return await pb.collection('materials').update(id, body: body);
+    } catch (e) {
+      print('Error updating material: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteMaterial(String id) async {
+    try {
+      await pb.collection('materials').delete(id);
+    } catch (e) {
+      print('Error deleting material: $e');
+      rethrow;
+    }
+  }
+
+  Future<dynamic> uploadPurchaseAttachments(
+    String purchaseId,
+    List<http.MultipartFile> files,
+  ) async {
+    try {
+      return await pb.collection('purchases').update(purchaseId, files: files);
+    } catch (e) {
+      print('Error uploading purchase attachments: $e');
+      rethrow;
+    }
+  }
+
+  Future<dynamic> removePurchaseAttachment(
+    String purchaseId,
+    String filename,
+  ) async {
+    try {
+      return await pb.collection('purchases').update(
+        purchaseId,
+        body: {
+          'attachments-': [filename],
+        },
+      );
+    } catch (e) {
+      print('Error removing purchase attachment: $e');
       rethrow;
     }
   }

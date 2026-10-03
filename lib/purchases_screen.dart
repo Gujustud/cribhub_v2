@@ -141,8 +141,9 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
   }
 
   Widget _buildToolbar(bool isNarrow, {required bool usePanel}) {
-    final search = TextField(
+    final search = InventoryListSearchField(
       controller: _purchaseSearchController,
+      hintText: 'Search supplier or invoice #...',
       onChanged: (v) {
         setState(() {
           _purchaseSearchQuery = v;
@@ -154,8 +155,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
         hintText: 'Search supplier or invoice #...',
       ).copyWith(
         suffixIcon: _purchaseSearchController.text.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.clear),
+            ? inventoryListSearchClearButton(
                 onPressed: () {
                   _purchaseSearchController.clear();
                   setState(() {
@@ -222,6 +222,10 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
       );
     }
 
+    // When the detail panel is open, keep the master list compact (supplier + ref);
+    // date/total move to a hover tooltip so the form gets more width.
+    final compactMaster = usePanel && _panelOpen;
+
     return ListView.builder(
       padding: const EdgeInsets.all(8),
       itemCount: _filteredPurchases.length,
@@ -229,22 +233,109 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
         final p = _filteredPurchases[index];
         final supplier = p.supplierName ?? 'No supplier';
         final dateText = DateFormat.yMMMd().format(p.purchaseDate);
+        final refRaw = p.orderReference?.trim();
         final refText =
-            (p.orderReference != null && p.orderReference!.isNotEmpty)
-                ? 'Ref: ${p.orderReference}'
-                : null;
+            (refRaw != null && refRaw.isNotEmpty) ? 'Ref: $refRaw' : null;
         final totalText =
             p.total != null ? 'Total: \$${p.total!.toStringAsFixed(2)}' : null;
         final selected = usePanel &&
             !_creatingNew &&
             _selectedPurchase?.id == p.id;
 
+        final hoverBits = <String>[
+          dateText,
+          if (refText != null) refText,
+          if (totalText != null) totalText,
+        ];
+        final hoverMessage = hoverBits.join('\n');
+
+        Widget cardBody({required bool isWideCard}) {
+          if (compactMaster) {
+            return Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        supplier,
+                        style: titleStyle,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (refText != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          refText,
+                          style: muted,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ],
+            );
+          }
+          if (isWideCard) {
+            return Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    supplier,
+                    style: titleStyle,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Text(dateText, style: muted),
+                if (refText != null) ...[
+                  const SizedBox(width: 20),
+                  Text(refText, style: muted),
+                ],
+                if (totalText != null) ...[
+                  const SizedBox(width: 20),
+                  Text(totalText, style: titleStyle),
+                ],
+                const SizedBox(width: 10),
+                Icon(
+                  Icons.chevron_right,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(supplier, style: titleStyle),
+                    const SizedBox(height: 4),
+                    Text(dateText, style: muted),
+                    if (refText != null) Text(refText, style: muted),
+                    if (totalText != null) Text(totalText, style: titleStyle),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: scheme.onSurfaceVariant,
+              ),
+            ],
+          );
+        }
+
         return Card(
           color: selected ? scheme.secondaryContainer : null,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final isWideCard = constraints.maxWidth >= 560;
-              return InkWell(
+              final tile = InkWell(
                 borderRadius: BorderRadius.circular(8),
                 onTap: () => _openPurchase(p, usePanel: usePanel),
                 child: Padding(
@@ -252,56 +343,14 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
                     horizontal: 16,
                     vertical: 12,
                   ),
-                  child: isWideCard
-                      ? Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                supplier,
-                                style: titleStyle,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Text(dateText, style: muted),
-                            if (refText != null) ...[
-                              const SizedBox(width: 20),
-                              Text(refText, style: muted),
-                            ],
-                            if (totalText != null) ...[
-                              const SizedBox(width: 20),
-                              Text(totalText, style: titleStyle),
-                            ],
-                            const SizedBox(width: 10),
-                            Icon(
-                              Icons.chevron_right,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(supplier, style: titleStyle),
-                                  const SizedBox(height: 4),
-                                  Text(dateText, style: muted),
-                                  if (refText != null)
-                                    Text(refText, style: muted),
-                                  if (totalText != null)
-                                    Text(totalText, style: titleStyle),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.chevron_right,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ],
-                        ),
+                  child: cardBody(isWideCard: isWideCard),
                 ),
+              );
+              if (!compactMaster) return tile;
+              return Tooltip(
+                message: hoverMessage,
+                waitDuration: const Duration(milliseconds: 400),
+                child: tile,
               );
             },
           ),
@@ -335,35 +384,36 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
     // Master/detail needs room for list + form (and optional pinned drawer).
     final usePanel = width >= kWorkspaceWideBreakpointPx;
 
-    final listColumn = Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            border: Border(
-              bottom: BorderSide(color: scheme.outlineVariant),
-            ),
-          ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: usePanel && _panelOpen ? 900 : 1200,
+    final listColumn = workspaceContentFrame(
+      Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              border: Border(
+                bottom: BorderSide(color: scheme.outlineVariant),
               ),
-              child: _buildToolbar(isNarrow, usePanel: usePanel),
+            ),
+            child: _buildToolbar(
+              isNarrow || (usePanel && _panelOpen),
+              usePanel: usePanel,
             ),
           ),
-        ),
-        Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _buildPurchaseList(
-                  usePanel: usePanel,
-                  titleStyle: titleStyle,
-                  muted: muted,
-                ),
-        ),
-      ],
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _buildPurchaseList(
+                    usePanel: usePanel,
+                    titleStyle: titleStyle,
+                    muted: muted,
+                  ),
+          ),
+        ],
+      ),
+      maxWidth: usePanel && _panelOpen
+          ? kWorkspacePanelContentMaxWidth
+          : kWorkspaceContentMaxWidth,
     );
 
     return WorkspaceScaffold(
@@ -376,8 +426,8 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
           ? Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(flex: 5, child: listColumn),
-                Expanded(flex: 6, child: _buildDetailPanel()),
+                Expanded(flex: 3, child: listColumn),
+                Expanded(flex: 7, child: _buildDetailPanel()),
               ],
             )
           : listColumn,

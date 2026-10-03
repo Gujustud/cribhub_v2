@@ -1400,7 +1400,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
         title: const Text('Locations'),
         leading: workspaceMenuLeading(context),
       ),
-      body: bodyContent,
+      body: workspaceContentFrame(bodyContent),
     );
   }
 }

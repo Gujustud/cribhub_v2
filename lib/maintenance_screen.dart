@@ -466,7 +466,6 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
     }
   }
 
-  static const double _contentMaxWidth = 1200;
   static const double _wideBreakpoint = 900;
 
   @override
@@ -486,11 +485,8 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: _contentMaxWidth),
-                child: Padding(
+          : workspaceContentFrame(
+                Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -523,13 +519,10 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
                         ),
                         const SizedBox(height: 12),
                       ],
-                      TextField(
+                      InventoryListSearchField(
                         controller: _searchController,
+                        hintText: 'Search name, note, machine…',
                         onChanged: (_) => _refilter(),
-                        decoration: inventoryListSearchDecoration(
-                          context,
-                          hintText: 'Search name, note, machine…',
-                        ),
                       ),
                       const SizedBox(height: 12),
                       Wrap(
@@ -562,13 +555,10 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
                               },
                             );
                           }),
-                          TextButton.icon(
+                          IconButton(
+                            tooltip: 'Manage machines',
                             onPressed: _manageMachines,
-                            icon: const Icon(
-                              Icons.precision_manufacturing_outlined,
-                              size: 18,
-                            ),
-                            label: const Text('Manage machines'),
+                            icon: const Icon(Icons.add),
                           ),
                         ],
                       ),
@@ -638,7 +628,6 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
                     ],
                   ),
                 ),
-              ),
             ),
     );
   }

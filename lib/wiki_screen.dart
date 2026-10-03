@@ -8,6 +8,7 @@ import 'list_toolbar_widgets.dart';
 import 'pocketbase_service.dart';
 import 'wiki_edit_screen.dart';
 import 'wiki_page_utils.dart';
+import 'workspace_layout.dart';
 import 'workspace_scaffold.dart';
 
 class WikiScreen extends StatefulWidget {
@@ -151,104 +152,99 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
     return WorkspaceScaffold(
       scaffoldKey: _scaffoldKey,
       appBar: AppBar(title: const Text('Wiki')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1200),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Flexible(
-                      flex: 3,
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: inventoryListSearchDecoration(
-                          context,
-                          hintText: 'Search titles and page text',
-                        ),
-                        onChanged: (v) => setState(() {
-                          _query = v;
-                          if (v.trim().isNotEmpty) {
-                            // Expand ancestors of search hits so matches are visible.
-                            for (final p in _pages) {
-                              if (wikiMatchesQuery(p, v)) {
-                                _expandedIds.addAll(wikiAncestorIds(_pages, p.id));
-                              }
+      body: workspaceContentFrame(
+        Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    flex: 3,
+                    child: InventoryListSearchField(
+                      controller: _searchController,
+                      hintText: 'Search titles and page text',
+                      onChanged: (v) => setState(() {
+                        _query = v;
+                        if (v.trim().isNotEmpty) {
+                          // Expand ancestors of search hits so matches are visible.
+                          for (final p in _pages) {
+                            if (wikiMatchesQuery(p, v)) {
+                              _expandedIds.addAll(wikiAncestorIds(_pages, p.id));
                             }
                           }
-                        }),
-                      ),
+                        }
+                      }),
                     ),
-                    if (_canEdit) ...[
-                      const SizedBox(width: 12),
-                      InventoryListActionButton(
-                        label: 'New page',
-                        onPressed: () => _openEditor(parentId: _selectedId),
-                      ),
-                      const SizedBox(width: 12),
-                      InventoryListActionButton(
-                        label: 'Edit',
-                        icon: Icons.edit_outlined,
-                        onPressed: selected == null
-                            ? null
-                            : () => _openEditor(page: selected),
-                      ),
-                    ],
+                  ),
+                  if (_canEdit) ...[
+                    const SizedBox(width: 12),
+                    InventoryListActionButton(
+                      label: 'New page',
+                      onPressed: () => _openEditor(parentId: _selectedId),
+                    ),
+                    const SizedBox(width: 12),
+                    InventoryListActionButton(
+                      label: 'Edit',
+                      icon: Icons.edit_outlined,
+                      onPressed: selected == null
+                          ? null
+                          : () => _openEditor(page: selected),
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
-          ),
-          if (AuthService.instance.isWikiReadonly)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text('Your account is wiki read-only.'),
-            ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _pages.isEmpty
-                    ? Center(
-                        child: Text(
-                          _canEdit
-                              ? 'No wiki pages yet.\nTap New page to add a section (Team, Tooling, Docs, …).'
-                              : 'No wiki pages yet.',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 16, color: Colors.grey),
-                        ),
-                      )
-                    : wide
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              SizedBox(
-                                width: 300,
-                                child: _treePane(),
-                              ),
-                              const VerticalDivider(width: 1),
-                              Expanded(child: _readerPane(selected)),
-                            ],
-                          )
-                        : _selectedId == null
-                            ? _treePane()
-                            : Column(
-                                children: [
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: TextButton.icon(
-                                      onPressed: () => setState(() => _selectedId = null),
-                                      icon: const Icon(Icons.arrow_back),
-                                      label: const Text('Pages'),
+            if (AuthService.instance.isWikiReadonly)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text('Your account is wiki read-only.'),
+              ),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _pages.isEmpty
+                      ? Center(
+                          child: Text(
+                            _canEdit
+                                ? 'No wiki pages yet.\nTap New page to add a section (Team, Tooling, Docs, …).'
+                                : 'No wiki pages yet.',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 16, color: Colors.grey),
+                          ),
+                        )
+                      : wide
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                SizedBox(
+                                  width: 300,
+                                  child: _treePane(),
+                                ),
+                                const VerticalDivider(width: 1),
+                                Expanded(child: _readerPane(selected)),
+                              ],
+                            )
+                          : _selectedId == null
+                              ? _treePane()
+                              : Column(
+                                  children: [
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: TextButton.icon(
+                                        onPressed: () =>
+                                            setState(() => _selectedId = null),
+                                        icon: const Icon(Icons.arrow_back),
+                                        label: const Text('Pages'),
+                                      ),
                                     ),
-                                  ),
-                                  Expanded(child: _readerPane(selected)),
-                                ],
-                              ),
-          ),
-        ],
+                                    Expanded(child: _readerPane(selected)),
+                                  ],
+                                ),
+            ),
+          ],
+        ),
       ),
     );
   }

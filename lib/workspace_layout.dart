@@ -2,6 +2,21 @@ import 'package:flutter/material.dart';
 
 import 'app_drawer.dart';
 import 'drawer_data_cache.dart';
+import 'ui_breakpoints.dart';
+
+/// Centers [child] and caps width at [kWorkspaceContentMaxWidth] (or [maxWidth]).
+Widget workspaceContentFrame(
+  Widget child, {
+  double maxWidth = kWorkspaceContentMaxWidth,
+}) {
+  return Align(
+    alignment: Alignment.topCenter,
+    child: ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: child,
+    ),
+  );
+}
 
 /// Min width for pinned side menu when [DrawerDataCache.keepDrawerOpen] is on.
 const double kPinnedDrawerBreakpointPx = 900;

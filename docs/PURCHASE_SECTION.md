@@ -12,8 +12,11 @@ The purchase section lets users:
 - **Add** a new purchase (full-screen form with date, supplier, order ref, notes, line items, GST/PST, total).
 - **Edit** an existing purchase by tapping a row: opens the same form pre-filled; supports update and delete.
 - **Link tools to purchases** via line items; tool edit screen shows “Price over time” from purchase history.
+- **Material lines** (`line_type = material`) linked to a `materials` catalog (grade, form, size); optional heat/lot.
+- **Mill cert PDFs** on the purchase (`purchases.attachments`) and/or on each material line (`purchase_items.mill_certs`) so they show on the Material history screen.
+- **Material** screen: browse catalog and cost/purchase history by type and size (with line mill certs).
 
-All purchase data is stored in **PocketBase** in two collections: `purchases` and `purchase_items`.
+All purchase data is stored in **PocketBase** in `purchases`, `purchase_items`, and `materials` (see migration `1775500000_materials_and_purchase_certs.js`).
 
 ---
 
@@ -63,7 +66,7 @@ One line on a purchase: product (tool), shipping, or tax.
 | `quantity` | int | `quantity` | Required; 1 for tax/shipping |
 | `unitCost` | double? | `unit_cost` | Unit price (items) or amount (tax/shipping) |
 | `toolName` | String? | expand `tool` → `tool_name` | For display |
-| `lineType` | String | `line_type` | `'item'` \| `'tax'` \| `'shipping'` |
+| `lineType` | String | `line_type` | `'item'` \| `'material'` \| `'misc'` \| `'tax'` \| `'shipping'` |
 | `description` | String? | `description` | e.g. "GST", "PST", "Shipping" |
 
 - **Factory:** `PurchaseItem.fromRecord(dynamic record)` – uses `record.data` and `record.expand['tool']` for `toolName`.
