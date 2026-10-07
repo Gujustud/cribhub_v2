@@ -21,7 +21,7 @@ import 'dashboard_navigation.dart';
 import 'drawer_data_cache.dart';
 
 /// Width of the side menu panel (pinned or slide-out).
-const double kAppDrawerWidth = 200;
+const double kAppDrawerWidth = 188;
 
 /// Section label in the side nav (shadcn-like muted chrome).
 class DrawerSectionLabel extends StatelessWidget {
@@ -169,9 +169,11 @@ class AppDrawer extends StatelessWidget {
               child: Text(
                 'DharmaCore',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontFamily: 'Polaris',
                       color: headerFg,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                       fontSize: 16,
+                      letterSpacing: 0,
                     ),
               ),
             ),

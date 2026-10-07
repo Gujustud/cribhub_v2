@@ -74,6 +74,11 @@ flutter:
   assets:
     - assets/certs/cribhub.pem
 
+  fonts:
+    - family: Polaris
+      fonts:
+        - asset: fonts/Polaris.otf
+
   # To add assets to your application, add an assets section, like this:
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg

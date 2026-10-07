@@ -161,7 +161,12 @@ class WorkspaceTopBar extends StatelessWidget implements PreferredSizeWidget {
                           padding: const EdgeInsets.symmetric(vertical: 4),
                           child: Text(
                             'DharmaCore',
-                            style: titleStyle?.copyWith(fontSize: 16),
+                            style: titleStyle?.copyWith(
+                              fontFamily: 'Polaris',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w400,
+                              letterSpacing: 0,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
