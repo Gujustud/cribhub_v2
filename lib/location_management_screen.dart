@@ -1,188 +1,14 @@
 // location_management_screen.dart
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'pocketbase_service.dart';
+import 'ui_breakpoints.dart';
 import 'workspace_layout.dart';
 import 'workspace_scaffold.dart';
 import 'add_tool_screen.dart';
 import 'models.dart';
 import 'drawer_behavior.dart';
 import 'list_toolbar_widgets.dart';
-
-/// Hover over the list icon to load and show tool names/counts at this location (cached briefly).
-class _LocationContentsHoverIcon extends StatefulWidget {
-  const _LocationContentsHoverIcon({
-    required this.location,
-    required this.onPressed,
-  });
-
-  final dynamic location;
-  final VoidCallback onPressed;
-
-  @override
-  State<_LocationContentsHoverIcon> createState() => _LocationContentsHoverIconState();
-}
-
-class _LocationContentsHoverIconState extends State<_LocationContentsHoverIcon> {
-  Timer? _hoverTimer;
-  OverlayEntry? _overlayEntry;
-  final LayerLink _layerLink = LayerLink();
-
-  static final Map<String, List<dynamic>> _cache = {};
-  static final Map<String, DateTime> _cacheTime = {};
-  static const Duration _cacheTtl = Duration(seconds: 45);
-
-  /// Call after location/tool data changes so hover shows fresh lists.
-  static void clearCache() {
-    _cache.clear();
-    _cacheTime.clear();
-  }
-
-  static String _toolNameFromRecord(dynamic r) {
-    final tool = r.expand?['tool'];
-    if (tool == null) return 'Tool';
-    final t = tool is List ? (tool.isNotEmpty ? tool[0] : null) : tool;
-    return t?.data['tool_name']?.toString() ?? 'Tool';
-  }
-
-  static int _qtyFromRecord(dynamic r) {
-    final q = r.data['quantity'];
-    if (q is int) return q;
-    return int.tryParse(q?.toString() ?? '') ?? 0;
-  }
-
-  void _removeOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-  }
-
-  void _onExit(PointerEvent event) {
-    _hoverTimer?.cancel();
-    _hoverTimer = null;
-    _removeOverlay();
-  }
-
-  void _onEnter(PointerEvent event) {
-    _hoverTimer?.cancel();
-    _hoverTimer = Timer(const Duration(milliseconds: 500), _fetchAndShowOverlay);
-  }
-
-  Future<void> _fetchAndShowOverlay() async {
-    if (!mounted) return;
-    final id = widget.location.id as String;
-    List<dynamic> records;
-    final cachedAt = _cacheTime[id];
-    if (cachedAt != null &&
-        DateTime.now().difference(cachedAt) < _cacheTtl &&
-        _cache.containsKey(id)) {
-      records = List<dynamic>.from(_cache[id]!);
-    } else {
-      try {
-        records = await PocketBaseService().getToolLocationsAtLocationWithTool(id);
-      } catch (_) {
-        records = [];
-      }
-      _cache[id] = records;
-      _cacheTime[id] = DateTime.now();
-    }
-
-    if (!mounted) return;
-    _removeOverlay();
-
-    final overlay = Overlay.of(context);
-    final box = context.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize) return;
-
-    final namesWithQty = <String>[];
-    for (final r in records) {
-      final name = _toolNameFromRecord(r);
-      final q = _qtyFromRecord(r);
-      namesWithQty.add(q > 1 ? '$name (×$q)' : name);
-    }
-
-    _overlayEntry = OverlayEntry(
-      builder: (ctx) => Positioned(
-        width: 320,
-        child: CompositedTransformFollower(
-          link: _layerLink,
-          showWhenUnlinked: false,
-          offset: const Offset(0, 36),
-          followerAnchor: Alignment.topLeft,
-          targetAnchor: Alignment.bottomLeft,
-          child: Material(
-            elevation: 8,
-            borderRadius: BorderRadius.circular(8),
-            color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: namesWithQty.isEmpty
-                  ? Text(
-                      'No tools at this location.',
-                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                          ),
-                    )
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${namesWithQty.length} tool${namesWithQty.length == 1 ? '' : 's'}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: Theme.of(ctx).colorScheme.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 200),
-                          child: SingleChildScrollView(
-                            child: SelectableText(
-                              namesWithQty.join('\n'),
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-          ),
-        ),
-      ),
-    );
-    overlay.insert(_overlayEntry!);
-  }
-
-  @override
-  void dispose() {
-    _hoverTimer?.cancel();
-    _removeOverlay();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CompositedTransformTarget(
-      link: _layerLink,
-      child: MouseRegion(
-        onEnter: _onEnter,
-        onExit: _onExit,
-        child: IconButton(
-          icon: Icon(
-            Icons.list_alt,
-            size: 20,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-          onPressed: widget.onPressed,
-          tooltip: null,
-        ),
-      ),
-    );
-  }
-}
 
 class LocationManagementScreen extends StatefulWidget {
   const LocationManagementScreen({super.key});
@@ -203,9 +29,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
   Set<String> _expandedLocations = {};
   String? _selectedType;
   String _searchQuery = '';
+  dynamic _selectedLocation;
+  List<dynamic> _contentsRecords = [];
+  bool _loadingContents = false;
 
   final _searchController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  bool get _panelOpen => _selectedLocation != null;
 
   @override
   GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
@@ -308,18 +139,30 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
         }
       }
       
-      _LocationContentsHoverIconState.clearCache();
       setState(() {
         _locations = locations;
         _isLoading = false;
-        
-        // Auto-select first type if none selected
+
         if (_selectedType == null && _sortedLocationTypes.isNotEmpty) {
           _selectedType = _sortedLocationTypes.first;
         }
+
+        if (_selectedLocation != null) {
+          final id = _selectedLocation.id;
+          try {
+            _selectedLocation = _locations.firstWhere((l) => l.id == id);
+          } catch (_) {
+            _selectedLocation = null;
+            _contentsRecords = [];
+            _loadingContents = false;
+          }
+        }
       });
-      
+
       await _saveTypeOrder();
+      if (_selectedLocation != null) {
+        await _loadContentsFor(_selectedLocation);
+      }
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -962,104 +805,47 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
     );
   }
 
-  /// Show tools that have quantity at this location (Option B: view by location).
-  Future<void> _showLocationContentsDialog(dynamic location) async {
-    final path = _buildLocationPathFromRecord(location);
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const AlertDialog(
-        content: SizedBox(
-          width: 280,
-          height: 120,
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      ),
-    );
 
+  void _clearSelection() {
+    setState(() {
+      _selectedLocation = null;
+      _contentsRecords = [];
+      _loadingContents = false;
+    });
+  }
+
+  Future<void> _loadContentsFor(dynamic location) async {
+    setState(() => _loadingContents = true);
     List<dynamic> records = [];
     try {
-      records = await PocketBaseService().getToolLocationsAtLocationWithTool(location.id);
+      records = await PocketBaseService()
+          .getToolLocationsAtLocationWithTool(location.id);
     } catch (_) {}
-
     if (!mounted) return;
-    Navigator.of(context).pop();
+    if (_selectedLocation?.id != location.id) return;
+    setState(() {
+      _contentsRecords = records;
+      _loadingContents = false;
+    });
+  }
 
-    if (!mounted) return;
-    // Compact dialog: capped width and height so it doesn't dominate the screen.
-    final listHeight = records.isEmpty
-        ? 0.0
-        : (records.length * 52.0 + 8).clamp(56.0, 220.0);
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-        titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-        contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-        actionsPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-        title: Text(
-          path,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-        ),
-        content: SizedBox(
-          width: 360,
-          child: records.isEmpty
-              ? Text(
-                  'No tools at this location.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                )
-              : SizedBox(
-                  height: listHeight,
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemCount: records.length,
-                    itemBuilder: (context, i) {
-                    final r = records[i];
-                    final qty = (r.data['quantity'] ?? 0).toInt();
-                    final tool = r.expand?['tool'];
-                    dynamic t;
-                    if (tool != null) {
-                      t = tool is List
-                          ? (tool.isNotEmpty ? tool[0] : null)
-                          : tool;
-                    }
-                    final name = t?.data['tool_name'] ?? 'Tool';
-                    return ListTile(
-                      dense: true,
-                      visualDensity: VisualDensity.compact,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                      title: Text(name, style: const TextStyle(fontSize: 14)),
-                      subtitle: Text('Qty: $qty', style: const TextStyle(fontSize: 12)),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () async {
-                        if (t == null) return;
-                        Navigator.pop(ctx);
-                        final toolModel = Tool.fromRecord(t);
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => AddToolScreen(tool: toolModel),
-                          ),
-                        );
-                        if (mounted) _loadData();
-                      },
-                    );
-                  },
-                ),
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
+  Future<void> _selectLocation(dynamic location) async {
+    setState(() {
+      _selectedLocation = location;
+      _contentsRecords = [];
+      _loadingContents = true;
+    });
+    await _loadContentsFor(location);
+  }
+
+  Future<void> _openToolFromContents(dynamic toolRecord) async {
+    if (toolRecord == null) return;
+    final toolModel = Tool.fromRecord(toolRecord);
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => AddToolScreen(tool: toolModel)),
     );
+    if (mounted) await _loadData();
   }
 
   // NEW: Get root locations filtered by selected type
@@ -1130,6 +916,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
 
     return names.join(' > ');
   }
+
 
   bool _matchesSearch(dynamic location) {
     final q = _searchQuery.trim().toLowerCase();
@@ -1214,7 +1001,17 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
                 avatar: Icon(_getIconForType(type), size: 18),
                 label: Text(_typeLabel(type)),
                 selected: _selectedType == type,
-                onSelected: (_) => setState(() => _selectedType = type),
+                onSelected: (_) {
+                  setState(() {
+                    _selectedType = type;
+                    if (_selectedLocation != null &&
+                        '${_selectedLocation.data['type']}' != type) {
+                      _selectedLocation = null;
+                      _contentsRecords = [];
+                      _loadingContents = false;
+                    }
+                  });
+                },
                 showCheckmark: false,
                 selectedColor: scheme.secondaryContainer,
               ),
@@ -1225,25 +1022,43 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
     );
   }
 
-  Widget _buildLocationTree(dynamic location, int depth) {
+  Future<void> _onLocationMenu(String value, dynamic location) async {
+    if (value == 'edit') {
+      _showEditLocationDialog(location);
+    } else if (value == 'add_child') {
+      _showAddLocationDialog(
+        parentId: location.id,
+        parentName: _buildLocationPathFromRecord(location),
+      );
+    } else if (value == 'delete') {
+      final toolLocs = await PocketBaseService()
+          .getToolLocationsAtLocationWithTool(location.id);
+      if (!mounted) return;
+      _showDeleteLocationDialog(location, toolLocations: toolLocs);
+    }
+  }
+
+  Widget _buildLocationTree(dynamic location, int depth, {required bool usePanel}) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final titleStyle =
         textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600);
     final muted =
         textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
-    final children = _getChildLocations(location.id)
-        .where(_subtreeMatches)
-        .toList();
+    final children =
+        _getChildLocations(location.id).where(_subtreeMatches).toList();
     final hasChildren = children.isNotEmpty;
     final isExpanded = _expandedLocations.contains(location.id) ||
         (_searchQuery.trim().isNotEmpty && hasChildren);
     final childCount = _getChildLocations(location.id).length;
+    final selected = _selectedLocation?.id == location.id;
 
     return Column(
       children: [
         Card(
-          margin: EdgeInsets.only(left: depth * 20.0, top: 4, right: 0, bottom: 4),
+          color: selected ? scheme.secondaryContainer : null,
+          margin:
+              EdgeInsets.only(left: depth * 20.0, top: 4, right: 0, bottom: 4),
           child: ListTile(
             leading: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1257,7 +1072,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
                     onPressed: () => _toggleExpanded(location.id),
                     visualDensity: VisualDensity.compact,
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    constraints:
+                        const BoxConstraints(minWidth: 32, minHeight: 32),
                   )
                 else
                   const SizedBox(width: 32),
@@ -1269,58 +1085,34 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
               ],
             ),
             title: Text(
-              '',
+              '${location.data['name'] ?? ''}',
               style: titleStyle,
             ),
             subtitle: childCount > 0
                 ? Text(
-                    ' sub-location',
+                    '$childCount sub-location${childCount == 1 ? '' : 's'}',
                     style: muted,
                   )
                 : null,
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _LocationContentsHoverIcon(
-                  location: location,
-                  onPressed: () => _showLocationContentsDialog(location),
+            trailing: PopupMenuButton<String>(
+              tooltip: 'Actions',
+              onSelected: (value) => _onLocationMenu(value, location),
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'edit', child: Text('Edit')),
+                PopupMenuItem(
+                  value: 'add_child',
+                  child: Text('Add sub-location'),
                 ),
-                PopupMenuButton<String>(
-                  tooltip: 'Actions',
-                  onSelected: (value) async {
-                    if (value == 'edit') {
-                      _showEditLocationDialog(location);
-                    } else if (value == 'add_child') {
-                      _showAddLocationDialog(
-                        parentId: location.id,
-                        parentName: _buildLocationPathFromRecord(location),
-                      );
-                    } else if (value == 'delete') {
-                      final pbService = PocketBaseService();
-                      final toolLocs = await pbService
-                          .getToolLocationsAtLocationWithTool(location.id);
-                      if (!mounted) return;
-                      _showDeleteLocationDialog(
-                        location,
-                        toolLocations: toolLocs,
-                      );
-                    }
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    PopupMenuItem(
-                      value: 'add_child',
-                      child: Text('Add sub-location'),
-                    ),
-                    PopupMenuItem(value: 'delete', child: Text('Delete')),
-                  ],
-                ),
+                PopupMenuItem(value: 'delete', child: Text('Delete')),
               ],
             ),
+            onTap: () => _selectLocation(location),
           ),
         ),
         if (hasChildren && isExpanded)
-          ...children.map((child) => _buildLocationTree(child, depth + 1)),
+          ...children.map(
+            (child) => _buildLocationTree(child, depth + 1, usePanel: usePanel),
+          ),
       ],
     );
   }
@@ -1344,6 +1136,130 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
     return Theme.of(context).colorScheme.onSurfaceVariant;
   }
 
+  Widget _buildDetailPane(ColorScheme scheme) {
+    final textTheme = Theme.of(context).textTheme;
+    final muted =
+        textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant);
+
+    if (_selectedLocation == null) {
+      return Center(
+        child: Text(
+          'Select a location to see what’s inside.',
+          style: muted,
+        ),
+      );
+    }
+
+    final loc = _selectedLocation;
+    final path = _buildLocationPathFromRecord(loc);
+    final name = (loc.data['name'] ?? '').toString();
+    final type = (loc.data['type'] ?? '').toString();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      path,
+                      style: muted,
+                    ),
+                    if (type.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        _typeLabel(type),
+                        style: textTheme.labelMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'Actions',
+                onSelected: (value) => _onLocationMenu(value, loc),
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  PopupMenuItem(
+                    value: 'add_child',
+                    child: Text('Add sub-location'),
+                  ),
+                  PopupMenuItem(value: 'delete', child: Text('Delete')),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text(
+            'Tools here',
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
+        Expanded(
+          child: _loadingContents
+              ? const Center(child: CircularProgressIndicator())
+              : _contentsRecords.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No tools at this location.',
+                        style: muted,
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+                      itemCount: _contentsRecords.length,
+                      itemBuilder: (context, i) {
+                        final r = _contentsRecords[i];
+                        final qty = (r.data['quantity'] ?? 0).toInt();
+                        final tool = r.expand?['tool'];
+                        dynamic t;
+                        if (tool != null) {
+                          t = tool is List
+                              ? (tool.isNotEmpty ? tool[0] : null)
+                              : tool;
+                        }
+                        final toolName = t?.data['tool_name'] ?? 'Tool';
+                        return Card(
+                          child: ListTile(
+                            title: Text(
+                              '$toolName',
+                              style: textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            subtitle: Text('Qty: $qty', style: muted),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            onTap: () => _openToolFromContents(t),
+                          ),
+                        );
+                      },
+                    ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     maybeAutoOpenDrawer();
@@ -1353,54 +1269,102 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
         textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant);
     final width = MediaQuery.sizeOf(context).width;
     final isNarrow = width < 700;
+    final usePanel = width >= kWorkspaceWideBreakpointPx;
     final roots = _visibleRootLocations();
 
-    final body = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            border: Border(
-              bottom: BorderSide(color: scheme.outlineVariant),
+    final listColumn = workspaceContentFrame(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              border: Border(
+                bottom: BorderSide(color: scheme.outlineVariant),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildToolbar(isNarrow || (usePanel && _panelOpen)),
+                const SizedBox(height: 12),
+                _buildTypeChips(scheme),
+              ],
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildToolbar(isNarrow),
-              const SizedBox(height: 12),
-              _buildTypeChips(scheme),
-            ],
-          ),
-        ),
-        Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _selectedType == null
-                  ? Center(
-                      child: Text('Select a location type', style: muted),
-                    )
-                  : roots.isEmpty
-                      ? Center(
-                          child: Text(
-                            _searchQuery.trim().isNotEmpty
-                                ? 'No locations match your search.'
-                                : 'No  locations yet.\nTap Add Location above.',
-                            textAlign: TextAlign.center,
-                            style: muted,
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _selectedType == null
+                    ? Center(
+                        child: Text('Select a location type', style: muted),
+                      )
+                    : roots.isEmpty
+                        ? Center(
+                            child: Text(
+                              _searchQuery.trim().isNotEmpty
+                                  ? 'No locations match your search.'
+                                  : 'No ${_typeLabel(_selectedType!)} locations yet.\nTap Add Location above.',
+                              textAlign: TextAlign.center,
+                              style: muted,
+                            ),
+                          )
+                        : ListView(
+                            padding: const EdgeInsets.all(8),
+                            children: [
+                              ...roots.map(
+                                (loc) => _buildLocationTree(
+                                  loc,
+                                  0,
+                                  usePanel: usePanel,
+                                ),
+                              ),
+                            ],
                           ),
-                        )
-                      : ListView(
-                          padding: const EdgeInsets.all(8),
-                          children: [
-                            ...roots.map((loc) => _buildLocationTree(loc, 0)),
-                          ],
-                        ),
-        ),
-      ],
+          ),
+        ],
+      ),
+      maxWidth: usePanel && _panelOpen
+          ? kWorkspacePanelContentMaxWidth
+          : kWorkspaceContentMaxWidth,
     );
+
+    final detailPane = DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(color: scheme.outlineVariant),
+        ),
+      ),
+      child: _buildDetailPane(scheme),
+    );
+
+    Widget body;
+    if (usePanel && _panelOpen) {
+      body = Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(flex: 3, child: listColumn),
+          Expanded(flex: 7, child: detailPane),
+        ],
+      );
+    } else if (!usePanel && _panelOpen) {
+      body = Column(
+        children: [
+          ListTile(
+            leading: const Icon(Icons.arrow_back),
+            title: Text(
+              (_selectedLocation.data['name'] ?? '').toString(),
+            ),
+            onTap: _clearSelection,
+          ),
+          const Divider(height: 1),
+          Expanded(child: _buildDetailPane(scheme)),
+        ],
+      );
+    } else {
+      body = listColumn;
+    }
 
     return WorkspaceScaffold(
       scaffoldKey: _scaffoldKey,
@@ -1408,7 +1372,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
         title: const Text('Locations'),
         leading: workspaceMenuLeading(context),
       ),
-      body: workspaceContentFrame(body),
+      body: body,
     );
   }
 }

@@ -70,15 +70,10 @@ class _AboutScreenState extends State<AboutScreen> with AutoOpenDrawerMixin {
                 Center(
                   child: Column(
                     children: [
-                      Icon(
-                        Icons.inventory_2,
-                        size: 80,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(height: 16),
                       Text(
                         'DharmaCore',
                         style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              fontFamily: 'Polaris',
                               fontWeight: FontWeight.bold,
                               color: Theme.of(context).colorScheme.primary,
                             ),
@@ -87,14 +82,14 @@ class _AboutScreenState extends State<AboutScreen> with AutoOpenDrawerMixin {
                       Text(
                         'Shop Tool Inventory Management',
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: Colors.grey[600],
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'Version $_version',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Colors.grey[600],
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                       ),
                     ],
