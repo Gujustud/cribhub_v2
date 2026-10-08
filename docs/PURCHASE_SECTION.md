@@ -50,6 +50,7 @@ Represents one purchase (header only; line items are separate).
 | `orderReference` | String? | `order_reference` | Optional |
 | `notes` | String? | `notes` | Optional |
 | `total` | double? | `total` | Optional (can be computed from items) |
+| `currency` | String | `currency` | `CAD` (default) or `USD`; tag only — no FX |
 | `supplierName` | String? | expand `supplier` → `company_name` | For display |
 
 - **Factory:** `Purchase.fromRecord(dynamic record)` – builds from PocketBase record; handles `record.data` and `record.expand['supplier']` for `supplierName`.
@@ -85,11 +86,11 @@ All purchase-related methods live in the same `PocketBaseService` class used for
   - Uses collection `purchases`, sort `-purchase_date`, expand `supplier`.  
   - If `supplierId` is set, filters by `supplier = "<id>"`.
 
-- **`createPurchase({ required DateTime purchaseDate, String? supplierId, String? orderReference, String? notes, double? total })`**  
+- **`createPurchase({ required DateTime purchaseDate, String? supplierId, String? orderReference, String? notes, double? total, String currency = 'CAD' })`**  
   - Creates one record in `purchases`.  
   - Returns the created record (with `id`).
 
-- **`updatePurchase(String id, { DateTime? purchaseDate, String? supplierId, String? orderReference, String? notes, double? total })`**  
+- **`updatePurchase(String id, { DateTime? purchaseDate, String? supplierId, String? orderReference, String? notes, double? total, String? currency })`**  
   - Updates the purchase by `id`; only sends non-null parameters.
 
 - **`deletePurchase(String id)`**  
@@ -126,6 +127,7 @@ Defined in **`DEPLOY.md`** (§5.5). Create in Admin: **Settings → Collections*
 | `order_reference` | text | Optional |
 | `notes` | text | Optional |
 | `total` | number | Optional |
+| `currency` | select | `CAD` \| `USD` (migration `1775700000_purchases_currency.js`); no FX |
 
 ### 5.2 Collection: `purchase_items`
 
@@ -197,7 +199,7 @@ Single full-screen form used for both **create** and **edit**.
     - **Shipping:** description field + Amount.  
   - Each row has delete IconButton; last row only has “+” IconButton → `_addLine()` (appends a new line map).  
   - Subtotal/Total numeric boxes use fixed widths (e.g. 110) and `maxLines: 1` so values don’t wrap.
-- **Tax row:** GST (5%) and PST (7%) checkboxes; live total; then a “Total” box (subtotal + GST + PST + shipping). Layout: `Spacer()` then GST, PST, small gap, Total(110), gap, trailing space so Total aligns under Subtotal column.
+- **Tax / currency row:** GST, PST, and USD checkboxes (same style). USD tags invoice currency (`purchases.currency`; no FX). GST/PST amounts appear as lines under Items/Shipping, not beside the checkboxes. Tax base = items + shipping (UI and save).
 - **Actions:** “SAVE PURCHASE” (centered); in edit mode, app bar “Delete” with confirmation then `deletePurchase` and pop.
 
 ### 7.5 Save logic (`_save()`)

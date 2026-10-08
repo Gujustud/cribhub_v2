@@ -6,6 +6,7 @@ import 'auth_service.dart';
 import 'drawer_behavior.dart';
 import 'list_toolbar_widgets.dart';
 import 'pocketbase_service.dart';
+import 'ui_breakpoints.dart';
 import 'wiki_edit_screen.dart';
 import 'wiki_page_utils.dart';
 import 'workspace_layout.dart';
@@ -28,6 +29,8 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
   String _query = '';
   /// Page ids whose children are shown in the left tree.
   final Set<String> _expandedIds = {};
+  /// When true (wide layout only), hide the page tree so the reader is wider.
+  bool _treeCollapsed = false;
 
   @override
   GlobalKey<ScaffoldState> get scaffoldKey => _scaffoldKey;
@@ -144,106 +147,184 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
     }
   }
 
+  Widget _buildToolbar({required bool stacked}) {
+    final search = InventoryListSearchField(
+      controller: _searchController,
+      hintText: 'Search titles and page text',
+      onChanged: (v) => setState(() {
+        _query = v;
+        if (v.trim().isNotEmpty) {
+          for (final p in _pages) {
+            if (wikiMatchesQuery(p, v)) {
+              _expandedIds.addAll(wikiAncestorIds(_pages, p.id));
+            }
+          }
+        }
+      }),
+    );
+    final actions = <Widget>[
+      if (_canEdit) ...[
+        InventoryListActionButton(
+          label: 'New page',
+          onPressed: () => _openEditor(parentId: _selectedId),
+        ),
+        InventoryListActionButton(
+          label: 'Edit',
+          icon: Icons.edit_outlined,
+          onPressed:
+              _selected == null ? null : () => _openEditor(page: _selected),
+        ),
+      ],
+    ];
+
+    if (stacked) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          search,
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(spacing: 12, runSpacing: 8, children: actions),
+          ],
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: search),
+        for (final action in actions) ...[
+          const SizedBox(width: 12),
+          action,
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final selected = _selected;
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final width = MediaQuery.sizeOf(context).width;
+    final isNarrow = width < 700;
+    // Same master/detail breakpoint + flex as Purchases / Material.
+    final usePanel = width >= kWorkspaceWideBreakpointPx;
+    final panelOpen = _selectedId != null;
+
+    final listColumn = workspaceContentFrame(
+      Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              border: Border(
+                bottom: BorderSide(color: scheme.outlineVariant),
+              ),
+            ),
+            child: _buildToolbar(
+              stacked: isNarrow || (usePanel && panelOpen),
+            ),
+          ),
+          if (AuthService.instance.isWikiReadonly)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                'Your account is wiki read-only.',
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+            ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _pages.isEmpty
+                    ? Center(
+                        child: Text(
+                          _canEdit
+                              ? 'No wiki pages yet.\nTap New page to add a section (Team, Tooling, Docs, …).'
+                              : 'No wiki pages yet.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                    : _treePane(),
+          ),
+        ],
+      ),
+      maxWidth: usePanel && panelOpen
+          ? kWorkspacePanelContentMaxWidth
+          : kWorkspaceContentMaxWidth,
+    );
+
+    Widget body;
+    if (usePanel && panelOpen) {
+      body = Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!_treeCollapsed) Expanded(flex: 3, child: listColumn),
+          _treeCollapseRail(collapsed: _treeCollapsed, scheme: scheme),
+          Expanded(
+            flex: _treeCollapsed ? 1 : 7,
+            child: _readerPane(selected),
+          ),
+        ],
+      );
+    } else if (!usePanel && panelOpen) {
+      body = Column(
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _selectedId = null),
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('Pages'),
+            ),
+          ),
+          Expanded(child: _readerPane(selected)),
+        ],
+      );
+    } else {
+      body = listColumn;
+    }
 
     return WorkspaceScaffold(
       scaffoldKey: _scaffoldKey,
-      appBar: AppBar(title: const Text('Wiki')),
-      body: workspaceContentFrame(
-        Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Flexible(
-                    flex: 3,
-                    child: InventoryListSearchField(
-                      controller: _searchController,
-                      hintText: 'Search titles and page text',
-                      onChanged: (v) => setState(() {
-                        _query = v;
-                        if (v.trim().isNotEmpty) {
-                          // Expand ancestors of search hits so matches are visible.
-                          for (final p in _pages) {
-                            if (wikiMatchesQuery(p, v)) {
-                              _expandedIds.addAll(wikiAncestorIds(_pages, p.id));
-                            }
-                          }
-                        }
-                      }),
-                    ),
-                  ),
-                  if (_canEdit) ...[
-                    const SizedBox(width: 12),
-                    InventoryListActionButton(
-                      label: 'New page',
-                      onPressed: () => _openEditor(parentId: _selectedId),
-                    ),
-                    const SizedBox(width: 12),
-                    InventoryListActionButton(
-                      label: 'Edit',
-                      icon: Icons.edit_outlined,
-                      onPressed: selected == null
-                          ? null
-                          : () => _openEditor(page: selected),
-                    ),
-                  ],
-                ],
+      appBar: AppBar(
+        title: const Text('Wiki'),
+        leading: workspaceMenuLeading(context),
+      ),
+      body: body,
+    );
+  }
+
+  Widget _treeCollapseRail({
+    required bool collapsed,
+    required ColorScheme scheme,
+  }) {
+    return Material(
+      color: scheme.surface,
+      child: InkWell(
+        onTap: () => setState(() => _treeCollapsed = !collapsed),
+        child: Tooltip(
+          message: collapsed ? 'Show pages' : 'Hide pages',
+          child: Container(
+            width: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(color: scheme.outlineVariant),
+                right: BorderSide(color: scheme.outlineVariant),
               ),
             ),
-            if (AuthService.instance.isWikiReadonly)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
-                child: Text('Your account is wiki read-only.'),
-              ),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _pages.isEmpty
-                      ? Center(
-                          child: Text(
-                            _canEdit
-                                ? 'No wiki pages yet.\nTap New page to add a section (Team, Tooling, Docs, …).'
-                                : 'No wiki pages yet.',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 16, color: Colors.grey),
-                          ),
-                        )
-                      : wide
-                          ? Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                SizedBox(
-                                  width: 300,
-                                  child: _treePane(),
-                                ),
-                                const VerticalDivider(width: 1),
-                                Expanded(child: _readerPane(selected)),
-                              ],
-                            )
-                          : _selectedId == null
-                              ? _treePane()
-                              : Column(
-                                  children: [
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: TextButton.icon(
-                                        onPressed: () =>
-                                            setState(() => _selectedId = null),
-                                        icon: const Icon(Icons.arrow_back),
-                                        label: const Text('Pages'),
-                                      ),
-                                    ),
-                                    Expanded(child: _readerPane(selected)),
-                                  ],
-                                ),
+            child: Icon(
+              collapsed ? Icons.chevron_right : Icons.chevron_left,
+              size: 22,
+              color: scheme.onSurfaceVariant,
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -255,11 +336,16 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
     final roots = (children[null] ?? []).where((p) => visible.contains(p.id)).toList();
 
     if (roots.isEmpty) {
-      return const Center(child: Text('No matching pages.'));
+      return Center(
+        child: Text(
+          'No matching pages.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      );
     }
 
     return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(8),
       children: [
         for (final root in roots) ..._treeTiles(root, children, visible, 0),
       ],
@@ -276,20 +362,25 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
     final selected = page.id == _selectedId;
     final hasKids = kids.isNotEmpty;
     final expanded = _expandedIds.contains(page.id) || _query.trim().isNotEmpty;
+    final titleStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontWeight: depth == 0 ? FontWeight.w600 : FontWeight.w400,
+        );
 
     return [
       ListTile(
         selected: selected,
         dense: true,
-        contentPadding: EdgeInsets.only(left: 4 + depth * 12, right: 4),
+        visualDensity: VisualDensity.compact,
+        contentPadding: EdgeInsets.only(left: 4.0 + depth * 12.0, right: 4),
+        minLeadingWidth: 28,
         leading: hasKids
             ? IconButton(
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 tooltip: expanded ? 'Collapse' : 'Expand',
                 icon: Icon(
                   expanded ? Icons.expand_more : Icons.chevron_right,
-                  size: 22,
+                  size: 18,
                 ),
                 onPressed: () {
                   setState(() {
@@ -301,12 +392,11 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
                   });
                 },
               )
-            : const SizedBox(width: 32),
+            : const SizedBox(width: 28),
         title: Text(
           wikiTitle(page),
-          style: TextStyle(
-            fontWeight: depth == 0 ? FontWeight.w600 : FontWeight.w400,
-          ),
+          style: titleStyle,
+          overflow: TextOverflow.ellipsis,
         ),
         onTap: () => setState(() {
           _selectedId = page.id;
@@ -314,6 +404,8 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
         }),
         trailing: _canEdit
             ? PopupMenuButton<String>(
+                padding: EdgeInsets.zero,
+                iconSize: 18,
                 onSelected: (v) {
                   if (v == 'child') _openEditor(parentId: page.id);
                   if (v == 'edit') _openEditor(page: page);
@@ -338,7 +430,7 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
     }
     final pb = PocketBaseService().pb;
     final attachments = wikiAttachmentNames(page);
-    final email = wikiUpdatedEmail(page);
+    final editedBy = wikiUpdatedByLabel(page);
     final when = wikiUpdatedLabel(page);
 
     return ListView(
@@ -358,7 +450,11 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
           ],
         ),
         const SizedBox(height: 16),
-        wikiMarkdownView(context, wikiBody(page)),
+        wikiBodyWithTables(
+          context,
+          wikiBody(page),
+          canEditTables: _canEdit,
+        ),
         if (attachments.isNotEmpty) ...[
           const SizedBox(height: 24),
           const Text('Attachments', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -387,15 +483,18 @@ class _WikiScreenState extends State<WikiScreen> with AutoOpenDrawerMixin {
             ],
           ),
         ],
-        const SizedBox(height: 24),
-        Text(
-          [
-            wikiVisibilityLabel(wikiVisibility(page)),
-            if (email.isNotEmpty) 'Last edit: $email',
-            if (when.isNotEmpty) when,
-          ].join(' · '),
-          style: TextStyle(color: Colors.grey[600], fontSize: 13),
-        ),
+        if (editedBy.isNotEmpty || when.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Text(
+            [
+              if (editedBy.isNotEmpty) 'Last edit by $editedBy',
+              if (when.isNotEmpty) when,
+            ].join(' · '),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ],
       ],
     );
   }

@@ -750,11 +750,16 @@ class PocketBaseService {
     }
   }
 
+  static const String _jobExpand =
+      'quote,customer,material_source_vendor,'
+      'material_purchase_item,material_purchase_item.material,'
+      'material_purchase_item.purchase,material_purchase_item.purchase.supplier';
+
   Future<List<dynamic>> getJobs() async {
     try {
       return await pb.collection('jobs').getFullList(
         sort: '-updated',
-        expand: 'quote,customer,material_source_vendor',
+        expand: _jobExpand,
       );
     } catch (e) {
       print('Error getting jobs: $e');
@@ -767,7 +772,7 @@ class PocketBaseService {
     try {
       return await pb.collection('jobs').getOne(
         id,
-        expand: 'quote,customer,material_source_vendor',
+        expand: _jobExpand,
       );
     } catch (e) {
       print('Error getting job: $e');
@@ -1990,15 +1995,21 @@ class PocketBaseService {
     required DateTime purchaseDate,
     String? supplierId,
     String? orderReference,
+    String? invoice,
     String? notes,
     double? total,
+    String currency = 'CAD',
   }) async {
     try {
       final body = <String, dynamic>{
         'purchase_date': purchaseDate.toIso8601String().split('T').first,
+        'currency': currency == 'USD' ? 'USD' : 'CAD',
       };
       if (supplierId != null && supplierId.isNotEmpty) body['supplier'] = supplierId;
-      if (orderReference != null && orderReference.isNotEmpty) body['order_reference'] = orderReference;
+      if (orderReference != null && orderReference.isNotEmpty) {
+        body['order_reference'] = orderReference;
+      }
+      if (invoice != null && invoice.isNotEmpty) body['invoice'] = invoice;
       if (notes != null && notes.isNotEmpty) body['notes'] = notes;
       if (total != null) body['total'] = total;
       final record = await pb.collection('purchases').create(body: body);
@@ -2013,16 +2024,22 @@ class PocketBaseService {
     DateTime? purchaseDate,
     String? supplierId,
     String? orderReference,
+    String? invoice,
     String? notes,
     double? total,
+    String? currency,
   }) async {
     try {
       final body = <String, dynamic>{};
       if (purchaseDate != null) body['purchase_date'] = purchaseDate.toIso8601String().split('T').first;
       if (supplierId != null) body['supplier'] = supplierId.isEmpty ? null : supplierId;
       if (orderReference != null) body['order_reference'] = orderReference;
+      if (invoice != null) body['invoice'] = invoice;
       if (notes != null) body['notes'] = notes;
       if (total != null) body['total'] = total;
+      if (currency != null) {
+        body['currency'] = currency == 'USD' ? 'USD' : 'CAD';
+      }
       if (body.isEmpty) return;
       await pb.collection('purchases').update(id, body: body);
     } catch (e) {
@@ -2087,6 +2104,54 @@ class PocketBaseService {
       );
     } catch (e) {
       print('Error getting purchase items by material: $e');
+      rethrow;
+    }
+  }
+
+  /// Heat/lot strings keyed by material id (for Material list search).
+  Future<Map<String, List<String>>> getMaterialHeatLotsByMaterialId() async {
+    try {
+      final records = await pb.collection('purchase_items').getFullList(
+        filter: 'line_type = "material" && heat_lot != ""',
+      );
+      final map = <String, List<String>>{};
+      for (final r in records) {
+        final mid = r.data['material']?.toString() ?? '';
+        final lot = (r.data['heat_lot'] ?? '').toString().trim();
+        if (mid.isEmpty || lot.isEmpty) continue;
+        final list = map.putIfAbsent(mid, () => <String>[]);
+        final exists = list.any((x) => x.toLowerCase() == lot.toLowerCase());
+        if (!exists) list.add(lot);
+      }
+      return map;
+    } catch (e) {
+      print('Error getting material heat lots: $e');
+      rethrow;
+    }
+  }
+
+  /// Material purchase lines that have a heat/lot (for job lot picker).
+  Future<List<dynamic>> getMaterialLotsForPicker() async {
+    try {
+      return await pb.collection('purchase_items').getFullList(
+        filter: 'line_type = "material" && heat_lot != ""',
+        expand: 'material,purchase,purchase.supplier',
+        sort: '-purchase.purchase_date',
+      );
+    } catch (e) {
+      print('Error getting material lots for picker: $e');
+      rethrow;
+    }
+  }
+
+  Future<dynamic> getPurchaseItem(String id) async {
+    try {
+      return await pb.collection('purchase_items').getOne(
+        id,
+        expand: 'material,purchase,purchase.supplier',
+      );
+    } catch (e) {
+      print('Error getting purchase item: $e');
       rethrow;
     }
   }
@@ -2511,6 +2576,84 @@ class PocketBaseService {
       print('Error completing maintenance schedule: $e');
       rethrow;
     }
+  }
+
+  // --- Wiki tables (reusable grids embedded via {{table:id}}) ---
+
+  Future<List<RecordModel>> getWikiTablesForPage(String pageId) async {
+    return await pb.collection('wiki_tables').getFullList(
+      filter: 'page = "$pageId"',
+      sort: 'sort_order,title',
+    );
+  }
+
+  Future<RecordModel> getWikiTable(String id) async {
+    return await pb.collection('wiki_tables').getOne(id);
+  }
+
+  Future<RecordModel> createWikiTable({
+    required String title,
+    required String columnsJson,
+    String? pageId,
+    int sortOrder = 0,
+    String? updatedByEmail,
+    String? updatedByName,
+  }) async {
+    return await pb.collection('wiki_tables').create(body: {
+      'title': title,
+      'columns_json': columnsJson,
+      'sort_order': sortOrder,
+      if (pageId != null && pageId.isNotEmpty) 'page': pageId,
+      if (updatedByEmail != null) 'updated_by_email': updatedByEmail,
+      if (updatedByName != null) 'updated_by_name': updatedByName,
+    });
+  }
+
+  Future<RecordModel> updateWikiTable(
+    String id,
+    Map<String, dynamic> body,
+  ) async {
+    return await pb.collection('wiki_tables').update(id, body: body);
+  }
+
+  Future<void> deleteWikiTable(String id) async {
+    final rows = await pb.collection('wiki_table_rows').getFullList(
+      filter: 'wiki_table = "$id"',
+    );
+    for (final r in rows) {
+      await pb.collection('wiki_table_rows').delete(r.id);
+    }
+    await pb.collection('wiki_tables').delete(id);
+  }
+
+  Future<List<RecordModel>> getWikiTableRows(String tableId) async {
+    return await pb.collection('wiki_table_rows').getFullList(
+      filter: 'wiki_table = "$tableId"',
+      sort: 'sort_order',
+    );
+  }
+
+  Future<RecordModel> createWikiTableRow({
+    required String tableId,
+    required String valuesJson,
+    int sortOrder = 0,
+  }) async {
+    return await pb.collection('wiki_table_rows').create(body: {
+      'wiki_table': tableId,
+      'values_json': valuesJson,
+      'sort_order': sortOrder,
+    });
+  }
+
+  Future<RecordModel> updateWikiTableRow(
+    String id,
+    Map<String, dynamic> body,
+  ) async {
+    return await pb.collection('wiki_table_rows').update(id, body: body);
+  }
+
+  Future<void> deleteWikiTableRow(String id) async {
+    await pb.collection('wiki_table_rows').delete(id);
   }
 
   DateTime _advanceMaintenanceDue({

@@ -9,6 +9,8 @@ import 'auth_service.dart';
 import 'pocketbase_service.dart';
 import 'workspace_scaffold.dart';
 import 'wiki_page_utils.dart';
+import 'wiki_table_models.dart';
+import 'wiki_table_view.dart';
 
 MediaType? _wikiUploadContentType(String filename) {
   final lower = filename.toLowerCase();
@@ -174,6 +176,7 @@ class _WikiEditScreenState extends State<WikiEditScreen> {
     }
     setState(() => _saving = true);
     final email = AuthService.instance.email ?? '';
+    final displayName = AuthService.instance.displayName ?? '';
     final sort = int.tryParse(_sort.text.trim()) ?? 0;
     final body = <String, dynamic>{
       'title': title,
@@ -181,6 +184,7 @@ class _WikiEditScreenState extends State<WikiEditScreen> {
       'visibility': _visibility,
       'sort_order': sort,
       'updated_by_email': email,
+      'updated_by_name': displayName,
     };
     if (_parentId != null && _parentId!.isNotEmpty) {
       body['parent'] = _parentId;
@@ -260,6 +264,32 @@ class _WikiEditScreenState extends State<WikiEditScreen> {
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
+  }
+
+  /// Create a reusable table and insert `{{table:id}}` at the cursor.
+  Future<void> _insertTable() async {
+    var record = _record;
+    if (record == null) {
+      await _save(popOnSuccess: false);
+      record = _record;
+    }
+    if (record == null || !mounted) return;
+
+    final token = await createWikiTableAndEmbedToken(
+      context,
+      pageId: record.id,
+    );
+    if (token == null || !mounted) return;
+
+    final sel = _body.selection;
+    final start = sel.isValid ? sel.start : _body.text.length;
+    final end = sel.isValid ? sel.end : start;
+    final insert = start > 0 && !_body.text.substring(0, start).endsWith('\n')
+        ? '\n$token\n'
+        : '$token\n';
+    _replaceBodyRange(start, end, insert);
+    // Show the live grid (not the raw {{table:…}} token).
+    setState(() => _preview = true);
   }
 
   /// Upload image(s) and insert markdown `![alt](url)` at the cursor.
@@ -471,7 +501,11 @@ class _WikiEditScreenState extends State<WikiEditScreen> {
                         border: Border.all(color: Theme.of(context).dividerColor),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: wikiMarkdownView(context, _body.text),
+                      child: wikiBodyWithTables(
+                        context,
+                        _body.text,
+                        canEditTables: true,
+                      ),
                     )
                   else ...[
                     Padding(
@@ -499,6 +533,11 @@ class _WikiEditScreenState extends State<WikiEditScreen> {
                             onPressed: _uploading ? null : _insertInlineImages,
                             icon: const Icon(Icons.image_outlined),
                           ),
+                          IconButton(
+                            tooltip: 'Insert table',
+                            onPressed: _saving || _uploading ? null : _insertTable,
+                            icon: const Icon(Icons.table_chart_outlined),
+                          ),
                         ],
                       ),
                     ),
@@ -509,11 +548,24 @@ class _WikiEditScreenState extends State<WikiEditScreen> {
                       maxLines: 24,
                       decoration: const InputDecoration(
                         hintText:
-                            'B / I / U on selection. Images: ![alt](url) or ![alt](url#400x300) to set size',
+                            'B / I / U · Images · Tables (use table button, then Preview)',
                         alignLabelWithHint: true,
                         border: OutlineInputBorder(),
                       ),
                     ),
+                    // Live grids for any {{table:id}} tokens while editing markdown.
+                    ...[
+                      for (final part in splitWikiBodyWithTables(_body.text))
+                        if (part.isTable)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: WikiTableEmbed(
+                              key: ValueKey(part.tableId),
+                              tableId: part.tableId!,
+                              canEdit: true,
+                            ),
+                          ),
+                    ],
                   ],
                   const SizedBox(height: 16),
                   Row(
@@ -555,7 +607,7 @@ class _WikiEditScreenState extends State<WikiEditScreen> {
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
-                        'Last edit: ${wikiUpdatedEmail(_record!)} · ${wikiUpdatedLabel(_record!)}',
+                        'Last edit by ${wikiUpdatedByLabel(_record!)} · ${wikiUpdatedLabel(_record!)}',
                         style: TextStyle(color: Colors.grey[600], fontSize: 12),
                       ),
                     ),

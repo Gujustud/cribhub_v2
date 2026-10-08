@@ -4118,7 +4118,7 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
     );
   }
 
-  /// Shared inventory row, location tags, recent history, price over time, and (for Cutting Tools) performance stats.
+  /// Shared inventory, performance stats, price history, then movement history.
   List<Widget> _buildInventoryAndHistorySection(BuildContext context) {
     return [
       const SizedBox(height: 16),
@@ -4253,51 +4253,6 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
               ),
             );
           }),
-      ],
-      if (_isEditMode) ...[
-        const SizedBox(height: 32),
-        const Divider(),
-        const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Recent History',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            if (_recentHistory.isNotEmpty)
-              ElevatedButton(
-                onPressed: _showAllHistory,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text('View All'),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (_loadingHistory)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: CircularProgressIndicator(),
-            ),
-          )
-        else if (_recentHistory.isEmpty)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                'No history yet',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            ),
-          )
-        else
-          ..._buildHistoryItems(_recentHistory),
       ],
       if (_category.toLowerCase() == 'cutting tools') ...[
         const SizedBox(height: 32),
@@ -4472,6 +4427,51 @@ class _AddToolScreenState extends State<AddToolScreen> with AutoOpenDrawerMixin 
               }).toList(),
             ),
           ),
+      ],
+      if (_isEditMode) ...[
+        const SizedBox(height: 32),
+        const Divider(),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'History',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            if (_recentHistory.isNotEmpty)
+              ElevatedButton(
+                onPressed: _showAllHistory,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text('View All'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_loadingHistory)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (_recentHistory.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                'No history yet',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ),
+          )
+        else
+          ..._buildHistoryItems(_recentHistory),
       ],
     ];
   }

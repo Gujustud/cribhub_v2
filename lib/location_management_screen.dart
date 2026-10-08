@@ -8,9 +8,8 @@ import 'workspace_layout.dart';
 import 'workspace_scaffold.dart';
 import 'add_tool_screen.dart';
 import 'models.dart';
-import 'settings_screen.dart'; // NEW: For back button
 import 'drawer_behavior.dart';
-import 'drawer_data_cache.dart';
+import 'list_toolbar_widgets.dart';
 
 /// Hover over the list icon to load and show tool names/counts at this location (cached briefly).
 class _LocationContentsHoverIcon extends StatefulWidget {
@@ -172,9 +171,13 @@ class _LocationContentsHoverIconState extends State<_LocationContentsHoverIcon> 
         onEnter: _onEnter,
         onExit: _onExit,
         child: IconButton(
-          icon: const Icon(Icons.list_alt, size: 20, color: Colors.teal),
+          icon: Icon(
+            Icons.list_alt,
+            size: 20,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
           onPressed: widget.onPressed,
-          tooltip: null, // Hover overlay shows loaded tool names/counts
+          tooltip: null,
         ),
       ),
     );
@@ -198,8 +201,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
   };
   bool _isLoading = true;
   Set<String> _expandedLocations = {};
-  String? _selectedType; // NEW: Currently selected type
+  String? _selectedType;
+  String _searchQuery = '';
 
+  final _searchController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
@@ -211,6 +216,17 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
     _loadData();
     _loadExpandedState();
     _loadTypeOrder();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  String _typeLabel(String type) {
+    if (type.isEmpty) return type;
+    return type[0].toUpperCase() + type.substring(1);
   }
 
   Future<void> _loadExpandedState() async {
@@ -1115,39 +1131,153 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
     return names.join(' > ');
   }
 
+  bool _matchesSearch(dynamic location) {
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    final name = (location.data['name'] ?? '').toString().toLowerCase();
+    final path = _buildLocationPathFromRecord(location).toLowerCase();
+    return name.contains(q) || path.contains(q);
+  }
+
+  bool _subtreeMatches(dynamic location) {
+    if (_matchesSearch(location)) return true;
+    return _getChildLocations(location.id).any(_subtreeMatches);
+  }
+
+  List<dynamic> _visibleRootLocations() {
+    return _getRootLocationsByType().where(_subtreeMatches).toList();
+  }
+
+  Widget _buildToolbar(bool stacked) {
+    final search = InventoryListSearchField(
+      controller: _searchController,
+      hintText: 'Search locations…',
+      onChanged: (v) => setState(() => _searchQuery = v),
+      decoration: inventoryListSearchDecoration(
+        context,
+        hintText: 'Search locations…',
+      ).copyWith(
+        suffixIcon: _searchController.text.isNotEmpty
+            ? inventoryListSearchClearButton(
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _searchQuery = '');
+                },
+              )
+            : null,
+      ),
+    );
+    final addButton = InventoryListActionButton(
+      label: 'Add Location',
+      onPressed: _selectedType == null ? null : () => _showAddLocationDialog(),
+    );
+    final manage = TextButton(
+      onPressed: _showManageTypesDialog,
+      child: const Text('Manage types'),
+    );
+    if (stacked) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          search,
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: addButton),
+              const SizedBox(width: 8),
+              manage,
+            ],
+          ),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        Expanded(child: search),
+        const SizedBox(width: 12),
+        addButton,
+        const SizedBox(width: 8),
+        manage,
+      ],
+    );
+  }
+
+  Widget _buildTypeChips(ColorScheme scheme) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final type in _sortedLocationTypes) ...[
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilterChip(
+                avatar: Icon(_getIconForType(type), size: 18),
+                label: Text(_typeLabel(type)),
+                selected: _selectedType == type,
+                onSelected: (_) => setState(() => _selectedType = type),
+                showCheckmark: false,
+                selectedColor: scheme.secondaryContainer,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildLocationTree(dynamic location, int depth) {
-    final children = _getChildLocations(location.id);
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final titleStyle =
+        textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600);
+    final muted =
+        textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
+    final children = _getChildLocations(location.id)
+        .where(_subtreeMatches)
+        .toList();
     final hasChildren = children.isNotEmpty;
-    final isExpanded = _expandedLocations.contains(location.id);
+    final isExpanded = _expandedLocations.contains(location.id) ||
+        (_searchQuery.trim().isNotEmpty && hasChildren);
+    final childCount = _getChildLocations(location.id).length;
 
     return Column(
       children: [
         Card(
-          margin: EdgeInsets.only(left: depth * 16.0, top: 4, right: 4, bottom: 4),
+          margin: EdgeInsets.only(left: depth * 20.0, top: 4, right: 0, bottom: 4),
           child: ListTile(
             leading: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  _getIconForType(location.data['type']),
-                  color: _getColorForType(location.data['type']),
-                ),
-                if (hasChildren) ...[
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () => _toggleExpanded(location.id),
-                    child: Icon(
+                if (hasChildren)
+                  IconButton(
+                    icon: Icon(
                       isExpanded ? Icons.expand_more : Icons.chevron_right,
-                      size: 24,
+                      size: 22,
                     ),
-                  ),
-                ],
+                    onPressed: () => _toggleExpanded(location.id),
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  )
+                else
+                  const SizedBox(width: 32),
+                Icon(
+                  _getIconForType(location.data['type']?.toString() ?? ''),
+                  color: scheme.onSurfaceVariant,
+                  size: 22,
+                ),
               ],
             ),
             title: Text(
-              location.data['name'],
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              '',
+              style: titleStyle,
             ),
+            subtitle: childCount > 0
+                ? Text(
+                    ' sub-location',
+                    style: muted,
+                  )
+                : null,
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1155,30 +1285,35 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
                   location: location,
                   onPressed: () => _showLocationContentsDialog(location),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.edit, size: 20, color: Colors.blue),
-                  onPressed: () => _showEditLocationDialog(location),
-                  tooltip: 'Edit location',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete, size: 20, color: Colors.red),
-                  onPressed: () async {
-                    final pbService = PocketBaseService();
-                    final toolLocs = await pbService.getToolLocationsAtLocationWithTool(location.id);
-                    if (!mounted) return;
-                    _showDeleteLocationDialog(location, toolLocations: toolLocs);
+                PopupMenuButton<String>(
+                  tooltip: 'Actions',
+                  onSelected: (value) async {
+                    if (value == 'edit') {
+                      _showEditLocationDialog(location);
+                    } else if (value == 'add_child') {
+                      _showAddLocationDialog(
+                        parentId: location.id,
+                        parentName: _buildLocationPathFromRecord(location),
+                      );
+                    } else if (value == 'delete') {
+                      final pbService = PocketBaseService();
+                      final toolLocs = await pbService
+                          .getToolLocationsAtLocationWithTool(location.id);
+                      if (!mounted) return;
+                      _showDeleteLocationDialog(
+                        location,
+                        toolLocations: toolLocs,
+                      );
+                    }
                   },
-                  tooltip: 'Delete location',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add, size: 20),
-                  onPressed: () {
-                    _showAddLocationDialog(
-                      parentId: location.id,
-                      parentName: _buildLocationPathFromRecord(location),
-                    );
-                  },
-                  tooltip: 'Add sub-location',
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    PopupMenuItem(
+                      value: 'add_child',
+                      child: Text('Add sub-location'),
+                    ),
+                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  ],
                 ),
               ],
             ),
@@ -1193,206 +1328,79 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
   IconData _getIconForType(String type) {
     switch (type) {
       case 'toolbox':
-        return Icons.inbox;
+        return Icons.inbox_outlined;
       case 'machine':
-        return Icons.precision_manufacturing;
+        return Icons.precision_manufacturing_outlined;
       case 'shelf':
         return Icons.shelves;
       case 'recycle':
-        return Icons.delete;
+        return Icons.delete_outline;
       default:
-        return Icons.folder;
+        return Icons.folder_outlined;
     }
   }
 
   Color _getColorForType(String type) {
-    switch (type) {
-      case 'toolbox':
-        return Colors.blue;
-      case 'machine':
-        return Colors.green;
-      case 'shelf':
-        return Colors.orange;
-      case 'recycle':
-        return Colors.red;
-      default:
-        return Theme.of(context).colorScheme.onSurfaceVariant;
-    }
+    return Theme.of(context).colorScheme.onSurfaceVariant;
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final dividerColor = theme.dividerColor;
+    maybeAutoOpenDrawer();
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final muted =
+        textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant);
+    final width = MediaQuery.sizeOf(context).width;
+    final isNarrow = width < 700;
+    final roots = _visibleRootLocations();
 
-    final bodyContent = _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            border: Border(
+              bottom: BorderSide(color: scheme.outlineVariant),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // LEFT PANEL - Location Types
-              Container(
-                  width: 250,
-                  decoration: BoxDecoration(
-                    border: Border(right: BorderSide(color: dividerColor)),
-                    color: colorScheme.surfaceContainerLowest,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          border: Border(bottom: BorderSide(color: dividerColor)),
-                        ),
-                        child: Text(
-                          'LOCATION TYPES',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.onSurfaceVariant,
-                            letterSpacing: 1.2,
+              _buildToolbar(isNarrow),
+              const SizedBox(height: 12),
+              _buildTypeChips(scheme),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _selectedType == null
+                  ? Center(
+                      child: Text('Select a location type', style: muted),
+                    )
+                  : roots.isEmpty
+                      ? Center(
+                          child: Text(
+                            _searchQuery.trim().isNotEmpty
+                                ? 'No locations match your search.'
+                                : 'No  locations yet.\nTap Add Location above.',
+                            textAlign: TextAlign.center,
+                            style: muted,
                           ),
-                        ),
-                      ),
-                      Expanded(
-                        child: ListView.builder(
-                          itemCount: _sortedLocationTypes.length,
-                          itemBuilder: (context, index) {
-                            final type = _sortedLocationTypes[index];
-                            final isSelected = _selectedType == type;
-                            
-                            return ListTile(
-                              selected: isSelected,
-                              selectedTileColor: colorScheme.primaryContainer,
-                              leading: Icon(
-                                _getIconForType(type),
-                                color: _getColorForType(type),
-                              ),
-                              title: Text(
-                                type.toUpperCase(),
-                                style: TextStyle(
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                ),
-                              ),
-                              onTap: () {
-                                setState(() {
-                                  _selectedType = type;
-                                });
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                      // Manage Types button
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          border: Border(top: BorderSide(color: dividerColor)),
-                        ),
-                        child: Column(
+                        )
+                      : ListView(
+                          padding: const EdgeInsets.all(8),
                           children: [
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: _showManageTypesDialog,
-                                icon: const Icon(Icons.category, size: 18),
-                                label: const Text('Manage Types'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                                  );
-                                },
-                                icon: const Icon(Icons.arrow_back, size: 18),
-                                label: const Text('Back to Settings'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                ),
-                              ),
-                            ),
+                            ...roots.map((loc) => _buildLocationTree(loc, 0)),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                
-                // RIGHT PANEL - Locations Tree
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header with Add button
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          border: Border(bottom: BorderSide(color: dividerColor)),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _selectedType != null
-                                  ? '${_selectedType!.toUpperCase()} LOCATIONS'
-                                  : 'Select a type',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            if (_selectedType != null)
-                              FilledButton.icon(
-                                onPressed: () => _showAddLocationDialog(),
-                                icon: const Icon(Icons.add, size: 18),
-                                label: const Text('Add Location'),
-                              ),
-                          ],
-                        ),
-                      ),
-                      
-                      // Locations tree
-                      Expanded(
-                        child: _selectedType == null
-                            ? Center(
-                                child: Text(
-                                  'Select a location type',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              )
-                            : _getRootLocationsByType().isEmpty
-                                ? Center(
-                                    child: Text(
-                                      'No ${_selectedType!} locations yet.\nClick "Add Location" to create one.',
-                                      textAlign: TextAlign.center,
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        color: colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  )
-                                : ListView(
-                                    padding: const EdgeInsets.all(8),
-                                    children: [
-                                      ..._getRootLocationsByType().map((loc) => _buildLocationTree(loc, 0)),
-                                    ],
-                                  ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            );
+        ),
+      ],
+    );
 
     return WorkspaceScaffold(
       scaffoldKey: _scaffoldKey,
@@ -1400,7 +1408,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> wit
         title: const Text('Locations'),
         leading: workspaceMenuLeading(context),
       ),
-      body: workspaceContentFrame(bodyContent),
+      body: workspaceContentFrame(body),
     );
   }
 }

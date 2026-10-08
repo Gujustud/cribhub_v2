@@ -65,6 +65,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
   DateTime _purchaseDate = DateTime.now();
   String? _supplierId;
   final _orderRefController = TextEditingController();
+  final _invoiceController = TextEditingController();
   final _notesController = TextEditingController();
   late final TextEditingController _dateController;
 
@@ -73,6 +74,8 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
 
   bool _gstChecked = false;
   bool _pstChecked = false;
+  /// Invoice currency tag — no FX conversion (`CAD` default, `USD` for McMaster).
+  String _currency = 'CAD';
 
   RecordModel? _purchaseRecord;
   final List<_PendingCert> _pendingCerts = [];
@@ -80,6 +83,9 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
 
   static const double _gstRate = 0.05; // 5%
   static const double _pstRate = 0.07; // 7%
+
+  String _money(double amount) =>
+      '\$${amount.toStringAsFixed(2)} $_currency';
 
   @override
   void initState() {
@@ -89,7 +95,9 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
       _purchaseDate = p.purchaseDate;
       _supplierId = p.supplierId;
       _orderRefController.text = p.orderReference ?? '';
+      _invoiceController.text = p.invoice ?? '';
       _notesController.text = p.notes ?? '';
+      _currency = p.currency == 'USD' ? 'USD' : 'CAD';
     }
     _dateController = TextEditingController(text: DateFormat.yMMMd().format(_purchaseDate));
     _loadData();
@@ -101,6 +109,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
   @override
   void dispose() {
     _orderRefController.dispose();
+    _invoiceController.dispose();
     _notesController.dispose();
     _dateController.dispose();
     // Dispose any per-line TextEditingControllers we created
@@ -573,8 +582,10 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
       await _hydrateLineMillCertsForSave();
       String id;
       final subtotal = _subtotalItems();
-      final gstAmt = _gstChecked ? subtotal * _gstRate : 0.0;
-      final pstAmt = _pstChecked ? subtotal * _pstRate : 0.0;
+      // Match on-screen GST/PST: tax base is items + shipping.
+      final taxable = _taxableBase();
+      final gstAmt = _gstChecked ? taxable * _gstRate : 0.0;
+      final pstAmt = _pstChecked ? taxable * _pstRate : 0.0;
       final grandTotal = subtotal + _totalTaxAndShipping();
       if (widget.purchase != null) {
         id = widget.purchase!.id;
@@ -582,8 +593,10 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
           purchaseDate: _purchaseDate,
           supplierId: _supplierId,
           orderReference: _orderRefController.text.isEmpty ? null : _orderRefController.text,
+          invoice: _invoiceController.text.isEmpty ? '' : _invoiceController.text,
           notes: _notesController.text.isEmpty ? null : _notesController.text,
           total: grandTotal,
+          currency: _currency,
         );
         final existing = await pbService.getPurchaseItems(id);
         for (final item in existing) {
@@ -594,8 +607,10 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
           purchaseDate: _purchaseDate,
           supplierId: _supplierId,
           orderReference: _orderRefController.text.isEmpty ? null : _orderRefController.text,
+          invoice: _invoiceController.text.isEmpty ? null : _invoiceController.text,
           notes: _notesController.text.isEmpty ? null : _notesController.text,
           total: grandTotal,
+          currency: _currency,
         );
         id = record.id;
         _purchaseRecord = record is RecordModel ? record : null;
@@ -893,6 +908,18 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                       );
                     },
                       ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: TextField(
+                          controller: _invoiceController,
+                          decoration: const InputDecoration(
+                            floatingLabelBehavior: FloatingLabelBehavior.always,
+                            labelText: 'Invoice',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -1641,7 +1668,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                     );
                   }),
                   const SizedBox(height: 16),
-                  // Summary row: right-aligned, shows item subtotal, shipping, GST/PST, and total (no box).
+                  // Summary: GST/PST/USD toggles; amounts listed under Items/Shipping.
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1653,28 +1680,42 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Checkbox(
-                                value: _gstChecked == true,
-                                onChanged: (v) => setState(() => _gstChecked = v == true),
+                                value: _gstChecked,
+                                onChanged: (v) =>
+                                    setState(() => _gstChecked = v == true),
                               ),
-                              Text(
-                                'GST${_gstChecked ? ' \$${(_taxableBase() * _gstRate).toStringAsFixed(2)}' : ''}',
-                              ),
+                              const Text('GST'),
                               const SizedBox(width: 16),
                               Checkbox(
-                                value: _pstChecked == true,
-                                onChanged: (v) => setState(() => _pstChecked = v == true),
+                                value: _pstChecked,
+                                onChanged: (v) =>
+                                    setState(() => _pstChecked = v == true),
                               ),
-                              Text(
-                                'PST${_pstChecked ? ' \$${(_taxableBase() * _pstRate).toStringAsFixed(2)}' : ''}',
+                              const Text('PST'),
+                              const SizedBox(width: 16),
+                              Checkbox(
+                                value: _currency == 'USD',
+                                onChanged: (v) => setState(
+                                  () => _currency = v == true ? 'USD' : 'CAD',
+                                ),
                               ),
+                              const Text('USD'),
                             ],
                           ),
                           const SizedBox(height: 4),
-                          Text('Items: \$${_subtotalItems().toStringAsFixed(2)}'),
-                          Text('Shipping: \$${_shippingTotal().toStringAsFixed(2)}'),
+                          Text('Items: ${_money(_subtotalItems())}'),
+                          Text('Shipping: ${_money(_shippingTotal())}'),
+                          if (_gstChecked)
+                            Text(
+                              'GST: ${_money(_taxableBase() * _gstRate)}',
+                            ),
+                          if (_pstChecked)
+                            Text(
+                              'PST: ${_money(_taxableBase() * _pstRate)}',
+                            ),
                           const SizedBox(height: 4),
                           Text(
-                            'Total: \$${(_subtotalItems() + _totalTaxAndShipping()).toStringAsFixed(2)}',
+                            'Total: ${_money(_subtotalItems() + _totalTaxAndShipping())}',
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1687,17 +1728,9 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Mill certs',
+                    'Attachments',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Optional purchase-level PDFs. To show a cert on the Material '
-                    'screen, attach it on the material line with “Line mill cert”.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                   ),
                   const SizedBox(height: 8),
@@ -1717,7 +1750,7 @@ class _AddPurchaseScreenState extends State<AddPurchaseScreen> with AutoOpenDraw
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Icon(Icons.attach_file),
-                        label: const Text('Add mill cert'),
+                        label: const Text('Add attachment'),
                       ),
                       for (final name in _existingCertNames)
                         InputChip(

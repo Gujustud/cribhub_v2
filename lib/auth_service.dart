@@ -17,9 +17,37 @@ class AuthService {
 
   String? get email => user?.getStringValue('email');
 
+  /// PocketBase `users.name` when set; otherwise null.
+  String? get name {
+    final n = user?.getStringValue('name').trim();
+    if (n == null || n.isEmpty) return null;
+    return n;
+  }
+
+  /// Prefer [name], fall back to [email].
+  String? get displayName => name ?? email;
+
+  /// Personal dashboard scratch pad (`users.quick_notes`).
+  String get quickNotes {
+    final v = user?.data['quick_notes']?.toString();
+    return v ?? '';
+  }
+
+  /// Persist [text] on the current user and refresh the auth store record.
+  Future<void> saveQuickNotes(String text) async {
+    final id = userId;
+    final token = _pb.authStore.token;
+    if (id == null || token.isEmpty) return;
+    final rec = await _pb.collection('users').update(
+      id,
+      body: {'quick_notes': text},
+    );
+    _pb.authStore.save(token, rec);
+  }
+
   /// `full`, `jobs_only`, or null/empty (treated as full).
   String get role {
-    final r = user?.getStringValue('role')?.trim();
+    final r = user?.getStringValue('role').trim();
     if (r == null || r.isEmpty) return 'full';
     return r;
   }

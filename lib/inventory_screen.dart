@@ -598,7 +598,9 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
                           const SizedBox(height: 16),
                           Text(
                             'Error: $_errorMessage',
-                            style: const TextStyle(color: Colors.red),
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 16),
@@ -622,18 +624,26 @@ class _InventoryScreenState extends State<InventoryScreen> with AutoOpenDrawerMi
                               const SizedBox(height: 16),
                               Text(
                                 'No tools found for "${_searchController.text}"',
-                                style: const TextStyle(color: Colors.grey),
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
                                 textAlign: TextAlign.center,
                               ),
                             ],
                           ),
                         )
                       : _filteredTools.isEmpty
-                          ? const Center(
+                          ? Center(
                               child: Text(
                                 'No tools found.\nAdd some tools to get started!',
                                 textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 16, color: Colors.grey),
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
                               ),
                             )
                           : ListView.builder(
@@ -706,6 +716,16 @@ class ToolCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tool = toolWithLocations.tool;
     final locations = toolWithLocations.sortedLocations;
+    final textTheme = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    final titleStyle =
+        textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600);
+    final muted =
+        textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
+
+    final visibleLocations = locations
+        .where((loc) => loc.location?.type.toLowerCase() != 'recycle')
+        .toList();
 
     return GestureDetector(
       onTap: onTap,
@@ -717,53 +737,46 @@ class ToolCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Left column: Tool details
+              // Left: tool details
               Expanded(
-                flex: 3,
+                flex: 2,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      tool.toolName,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                    Text(tool.toolName, style: titleStyle),
                     const SizedBox(height: 4),
-                    if (tool.subcategory != null && tool.subcategory!.isNotEmpty) ...[
+                    if (tool.subcategory != null &&
+                        tool.subcategory!.isNotEmpty) ...[
                       Text(
                         tool.subcategory!,
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500),
+                        style: muted?.copyWith(fontWeight: FontWeight.w500),
                       ),
                     ],
-                    if (tool.modelNumber != null && tool.modelNumber!.isNotEmpty) ...[
+                    if (tool.modelNumber != null &&
+                        tool.modelNumber!.isNotEmpty) ...[
                       const SizedBox(height: 2),
-                      Text(
-                        'Model: ${tool.modelNumber}',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                      ),
+                      Text('Model: ${tool.modelNumber}', style: muted),
                     ],
                     if (showToolDetails && tool.displaySpecs.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      Text(tool.displaySpecs, style: TextStyle(fontSize: 13, color: Colors.grey[700])),
+                      Text(tool.displaySpecs, style: muted),
                     ],
                   ],
                 ),
               ),
-              
               const SizedBox(width: 16),
-              
-              // Right column: Action buttons + Location tags (constrained to avoid overflow)
+              // Right: actions + location tags (wider so tags stay side by side)
               Expanded(
-                flex: 2,
+                flex: 3,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final maxTagWidth = constraints.maxWidth;
-                    final visibleLocations = locations.where((loc) =>
-                        loc.location?.type.toLowerCase() != 'recycle').toList();
+                    // Allow ~2 tags per row before wrapping on typical desktop widths.
+                    final maxTagWidth =
+                        (constraints.maxWidth * 0.48).clamp(120.0, 280.0);
                     return Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        // Action buttons
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -795,25 +808,26 @@ class ToolCard extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        if (visibleLocations.isEmpty)
-                          const SizedBox.shrink()
-                        else
+                        if (visibleLocations.isNotEmpty) ...[
+                          const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
                             runSpacing: 6,
                             alignment: WrapAlignment.end,
-                            children: visibleLocations.map((toolLocation) {
-                              return ConstrainedBox(
-                                constraints: BoxConstraints(maxWidth: maxTagWidth),
-                                child: LocationTag(
-                                  toolLocation: toolLocation,
-                                  allLocations: allLocations,
-                                  onTap: () => onTransfer(toolLocation),
+                            children: [
+                              for (final toolLocation in visibleLocations)
+                                ConstrainedBox(
+                                  constraints:
+                                      BoxConstraints(maxWidth: maxTagWidth),
+                                  child: LocationTag(
+                                    toolLocation: toolLocation,
+                                    allLocations: allLocations,
+                                    onTap: () => onTransfer(toolLocation),
+                                  ),
                                 ),
-                              );
-                            }).toList(),
+                            ],
                           ),
+                        ],
                       ],
                     );
                   },
@@ -942,12 +956,12 @@ class LocationTag extends StatelessWidget {
         ),
         child: Text(
           'Qty: $quantity • $locationPath',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: textColor,
-          ),
-          overflow: TextOverflow.visible,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 2,
         ),
       ),
     );

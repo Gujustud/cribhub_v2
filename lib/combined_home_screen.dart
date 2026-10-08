@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'add_tool_screen.dart';
 import 'auth_service.dart';
 import 'drawer_behavior.dart';
+import 'ui_breakpoints.dart';
 import 'workspace_layout.dart';
 import 'workspace_scaffold.dart';
 import 'inventory_screen.dart';
@@ -30,7 +31,11 @@ class CombinedHomeScreen extends StatefulWidget {
 class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDrawerMixin {
   final _toolSearchController = TextEditingController();
   final _dashboardSearchController = TextEditingController();
+  final _quickNotesController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  Timer? _quickNotesDebounce;
+  var _quickNotesSaving = false;
+  var _quickNotesDirty = false;
 
   List<dynamic> _jobs = [];
   List<dynamic> _quotes = [];
@@ -47,14 +52,40 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
     _dashboardSearchController.addListener(() {
       setState(() => _dashboardSearch = _dashboardSearchController.text);
     });
+    _quickNotesController.text = AuthService.instance.quickNotes;
+    _quickNotesController.addListener(_onQuickNotesChanged);
     _load();
   }
 
   @override
   void dispose() {
+    _quickNotesDebounce?.cancel();
+    if (_quickNotesDirty) {
+      // Best-effort flush; ignore errors during teardown.
+      unawaited(AuthService.instance.saveQuickNotes(_quickNotesController.text));
+    }
+    _quickNotesController.removeListener(_onQuickNotesChanged);
     _toolSearchController.dispose();
     _dashboardSearchController.dispose();
+    _quickNotesController.dispose();
     super.dispose();
+  }
+
+  void _onQuickNotesChanged() {
+    _quickNotesDirty = true;
+    _quickNotesDebounce?.cancel();
+    _quickNotesDebounce = Timer(const Duration(milliseconds: 600), () async {
+      final text = _quickNotesController.text;
+      if (!mounted) return;
+      setState(() => _quickNotesSaving = true);
+      try {
+        await AuthService.instance.saveQuickNotes(text);
+        _quickNotesDirty = false;
+      } catch (_) {
+        // Keep dirty so a later edit/retry can save; no modal spam.
+      }
+      if (mounted) setState(() => _quickNotesSaving = false);
+    });
   }
 
   bool get _isJobsOnly => AuthService.instance.isJobsOnly;
@@ -247,15 +278,17 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
     final muted = Theme.of(context).brightness == Brightness.dark
         ? const Color(0xFFD1D5DB)
         : const Color(0xFF4B5563);
-    return QuoteSidebarCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(fontSize: 13, color: muted)),
-          const SizedBox(height: 2),
-          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-        ],
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: TextStyle(fontSize: 13, color: muted)),
+            const SizedBox(height: 2),
+            Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          ],
+        ),
       ),
     );
   }
@@ -560,6 +593,116 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
     );
   }
 
+  Widget _quickNotesCard(BuildContext context, {bool expand = false}) {
+    final scheme = Theme.of(context).colorScheme;
+    final status = _quickNotesSaving
+        ? 'Saving…'
+        : (_quickNotesDirty ? 'Editing…' : null);
+    final field = TextField(
+      controller: _quickNotesController,
+      expands: expand,
+      minLines: expand ? null : 5,
+      maxLines: expand ? null : 8,
+      textAlignVertical: TextAlignVertical.top,
+      decoration: InputDecoration(
+        hintText: 'Quick notes — reminders, scratch notes…',
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        alignLabelWithHint: true,
+      ),
+    );
+    final statusChip = status == null
+        ? null
+        : Text(
+            status,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+          );
+    final body = expand
+        ? Stack(
+            fit: StackFit.expand,
+            children: [
+              field,
+              if (statusChip != null)
+                Positioned(
+                  top: 8,
+                  right: 12,
+                  child: IgnorePointer(child: statusChip),
+                ),
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (statusChip != null) ...[
+                Align(alignment: Alignment.centerRight, child: statusChip),
+                const SizedBox(height: 4),
+              ],
+              field,
+            ],
+          );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: expand ? SizedBox.expand(child: body) : body,
+      ),
+    );
+  }
+
+  Widget _statsBlock({
+    required int active,
+    required int inProgress,
+    required int done,
+    required int doneThisMonth,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 360;
+        if (wide) {
+          return Column(
+            children: [
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: _statCard('Active', '$active')),
+                    const SizedBox(width: 12),
+                    Expanded(child: _statCard('In progress', '$inProgress')),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: _statCard('Done', '$done')),
+                    const SizedBox(width: 12),
+                    Expanded(child: _statCard('This Month', '$doneThisMonth')),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
+        return Column(
+          children: [
+            _statCard('Active', '$active'),
+            const SizedBox(height: 12),
+            _statCard('In progress', '$inProgress'),
+            const SizedBox(height: 12),
+            _statCard('Done', '$done'),
+            const SizedBox(height: 12),
+            _statCard('This Month', '$doneThisMonth'),
+          ],
+        );
+      },
+    );
+  }
+
   BoxDecoration? _dashboardRowBorder(BuildContext context) {
     return BoxDecoration(
       border: Border(
@@ -785,124 +928,135 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
             return jobNum.contains(searchLower) || cust.contains(searchLower);
           }).toList();
 
+    final stats = _statsBlock(
+      active: activeJobsAll.length,
+      inProgress: inProgressCount,
+      done: doneJobs.length,
+      doneThisMonth: doneThisMonth,
+    );
+
     final body = RefreshIndicator(
       onRefresh: _load,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1200),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Dashboard',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 16),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    if (constraints.maxWidth >= 640) {
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: _toolsActionCard(context)),
-                          const SizedBox(width: 16),
-                          Expanded(child: _jobsActionCard(context)),
-                        ],
-                      );
-                    }
+        child: workspaceContentFrame(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth >= 640) {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _toolsActionCard(context),
-                        const SizedBox(height: 16),
-                        _jobsActionCard(context),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: _toolsActionCard(context)),
+                            const SizedBox(width: 16),
+                            Expanded(child: _jobsActionCard(context)),
+                          ],
+                        ),
+                        if (!_loading) ...[
+                          const SizedBox(height: 16),
+                          Table(
+                            columnWidths: const {
+                              0: FlexColumnWidth(),
+                              1: FlexColumnWidth(),
+                            },
+                            children: [
+                              TableRow(
+                                children: [
+                                  TableCell(
+                                    verticalAlignment:
+                                        TableCellVerticalAlignment.fill,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: _quickNotesCard(
+                                        context,
+                                        expand: true,
+                                      ),
+                                    ),
+                                  ),
+                                  // Top (not fill) so this cell sets the row height.
+                                  TableCell(
+                                    verticalAlignment:
+                                        TableCellVerticalAlignment.top,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 8),
+                                      child: stats,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 16),
+                          _quickNotesCard(context),
+                        ],
                       ],
                     );
-                  },
-                ),
-                const SizedBox(height: 16),
-                if (_loading)
-                  const Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else ...[
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      if (constraints.maxWidth >= 700) {
-                        return IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(child: _statCard('Active', '${activeJobsAll.length}')),
-                              const SizedBox(width: 12),
-                              Expanded(child: _statCard('In progress', '$inProgressCount')),
-                              const SizedBox(width: 12),
-                              Expanded(child: _statCard('Done', '${doneJobs.length}')),
-                              const SizedBox(width: 12),
-                              Expanded(child: _statCard('This Month', '$doneThisMonth')),
-                            ],
-                          ),
-                        );
-                      }
-                      return Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(child: _statCard('Active', '${activeJobsAll.length}')),
-                              const SizedBox(width: 12),
-                              Expanded(child: _statCard('In progress', '$inProgressCount')),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(child: _statCard('Done', '${doneJobs.length}')),
-                              const SizedBox(width: 12),
-                              Expanded(child: _statCard('This Month', '$doneThisMonth')),
-                            ],
-                          ),
-                        ],
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _toolsActionCard(context),
+                      const SizedBox(height: 16),
+                      _quickNotesCard(context),
+                      const SizedBox(height: 16),
+                      _jobsActionCard(context),
+                      if (!_loading) ...[
+                        const SizedBox(height: 16),
+                        stats,
+                      ],
+                    ],
+                  );
+                },
+              ),
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else ...[
+                _dashboardSection(
+                  title: 'Active Jobs',
+                  margin: const EdgeInsets.only(top: 24),
+                  trailing: TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const JobsScreen(),
+                        ),
                       );
                     },
+                    child: const Text('All jobs'),
                   ),
+                  child: _activeJobsTable(activeJobs),
+                ),
+                if (!_isJobsOnly)
                   _dashboardSection(
-                    title: 'Active Jobs',
-                    margin: const EdgeInsets.only(top: 24),
+                    title: 'Recent Quotes',
                     trailing: TextButton(
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const JobsScreen()),
+                          MaterialPageRoute(
+                            builder: (context) => const QuotesScreen(),
+                          ),
                         );
                       },
-                      child: const Text('All jobs'),
+                      child: const Text('All quotes'),
                     ),
-                    child: _activeJobsTable(activeJobs),
+                    child: _recentQuotesTable(recentQuotes),
                   ),
-                  if (!_isJobsOnly)
-                    _dashboardSection(
-                      title: 'Recent Quotes',
-                      trailing: TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const QuotesScreen()),
-                          );
-                        },
-                        child: const Text('All quotes'),
-                      ),
-                      child: _recentQuotesTable(recentQuotes),
-                    ),
-                ],
               ],
-            ),
+            ],
           ),
+          maxWidth: kWorkspaceContentMaxWidth,
         ),
       ),
     );
@@ -910,8 +1064,7 @@ class _CombinedHomeScreenState extends State<CombinedHomeScreen> with AutoOpenDr
     return WorkspaceScaffold(
       scaffoldKey: _scaffoldKey,
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('DharmaCore'),
+        title: const Text('Dashboard'),
         leading: workspaceMenuLeading(context),
       ),
       body: body,

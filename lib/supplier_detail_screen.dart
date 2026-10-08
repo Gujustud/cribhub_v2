@@ -3,15 +3,25 @@ import 'package:intl/intl.dart';
 import 'pocketbase_service.dart';
 import 'models.dart';
 import 'add_purchase_screen.dart';
+import 'drawer_behavior.dart';
+import 'ui_breakpoints.dart';
 import 'workspace_layout.dart';
 import 'workspace_scaffold.dart';
-import 'drawer_behavior.dart';
 
 class SupplierDetailScreen extends StatefulWidget {
   /// null = new supplier (add mode), non-null = edit mode
   final dynamic supplier;
 
-  const SupplierDetailScreen({super.key, this.supplier});
+  /// When true, renders as a side panel (no scaffold / route pop).
+  final bool embedded;
+  final ValueChanged<bool>? onClosed;
+
+  const SupplierDetailScreen({
+    super.key,
+    this.supplier,
+    this.embedded = false,
+    this.onClosed,
+  });
 
   @override
   State<SupplierDetailScreen> createState() => _SupplierDetailScreenState();
@@ -75,7 +85,7 @@ class _SupplierDetailScreenState extends State<SupplierDetailScreen> with AutoOp
             }
             id ??= c.toString();
           }
-          if (id != null && id.isNotEmpty) {
+          if (id.isNotEmpty) {
             _selectedCategoryIds.add(id);
           }
         }
@@ -123,6 +133,66 @@ class _SupplierDetailScreenState extends State<SupplierDetailScreen> with AutoOp
     }
   }
 
+  void _close({required bool saved}) {
+    if (widget.embedded) {
+      widget.onClosed?.call(saved);
+    } else if (Navigator.canPop(context)) {
+      Navigator.pop(context, saved);
+    }
+  }
+
+  String get _title {
+    if (_isNew) return 'Add Supplier';
+    final name = _companyNameController.text.trim();
+    return name.isEmpty ? 'Supplier' : name;
+  }
+
+  Future<void> _delete() async {
+    final name = _companyNameController.text.trim().isEmpty
+        ? (widget.supplier.data['company_name'] ?? 'this supplier')
+        : _companyNameController.text.trim();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Supplier'),
+        content: Text('Delete "$name"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    try {
+      await PocketBaseService().deleteSupplier(widget.supplier.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Supplier deleted'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _close(saved: true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _save() async {
     if (_companyNameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -160,13 +230,13 @@ class _SupplierDetailScreenState extends State<SupplierDetailScreen> with AutoOp
         );
       }
       if (mounted) {
-        Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(_isNew ? 'Supplier added' : 'Supplier updated'),
             backgroundColor: Colors.green,
           ),
         );
+        _close(saved: true);
       }
     } catch (e) {
       setState(() => _isSaving = false);
@@ -176,6 +246,42 @@ class _SupplierDetailScreenState extends State<SupplierDetailScreen> with AutoOp
         );
       }
     }
+  }
+
+  Widget _buildEmbeddedHeader(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surface,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: scheme.outlineVariant),
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text(
+                  _title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Close',
+              onPressed: () => _close(saved: false),
+              icon: const Icon(Icons.close),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _field({
@@ -214,8 +320,11 @@ class _SupplierDetailScreenState extends State<SupplierDetailScreen> with AutoOp
             title: Text(cat.data['name']),
             value: selected,
             onChanged: (v) => setState(() {
-              if (v == true) _selectedCategoryIds.add(cat.id);
-              else _selectedCategoryIds.remove(cat.id);
+              if (v == true) {
+                _selectedCategoryIds.add(cat.id);
+              } else {
+                _selectedCategoryIds.remove(cat.id);
+              }
             }),
             contentPadding: EdgeInsets.zero,
           );
@@ -250,139 +359,215 @@ class _SupplierDetailScreenState extends State<SupplierDetailScreen> with AutoOp
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return WorkspaceScaffold(
-      scaffoldKey: _scaffoldKey,
-      appBar: AppBar(
-        title: Text(_isNew ? 'Add Supplier' : _companyNameController.text.isEmpty ? 'Supplier' : _companyNameController.text),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: workspaceMenuLeading(context),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1000),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth > 600;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // ── Two-col on wide, single col on narrow ────
-                    if (isWide)
-                      IntrinsicHeight(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(flex: 3, child: _fieldsWidget()),
-                            const SizedBox(width: 24),
-                            Expanded(flex: 2, child: _categoriesWidget()),
-                          ],
-                        ),
-                      )
-                    else ...[
-                      _fieldsWidget(),
-                      if (_categories.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        _categoriesWidget(),
-                      ],
-                    ],
-
-                    const SizedBox(height: 16),
-
-                    // ── Save button ──────────────────────────────
-                    ElevatedButton(
-                      onPressed: _isSaving ? null : _save,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                      ),
-                      child: _isSaving
-                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : Text(_isNew ? 'ADD SUPPLIER' : 'SAVE CHANGES', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    ),
-
-                    // ── Purchase history (edit mode only) ────────
-                    if (!_isNew) ...[
-                      const SizedBox(height: 28),
-                      Row(
+  Widget _buildFormBody() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: widget.embedded ? kWorkspaceContentMaxWidth : 1000,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth > 600;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (isWide)
+                    IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Purchase History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          const SizedBox(width: 8),
-                          if (!_isLoadingPurchases)
-                            Text('(${_purchases.length})', style: TextStyle(fontSize: 16, color: Colors.grey[600])),
+                          Expanded(flex: 3, child: _fieldsWidget()),
+                          const SizedBox(width: 24),
+                          Expanded(flex: 2, child: _categoriesWidget()),
                         ],
                       ),
-                      const Divider(height: 16),
-                      if (_isLoadingPurchases)
-                        const Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      else if (_purchases.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Center(
-                            child: Column(
-                              children: [
-                                Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey[400]),
-                                const SizedBox(height: 12),
-                                Text('No purchases from this supplier yet.', style: TextStyle(color: Colors.grey[600])),
-                              ],
-                            ),
-                          ),
-                        )
-                      else
-                        ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _purchases.length,
-                          itemBuilder: (context, index) {
-                            final p = _purchases[index];
-                            return Card(
-                              child: ListTile(
-                                leading: const Icon(Icons.receipt_outlined, color: Colors.blueGrey),
-                                title: Text(
-                                  DateFormat.yMMMd().format(p.purchaseDate),
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (p.orderReference != null && p.orderReference!.isNotEmpty)
-                                      Text('Ref: ${p.orderReference}'),
-                                    if (p.total != null)
-                                      Text(
-                                        '\$${p.total!.toStringAsFixed(2)}',
-                                        style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.green),
-                                      ),
-                                  ],
-                                ),
-                                trailing: const Icon(Icons.chevron_right),
-                                onTap: () async {
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (context) => AddPurchaseScreen(purchase: p)),
-                                  );
-                                  _loadPurchases();
-                                },
-                              ),
-                            );
-                          },
-                        ),
-                      const SizedBox(height: 16),
+                    )
+                  else ...[
+                    _fieldsWidget(),
+                    if (_categories.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _categoriesWidget(),
                     ],
                   ],
-                );
-              },
-            ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FilledButton(
+                        onPressed: _isSaving ? null : _save,
+                        child: _isSaving
+                            ? const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(_isNew ? 'Save supplier' : 'Save changes'),
+                      ),
+                      if (!_isNew) ...[
+                        const SizedBox(width: 12),
+                        FilledButton(
+                          onPressed: _isSaving ? null : _delete,
+                          style: FilledButton.styleFrom(
+                            backgroundColor:
+                                Theme.of(context).colorScheme.error,
+                            foregroundColor:
+                                Theme.of(context).colorScheme.onError,
+                          ),
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (!_isNew) ...[
+                    const SizedBox(height: 28),
+                    Row(
+                      children: [
+                        const Text(
+                          'Purchase History',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (!_isLoadingPurchases)
+                          Text(
+                            '(${_purchases.length})',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                      ],
+                    ),
+                    const Divider(height: 16),
+                    if (_isLoadingPurchases)
+                      const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (_purchases.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.receipt_long_outlined,
+                                size: 48,
+                                color: Colors.grey[400],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No purchases from this supplier yet.',
+                                style: TextStyle(color: Colors.grey[600]),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _purchases.length,
+                        itemBuilder: (context, index) {
+                          final p = _purchases[index];
+                          return Card(
+                            child: ListTile(
+                              leading: const Icon(
+                                Icons.receipt_outlined,
+                                color: Colors.blueGrey,
+                              ),
+                              title: Text(
+                                DateFormat.yMMMd().format(p.purchaseDate),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (p.orderReference != null &&
+                                      p.orderReference!.isNotEmpty)
+                                    Text('Ref: ${p.orderReference}'),
+                                  if (p.invoice != null &&
+                                      p.invoice!.trim().isNotEmpty)
+                                    Text('Invoice: ${p.invoice}'),
+                                  if (p.total != null)
+                                    Text(
+                                      '\$${p.total!.toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.green,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        AddPurchaseScreen(purchase: p),
+                                  ),
+                                );
+                                _loadPurchases();
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    const SizedBox(height: 16),
+                  ],
+                ],
+              );
+            },
           ),
         ),
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final form = _buildFormBody();
+
+    if (widget.embedded) {
+      final scheme = Theme.of(context).colorScheme;
+      return Material(
+        color: scheme.surface,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(color: scheme.outlineVariant),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildEmbeddedHeader(context),
+              Expanded(child: form),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return WorkspaceScaffold(
+      scaffoldKey: _scaffoldKey,
+      appBar: AppBar(
+        title: Text(_title),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        leading: workspaceMenuLeading(context),
+      ),
+      body: form,
     );
   }
 }

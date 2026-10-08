@@ -27,8 +27,12 @@ class _MaterialHistoryScreenState extends State<MaterialHistoryScreen>
 
   List<ShopMaterial> _materials = [];
   List<ShopMaterial> _filtered = [];
+  /// materialId → distinct heat/lot values from purchase lines.
+  Map<String, List<String>> _lotsByMaterialId = {};
   ShopMaterial? _selected;
   List<dynamic> _historyRecords = [];
+  /// When search matched a lot, highlight that heat/lot in the history panel.
+  String? _highlightHeatLot;
   bool _loading = true;
   bool _loadingHistory = false;
 
@@ -50,11 +54,18 @@ class _MaterialHistoryScreenState extends State<MaterialHistoryScreen>
   Future<void> _loadMaterials() async {
     setState(() => _loading = true);
     try {
-      final records = await PocketBaseService().getMaterials();
+      final pb = PocketBaseService();
+      final results = await Future.wait([
+        pb.getMaterials(),
+        pb.getMaterialHeatLotsByMaterialId(),
+      ]);
+      final records = results[0] as List<dynamic>;
+      final lots = results[1] as Map<String, List<String>>;
       final list = records.map(ShopMaterial.fromRecord).toList();
       setState(() {
         _materials = list;
-        _applyFilter(_searchController.text);
+        _lotsByMaterialId = lots;
+        _syncFilter(_searchController.text);
         // Refresh selected if it still exists.
         if (_selected != null) {
           final id = _selected!.id;
@@ -82,25 +93,51 @@ class _MaterialHistoryScreenState extends State<MaterialHistoryScreen>
     }
   }
 
-  void _applyFilter(String query) {
+  List<String> _lotsFor(ShopMaterial m) =>
+      _lotsByMaterialId[m.id] ?? const <String>[];
+
+  String? _firstMatchingLot(ShopMaterial m, String queryLower) {
+    if (queryLower.isEmpty) return null;
+    for (final lot in _lotsFor(m)) {
+      if (lot.toLowerCase().contains(queryLower)) return lot;
+    }
+    return null;
+  }
+
+  void _syncFilter(String query) {
     final q = query.trim().toLowerCase();
-    setState(() {
-      if (q.isEmpty) {
-        _filtered = List.from(_materials);
-      } else {
-        _filtered = _materials.where((m) {
-          return m.grade.toLowerCase().contains(q) ||
-              m.form.toLowerCase().contains(q) ||
-              m.sizeLabel.toLowerCase().contains(q) ||
-              m.displayLabel.toLowerCase().contains(q);
-        }).toList();
+    if (q.isEmpty) {
+      _filtered = List.from(_materials);
+      _highlightHeatLot = null;
+      return;
+    }
+    _filtered = _materials.where((m) {
+      if (m.grade.toLowerCase().contains(q) ||
+          m.form.toLowerCase().contains(q) ||
+          m.sizeLabel.toLowerCase().contains(q) ||
+          m.displayLabel.toLowerCase().contains(q)) {
+        return true;
       }
-    });
+      return _lotsFor(m).any((lot) => lot.toLowerCase().contains(q));
+    }).toList();
+    String? highlight;
+    for (final m in _filtered) {
+      highlight = _firstMatchingLot(m, q);
+      if (highlight != null) break;
+    }
+    _highlightHeatLot = highlight;
+  }
+
+  void _applyFilter(String query) {
+    setState(() => _syncFilter(query));
   }
 
   Future<void> _selectMaterial(ShopMaterial m) async {
+    final q = _searchController.text.trim().toLowerCase();
+    final matchedLot = _firstMatchingLot(m, q);
     setState(() {
       _selected = m;
+      _highlightHeatLot = matchedLot;
       _loadingHistory = true;
       _historyRecords = [];
     });
@@ -294,11 +331,11 @@ class _MaterialHistoryScreenState extends State<MaterialHistoryScreen>
     Widget buildToolbar({required bool stacked}) {
       final search = InventoryListSearchField(
         controller: _searchController,
-        hintText: 'Search grade, form, or size…',
+        hintText: 'Search grade, size, or heat/lot…',
         onChanged: _applyFilter,
         decoration: inventoryListSearchDecoration(
           context,
-          hintText: 'Search grade, form, or size…',
+          hintText: 'Search grade, size, or heat/lot…',
         ).copyWith(
           suffixIcon: _searchController.text.isNotEmpty
               ? inventoryListSearchClearButton(
@@ -354,7 +391,9 @@ class _MaterialHistoryScreenState extends State<MaterialHistoryScreen>
                 : _filtered.isEmpty
                     ? Center(
                         child: Text(
-                          'No materials yet.\nAdd one here, or from a purchase line.',
+                          _materials.isEmpty
+                              ? 'No materials yet.\nAdd one here, or from a purchase line.'
+                              : 'No materials match your search.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: scheme.onSurfaceVariant),
                         ),
@@ -365,13 +404,18 @@ class _MaterialHistoryScreenState extends State<MaterialHistoryScreen>
                         itemBuilder: (context, index) {
                           final m = _filtered[index];
                           final selected = _selected?.id == m.id;
+                          final q = _searchController.text.trim().toLowerCase();
+                          final matchedLot = _firstMatchingLot(m, q);
+                          final subtitle = matchedLot != null
+                              ? '${m.form} · ${m.sizeLabel} · lot $matchedLot'
+                              : '${m.form} · ${m.sizeLabel}';
                           return Card(
                             color:
                                 selected ? scheme.secondaryContainer : null,
                             child: ListTile(
                               title: Text(m.grade, style: titleStyle),
                               subtitle: Text(
-                                '${m.form} · ${m.sizeLabel}',
+                                subtitle,
                                 style: muted,
                               ),
                               trailing: Row(
@@ -498,21 +542,11 @@ class _MaterialHistoryScreenState extends State<MaterialHistoryScreen>
           child: Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      selected.displayLabel,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Unit: ${selected.unit}',
-                      style: TextStyle(color: scheme.onSurfaceVariant),
-                    ),
-                  ],
+                child: Text(
+                  '${selected.form} · ${selected.sizeLabel}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                 ),
               ),
               TextButton.icon(
@@ -576,10 +610,23 @@ class _MaterialHistoryScreenState extends State<MaterialHistoryScreen>
                     final qty = item.quantity;
                     final unit = item.unitCost;
                     final lineTotal = unit != null ? qty * unit : null;
-
                     final certs = item.millCertNames;
+                    final highlight = _highlightHeatLot != null &&
+                        heat.isNotEmpty &&
+                        heat.toLowerCase().contains(
+                              _highlightHeatLot!.toLowerCase(),
+                            );
+                    final detailStyle = Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(color: scheme.onSurfaceVariant);
+                    final detailBold = detailStyle?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface,
+                    );
 
                     return Card(
+                      color: highlight
+                          ? scheme.secondaryContainer.withValues(alpha: 0.55)
+                          : null,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(8),
                         onTap: () => _openPurchase(item.purchaseId),
@@ -605,18 +652,44 @@ class _MaterialHistoryScreenState extends State<MaterialHistoryScreen>
                                             fontWeight: FontWeight.w600,
                                           ),
                                     ),
+                                    if (heat.isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      Text.rich(
+                                        TextSpan(
+                                          style: detailStyle,
+                                          children: [
+                                            const TextSpan(text: 'Heat/lot '),
+                                            TextSpan(
+                                              text: heat,
+                                              style: detailBold,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                     const SizedBox(height: 4),
-                                    Text(
-                                      [
-                                        'Qty $qty',
-                                        if (unit != null)
-                                          '\$${unit.toStringAsFixed(2)}/unit',
-                                        if (lineTotal != null)
-                                          'line \$${lineTotal.toStringAsFixed(2)}',
-                                        if (heat.isNotEmpty) 'heat/lot $heat',
-                                      ].join(' · '),
-                                      style: TextStyle(
-                                        color: scheme.onSurfaceVariant,
+                                    Text.rich(
+                                      TextSpan(
+                                        style: detailStyle,
+                                        children: [
+                                          TextSpan(text: 'Qty $qty'),
+                                          if (unit != null) ...[
+                                            const TextSpan(text: ' · '),
+                                            TextSpan(
+                                              text:
+                                                  '\$${unit.toStringAsFixed(2)}/unit',
+                                              style: detailBold,
+                                            ),
+                                          ],
+                                          if (lineTotal != null) ...[
+                                            const TextSpan(text: ' · total '),
+                                            TextSpan(
+                                              text:
+                                                  '\$${lineTotal.toStringAsFixed(2)}',
+                                              style: detailBold,
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                     ),
                                     if (certs.isNotEmpty) ...[

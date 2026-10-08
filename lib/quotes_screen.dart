@@ -304,6 +304,8 @@ class _QuotesScreenState extends State<QuotesScreen> with AutoOpenDrawerMixin {
             'material_vendor': _relationId(d['material_vendor']),
           'vendor_supplied': d['vendor_supplied'],
           'usd_cost': d['usd_cost'] ?? 0,
+          'usd_shipping_cost': d['usd_shipping_cost'] ?? 0,
+          'material_shipping_cost': d['material_shipping_cost'] ?? 0,
           'testing_cost': d['testing_cost'] ?? 0,
           'tooling_total_cost': d['tooling_total_cost'] ?? 0,
           'tooling_description': d['tooling_description'],
@@ -864,7 +866,7 @@ class _QuotesScreenState extends State<QuotesScreen> with AutoOpenDrawerMixin {
     return WorkspaceScaffold(
       scaffoldKey: _scaffoldKey,
       appBar: AppBar(
-        title: const Text('All Quotes'),
+        title: const Text('Quotes'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         leading: workspaceMenuLeading(context),
       ),

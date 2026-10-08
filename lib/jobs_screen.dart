@@ -824,7 +824,7 @@ class _JobsScreenState extends State<JobsScreen> with AutoOpenDrawerMixin {
     return WorkspaceScaffold(
       scaffoldKey: _scaffoldKey,
       appBar: AppBar(
-        title: const Text('All Jobs'),
+        title: const Text('Jobs'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         leading: workspaceMenuLeading(context),
       ),

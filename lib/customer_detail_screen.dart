@@ -16,7 +16,16 @@ class CustomerDetailScreen extends StatefulWidget {
   /// null = new customer, non-null = edit
   final dynamic customer;
 
-  const CustomerDetailScreen({super.key, this.customer});
+  /// When true, renders as a side panel (no scaffold / route pop).
+  final bool embedded;
+  final ValueChanged<bool>? onClosed;
+
+  const CustomerDetailScreen({
+    super.key,
+    this.customer,
+    this.embedded = false,
+    this.onClosed,
+  });
 
   @override
   State<CustomerDetailScreen> createState() => _CustomerDetailScreenState();
@@ -29,6 +38,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with AutoOp
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _notesController = TextEditingController();
+  double _notesBoxHeight = 96;
 
   bool _isSaving = false;
   bool _loadingRelated = false;
@@ -134,6 +144,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with AutoOp
     return sum;
   }
 
+  void _close({required bool saved}) {
+    if (widget.embedded) {
+      widget.onClosed?.call(saved);
+    } else if (Navigator.canPop(context)) {
+      Navigator.pop(context, saved);
+    }
+  }
+
   Future<void> _save() async {
     if (_companyController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -172,13 +190,13 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with AutoOp
         );
       }
       if (mounted) {
-        Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(_isNew ? 'Customer added' : 'Customer updated'),
             backgroundColor: Colors.green,
           ),
         );
+        _close(saved: true);
       }
     } catch (e) {
       setState(() => _isSaving = false);
@@ -215,10 +233,13 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with AutoOp
     try {
       await PocketBaseService().deleteCustomer(_customerId!);
       if (mounted) {
-        Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Customer deleted'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('Customer deleted'),
+            backgroundColor: Colors.green,
+          ),
         );
+        _close(saved: true);
       }
     } catch (e) {
       if (mounted) {
@@ -286,6 +307,60 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with AutoOp
           border: const OutlineInputBorder(),
           floatingLabelBehavior: FloatingLabelBehavior.always,
         ),
+      ),
+    );
+  }
+
+  Widget _resizableNotesField() {
+    final handleColor = Theme.of(context).colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Stack(
+        children: [
+          SizedBox(
+            height: _notesBoxHeight,
+            child: TextField(
+              controller: _notesController,
+              maxLines: null,
+              expands: true,
+              textAlignVertical: TextAlignVertical.top,
+              decoration: const InputDecoration(
+                labelText: 'Notes',
+                border: OutlineInputBorder(),
+                floatingLabelBehavior: FloatingLabelBehavior.always,
+                alignLabelWithHint: true,
+                contentPadding: EdgeInsets.fromLTRB(12, 16, 28, 12),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 2,
+            bottom: 2,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.resizeUpDown,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onVerticalDragUpdate: (details) {
+                  setState(() {
+                    _notesBoxHeight =
+                        (_notesBoxHeight + details.delta.dy).clamp(72.0, 480.0);
+                  });
+                },
+                child: Tooltip(
+                  message: 'Drag to resize',
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.south_east,
+                      size: 16,
+                      color: handleColor,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -624,31 +699,75 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with AutoOp
             ],
           ),
           _field(controller: _addressController, label: 'Address', maxLines: 2),
-          _field(controller: _notesController, label: 'Notes', maxLines: 3),
+          _resizableNotesField(),
           const SizedBox(height: 4),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              ElevatedButton(
+              FilledButton(
                 onPressed: _isSaving ? null : _save,
                 child: _isSaving
                     ? const SizedBox(
                         height: 18,
                         width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
-                    : const Text('Save'),
+                    : const Text('Save customer'),
               ),
-              if (!_isNew)
-                OutlinedButton(
-                  onPressed: _confirmDelete,
-                  style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                  child: const Text('Delete customer'),
+              if (!_isNew) ...[
+                const SizedBox(width: 12),
+                FilledButton(
+                  onPressed: _isSaving ? null : _confirmDelete,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                    foregroundColor: Theme.of(context).colorScheme.onError,
+                  ),
+                  child: const Text('Delete'),
                 ),
+              ],
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEmbeddedHeader(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final title = _isNew ? 'Add customer' : _displayName;
+    return Material(
+      color: scheme.surface,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: scheme.outlineVariant),
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Close',
+              onPressed: () => _close(saved: false),
+              icon: const Icon(Icons.close),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -748,24 +867,61 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with AutoOp
               ),
             ],
           ),
-          _field(controller: _notesController, label: 'Notes', maxLines: 3),
+          _resizableNotesField(),
           const SizedBox(height: 8),
-          ElevatedButton(
-            onPressed: _isSaving ? null : _save,
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            child: _isSaving
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('ADD CUSTOMER', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FilledButton(
+                onPressed: _isSaving ? null : _save,
+                child: _isSaving
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Save customer'),
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFormScroll() {
+    final wide = MediaQuery.sizeOf(context).width >= kWorkspaceWideBreakpointPx;
+    return RefreshIndicator(
+      onRefresh: _isNew ? () async {} : _loadRelated,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: widget.embedded ? kWorkspaceContentMaxWidth : 1100,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!_isNew && !widget.embedded)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Text(
+                      _displayName,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ),
+                _isNew ? _newCustomerBody() : _editBody(wide),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -773,7 +929,28 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with AutoOp
   @override
   Widget build(BuildContext context) {
     final title = _isNew ? 'Add customer' : _displayName;
-    final wide = MediaQuery.sizeOf(context).width >= kWorkspaceWideBreakpointPx;
+    final form = _buildFormScroll();
+
+    if (widget.embedded) {
+      final scheme = Theme.of(context).colorScheme;
+      return Material(
+        color: scheme.surface,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(color: scheme.outlineVariant),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildEmbeddedHeader(context),
+              Expanded(child: form),
+            ],
+          ),
+        ),
+      );
+    }
 
     return WorkspaceScaffold(
       scaffoldKey: _scaffoldKey,
@@ -782,47 +959,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> with AutoOp
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         leading: workspaceMenuLeading(context),
       ),
-      body: RefreshIndicator(
-        onRefresh: _isNew ? () async {} : _loadRelated,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1100),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (!_isNew)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: TextButton.icon(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.arrow_back, size: 18),
-                        label: const Text('Customers'),
-                        style: TextButton.styleFrom(
-                          alignment: Alignment.centerLeft,
-                          padding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ),
-                  if (!_isNew)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Text(
-                        _displayName,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                    ),
-                  _isNew ? _newCustomerBody() : _editBody(wide),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+      body: form,
     );
   }
 }

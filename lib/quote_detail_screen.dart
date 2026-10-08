@@ -110,14 +110,31 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
         final shopData = shop.data as Map<String, dynamic>? ?? {};
         quote = _defaultQuoteFromShop(newQuoteFieldsFromShopSettings(shopData));
         lines = [
-          {'line_number': 1, 'part_quantity': 1},
+          {
+            'line_number': 1,
+            'local_key': 'tmp_new_1',
+            'part_quantity': 1,
+          },
         ];
       }
 
       if (lines.isEmpty) {
         lines = [
-          {'line_number': 1, 'part_quantity': 1},
+          {
+            'line_number': 1,
+            'local_key': 'tmp_empty_1',
+            'part_quantity': 1,
+          },
         ];
+      } else {
+        for (var i = 0; i < lines.length; i++) {
+          if (lines[i]['id'] == null && lines[i]['local_key'] == null) {
+            lines[i] = {
+              ...lines[i],
+              'local_key': 'tmp_load_$i',
+            };
+          }
+        }
       }
 
       if (mounted) {
@@ -134,7 +151,11 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
         setState(() {
           _quote ??= _defaultQuoteFromShop(newQuoteFieldsFromShopSettings(null));
           _lineItems = [
-            {'line_number': 1, 'part_quantity': 1},
+            {
+              'line_number': 1,
+              'local_key': _newLocalLineKey(),
+              'part_quantity': 1,
+            },
           ];
           _loading = false;
         });
@@ -146,7 +167,59 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
   }
 
   void _patchQuote(Map<String, dynamic> updates) {
-    setState(() => _quote = {...?_quote, ...updates});
+    setState(() {
+      _quote = {...?_quote, ...updates};
+      // When FX changes, rewrite CAD from any USD amounts on line items.
+      if (updates.containsKey('exchange_rate_usd_to_cad')) {
+        _refreshCadFromUsd(updates['exchange_rate_usd_to_cad']);
+      }
+    });
+  }
+
+  String _newLocalLineKey() =>
+      'tmp_${DateTime.now().microsecondsSinceEpoch}_${_lineItems.length}';
+
+  void _renumberLineItems() {
+    for (var i = 0; i < _lineItems.length; i++) {
+      _lineItems[i] = {..._lineItems[i], 'line_number': i + 1};
+    }
+  }
+
+  void _onReorderLineItems(int oldIndex, int newIndex) {
+    setState(() {
+      if (newIndex > oldIndex) newIndex -= 1;
+      final item = _lineItems.removeAt(oldIndex);
+      _lineItems.insert(newIndex, item);
+      _renumberLineItems();
+    });
+  }
+
+  int _nextLineNumber() {
+    return _lineItems
+            .map((i) => (i['line_number'] is num)
+                ? (i['line_number'] as num).toInt()
+                : int.tryParse('${i['line_number']}') ?? 0)
+            .fold<int>(0, (a, b) => a > b ? a : b) +
+        1;
+  }
+
+  /// Recalculate material / shipping CAD from stored USD using [rateRaw].
+  /// Leaves CAD alone when there is no USD (manual CAD-only entry).
+  void _refreshCadFromUsd(dynamic rateRaw) {
+    final rate = double.tryParse('$rateRaw') ?? 0;
+    if (rate <= 0) return;
+    _lineItems = _lineItems.map((item) {
+      final next = Map<String, dynamic>.from(item);
+      final usdMat = _num(item['usd_cost']);
+      if (usdMat > 0) {
+        next['material_cost_cad'] = quoteRound2(usdMat * rate);
+      }
+      final usdShip = _num(item['usd_shipping_cost']);
+      if (usdShip > 0) {
+        next['material_shipping_cost'] = quoteRound2(usdShip * rate);
+      }
+      return next;
+    }).toList();
   }
 
   Future<void> _openLinkedJob() async {
@@ -345,7 +418,7 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
 
     return {
       'quote': quoteId,
-      'line_number': item['line_number'] ?? index + 1,
+      'line_number': index + 1,
       'part_number': item['part_number'],
       'part_quantity': item['part_quantity'] ?? 1,
       'alloy': item['alloy'],
@@ -357,6 +430,7 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
         'material_vendor': _relationId(item['material_vendor']),
       'vendor_supplied': item['vendor_supplied'],
       'usd_cost': quoteRound2(_num(item['usd_cost'])) ?? 0,
+      'usd_shipping_cost': quoteRound2(_num(item['usd_shipping_cost'])) ?? 0,
       'material_shipping_cost': quoteRound2(materialShipping) ?? 0,
       'testing_cost': quoteRound2(_num(item['testing_cost'])) ?? 0,
       'tooling_total_cost': quoteRound2(_num(item['tooling_total_cost'])) ?? 0,
@@ -847,47 +921,71 @@ class _QuoteDetailScreenState extends State<QuoteDetailScreen> with AutoOpenDraw
         const SizedBox(height: 16),
         Text('Line items', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 8),
-        ...List.generate(_lineItems.length, (index) {
-          return QuoteLineItemCard(
-            key: ValueKey('line_${_lineItems[index]['id'] ?? 'new_$index'}'),
-            lineItem: _lineItems[index],
-            quoteSettings: getQuoteSettings(_quote),
-            calculated: calcLines[index],
-            suppliers: _suppliers,
-            alloySuggestions: _alloySuggestions,
-            lineIndex: index,
-            onChanged: (next) {
-              setState(() => _lineItems[index] = next);
-            },
-            onDelete: () {
-              setState(() => _lineItems.removeAt(index));
-            },
-            onDuplicate: () {
-              final source = Map<String, dynamic>.from(_lineItems[index]);
-              source.remove('id');
-              final nextNum = _lineItems
-                      .map((i) => (i['line_number'] is num)
-                          ? (i['line_number'] as num).toInt()
-                          : int.tryParse('${i['line_number']}') ?? 0)
-                      .fold<int>(0, (a, b) => a > b ? a : b) +
-                  1;
-              source['line_number'] = nextNum;
-              setState(() => _lineItems.insert(index + 1, source));
-            },
-            onAddPart: () {
-              final nextNum = _lineItems
-                      .map((i) => (i['line_number'] is num)
-                          ? (i['line_number'] as num).toInt()
-                          : int.tryParse('${i['line_number']}') ?? 0)
-                      .fold<int>(0, (a, b) => a > b ? a : b) +
-                  1;
-              setState(() => _lineItems.add({
-                    'line_number': nextNum,
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          itemCount: _lineItems.length,
+          onReorder: _onReorderLineItems,
+          itemBuilder: (context, index) {
+            final item = _lineItems[index];
+            final keyId = item['id'] ?? item['local_key'] ?? 'line_$index';
+            return QuoteLineItemCard(
+              key: ValueKey('line_$keyId'),
+              lineItem: item,
+              quoteSettings: getQuoteSettings(_quote),
+              calculated: calcLines[index],
+              suppliers: _suppliers,
+              alloySuggestions: _alloySuggestions,
+              lineIndex: index,
+              dragHandle: ReorderableDragStartListener(
+                index: index,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.grab,
+                  child: Tooltip(
+                    message: 'Drag to reorder',
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 4, top: 8),
+                      child: Icon(
+                        Icons.drag_handle,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              onChanged: (next) {
+                setState(() => _lineItems[index] = next);
+              },
+              onDelete: () {
+                setState(() {
+                  _lineItems.removeAt(index);
+                  _renumberLineItems();
+                });
+              },
+              onDuplicate: () {
+                final source = Map<String, dynamic>.from(_lineItems[index]);
+                source.remove('id');
+                source['local_key'] = _newLocalLineKey();
+                source['line_number'] = _nextLineNumber();
+                setState(() {
+                  _lineItems.insert(index + 1, source);
+                  _renumberLineItems();
+                });
+              },
+              onAddPart: () {
+                setState(() {
+                  _lineItems.add({
+                    'line_number': _nextLineNumber(),
+                    'local_key': _newLocalLineKey(),
                     'part_quantity': 1,
-                  }));
-            },
-          );
-        }),
+                  });
+                  _renumberLineItems();
+                });
+              },
+            );
+          },
+        ),
       ],
     );
 

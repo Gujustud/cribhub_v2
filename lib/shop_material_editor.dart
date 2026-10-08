@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'material_form_icons.dart';
 import 'models.dart';
 import 'pocketbase_service.dart';
 
@@ -25,12 +26,15 @@ class _ShopMaterialEditorDialog extends StatefulWidget {
 }
 
 class _ShopMaterialEditorDialogState extends State<_ShopMaterialEditorDialog> {
+  static const _gradeSuggestionsMax = 25;
+
   late final TextEditingController _gradeCtrl;
   late final TextEditingController _sizeCtrl;
   late final TextEditingController _notesCtrl;
   late String _form;
   late String _unit;
   bool _saving = false;
+  List<String> _gradeSuggestions = [];
 
   bool get _isEdit => widget.existing != null;
 
@@ -41,8 +45,34 @@ class _ShopMaterialEditorDialogState extends State<_ShopMaterialEditorDialog> {
     _gradeCtrl = TextEditingController(text: existing?.grade ?? '');
     _sizeCtrl = TextEditingController(text: existing?.sizeLabel ?? '');
     _notesCtrl = TextEditingController(text: existing?.notes ?? '');
-    _form = existing?.form ?? 'bar';
+    _form = existing?.form ?? 'flat';
     _unit = existing?.unit ?? 'ea';
+    _loadGradeSuggestions();
+  }
+
+  Future<void> _loadGradeSuggestions() async {
+    try {
+      final records = await PocketBaseService().getMaterials();
+      final grades = <String>{};
+      for (final r in records) {
+        final g = ShopMaterial.fromRecord(r).grade.trim();
+        if (g.isNotEmpty) grades.add(g);
+      }
+      final list = grades.toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      if (mounted) setState(() => _gradeSuggestions = list);
+    } catch (_) {
+      // Suggestions are optional; typing a new grade still works.
+    }
+  }
+
+  Iterable<String> _filterGrades(String text) {
+    if (_gradeSuggestions.isEmpty) return const [];
+    final q = text.trim().toLowerCase();
+    final matches = q.isEmpty
+        ? _gradeSuggestions
+        : _gradeSuggestions.where((g) => g.toLowerCase().contains(q));
+    return matches.take(_gradeSuggestionsMax);
   }
 
   @override
@@ -101,43 +131,45 @@ class _ShopMaterialEditorDialogState extends State<_ShopMaterialEditorDialog> {
     return AlertDialog(
       title: Text(_isEdit ? 'Edit material' : 'New material'),
       content: SizedBox(
-        width: 420,
+        width: 460,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: _gradeCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Grade / alloy',
-                  hintText: 'e.g. 4140, 6061-T6',
-                  border: OutlineInputBorder(),
-                ),
-                autofocus: true,
-                enabled: !_saving,
+              Autocomplete<String>(
+                initialValue: TextEditingValue(text: _gradeCtrl.text),
+                optionsBuilder: (textEditingValue) =>
+                    _filterGrades(textEditingValue.text),
+                onSelected: (grade) {
+                  _gradeCtrl.text = grade;
+                },
+                optionsMaxHeight: 240,
+                fieldViewBuilder: (
+                  context,
+                  textEditingController,
+                  focusNode,
+                  onFieldSubmitted,
+                ) {
+                  return TextField(
+                    controller: textEditingController,
+                    focusNode: focusNode,
+                    decoration: const InputDecoration(
+                      labelText: 'Grade / alloy',
+                      hintText: 'e.g. 4140, 6061-T6',
+                      border: OutlineInputBorder(),
+                    ),
+                    autofocus: true,
+                    enabled: !_saving,
+                    onChanged: (v) => _gradeCtrl.text = v,
+                    onSubmitted: (_) => onFieldSubmitted(),
+                  );
+                },
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                // ignore: deprecated_member_use
+              MaterialFormIconRow(
                 value: _form,
-                decoration: const InputDecoration(
-                  labelText: 'Form',
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'bar', child: Text('Bar')),
-                  DropdownMenuItem(value: 'plate', child: Text('Plate')),
-                  DropdownMenuItem(value: 'sheet', child: Text('Sheet')),
-                  DropdownMenuItem(value: 'tube', child: Text('Tube')),
-                  DropdownMenuItem(value: 'hex', child: Text('Hex')),
-                  DropdownMenuItem(value: 'flat', child: Text('Flat')),
-                  DropdownMenuItem(value: 'other', child: Text('Other')),
-                ],
-                onChanged: _saving
-                    ? null
-                    : (v) {
-                        if (v != null) setState(() => _form = v);
-                      },
+                enabled: !_saving,
+                onChanged: (v) => setState(() => _form = v),
               ),
               const SizedBox(height: 12),
               TextField(

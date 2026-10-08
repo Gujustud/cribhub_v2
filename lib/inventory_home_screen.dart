@@ -322,7 +322,6 @@ class _MainScreenState extends State<MainScreen> with AutoOpenDrawerMixin {
       scaffoldKey: _scaffoldKey,
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('DharmaCore'),
         leading: workspaceMenuLeading(context),
       ),
       body: content,

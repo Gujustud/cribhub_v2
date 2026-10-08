@@ -54,7 +54,8 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
     return source.where((p) {
       final supplier = (p.supplierName ?? '').toLowerCase();
       final ref = (p.orderReference ?? '').toLowerCase();
-      return supplier.contains(q) || ref.contains(q);
+      final invoice = (p.invoice ?? '').toLowerCase();
+      return supplier.contains(q) || ref.contains(q) || invoice.contains(q);
     }).toList();
   }
 
@@ -197,7 +198,9 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
     required TextStyle? titleStyle,
     required TextStyle? muted,
   }) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
 
     if (_filteredPurchases.isEmpty) {
       return Center(
@@ -236,8 +239,10 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
         final refRaw = p.orderReference?.trim();
         final refText =
             (refRaw != null && refRaw.isNotEmpty) ? 'Ref: $refRaw' : null;
-        final totalText =
-            p.total != null ? 'Total: \$${p.total!.toStringAsFixed(2)}' : null;
+        final cur = p.currency == 'USD' ? 'USD' : 'CAD';
+        final totalText = p.total != null
+            ? 'Total: \$${p.total!.toStringAsFixed(2)} $cur'
+            : (cur == 'USD' ? 'USD' : null);
         final selected = usePanel &&
             !_creatingNew &&
             _selectedPurchase?.id == p.id;
@@ -350,6 +355,21 @@ class _PurchasesScreenState extends State<PurchasesScreen> with AutoOpenDrawerMi
               return Tooltip(
                 message: hoverMessage,
                 waitDuration: const Duration(milliseconds: 400),
+                decoration: BoxDecoration(
+                  color: scheme.surface,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: scheme.outlineVariant),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                textStyle: textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurface,
+                ),
                 child: tile,
               );
             },

@@ -463,9 +463,13 @@ class Purchase {
   final DateTime purchaseDate;
   final String? supplierId;
   final String? orderReference;
+  /// Supplier invoice number (optional).
+  final String? invoice;
   final String? notes;
   final double? total;
   final String? supplierName;
+  /// Invoice currency: `CAD` (default) or `USD`. No FX conversion.
+  final String currency;
   final List<String> attachmentNames;
 
   Purchase({
@@ -473,11 +477,15 @@ class Purchase {
     required this.purchaseDate,
     this.supplierId,
     this.orderReference,
+    this.invoice,
     this.notes,
     this.total,
     this.supplierName,
+    this.currency = 'CAD',
     this.attachmentNames = const [],
   });
+
+  bool get isUsd => currency == 'USD';
 
   factory Purchase.fromRecord(dynamic record) {
     final data = record.data;
@@ -492,6 +500,7 @@ class Purchase {
         }
       }
     } catch (_) {}
+    final rawCurrency = (data['currency'] ?? 'CAD').toString().trim().toUpperCase();
     return Purchase(
       id: record.id,
       purchaseDate: data['purchase_date'] != null
@@ -499,9 +508,11 @@ class Purchase {
           : DateTime.parse(record.created),
       supplierId: data['supplier'],
       orderReference: data['order_reference'],
+      invoice: data['invoice']?.toString(),
       notes: data['notes'],
       total: data['total']?.toDouble(),
       supplierName: supplierName,
+      currency: rawCurrency == 'USD' ? 'USD' : 'CAD',
       attachmentNames: _fileNamesFrom(data['attachments']),
     );
   }

@@ -4,6 +4,9 @@ import 'package:markdown/markdown.dart' as md;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'wiki_table_models.dart';
+import 'wiki_table_view.dart';
+
 Map<String, dynamic> wikiData(RecordModel page) {
   return page.data;
 }
@@ -41,6 +44,17 @@ int wikiSortOrder(RecordModel page) {
 
 String wikiUpdatedEmail(RecordModel page) {
   return (page.data['updated_by_email'] ?? '').toString().trim();
+}
+
+String wikiUpdatedName(RecordModel page) {
+  return (page.data['updated_by_name'] ?? '').toString().trim();
+}
+
+/// Display name for last editor (name, else email).
+String wikiUpdatedByLabel(RecordModel page) {
+  final name = wikiUpdatedName(page);
+  if (name.isNotEmpty) return name;
+  return wikiUpdatedEmail(page);
 }
 
 String? wikiParentId(RecordModel page) {
@@ -178,6 +192,35 @@ Widget wikiMarkdownView(BuildContext context, String markdown) {
       if (uri == null) return;
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     },
+  );
+}
+
+/// Markdown body with `{{table:id}}` embeds rendered as live [WikiTableEmbed]s.
+Widget wikiBodyWithTables(
+  BuildContext context,
+  String body, {
+  bool canEditTables = false,
+}) {
+  final parts = splitWikiBodyWithTables(body);
+  final onlyEmptyText = parts.length == 1 &&
+      !parts.first.isTable &&
+      (parts.first.markdown ?? '').trim().isEmpty;
+  if (onlyEmptyText) {
+    return wikiMarkdownView(context, body);
+  }
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      for (final part in parts)
+        if (part.isTable)
+          WikiTableEmbed(
+            tableId: part.tableId!,
+            canEdit: canEditTables,
+          )
+        else if ((part.markdown ?? '').trim().isNotEmpty)
+          wikiMarkdownView(context, part.markdown!),
+    ],
   );
 }
 

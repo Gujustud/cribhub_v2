@@ -6,6 +6,7 @@ import 'workspace_layout.dart';
 import 'workspace_scaffold.dart';
 import 'auth_service.dart';
 import 'drawer_behavior.dart';
+import 'material_lot_picker.dart';
 import 'part_images_panel.dart';
 import 'pocketbase_service.dart';
 import 'quote_detail_screen.dart';
@@ -62,6 +63,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
   String? _customerId;
   String? _quoteId;
   String? _materialSourceVendorId;
+  /// Linked purchase line for mill cert PDFs (`jobs.material_purchase_item`).
+  String? _materialPurchaseItemId;
+  MaterialLotPick? _materialLotPick;
   String _status = 'planning';
   String _trackingStatus = 'not_shipped';
   bool _loading = true;
@@ -131,6 +135,187 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
     _projectNotesController.text = '${d['project_notes'] ?? ''}';
     _partImages = PartImagesPanel.normalizeFilenames(d['part_images']);
     _showTracking2 = _trackingNumber2Controller.text.trim().isNotEmpty;
+    _hydrateMaterialLotFromRecord(d);
+  }
+
+  void _hydrateMaterialLotFromRecord(Map<String, dynamic> d) {
+    _materialPurchaseItemId = _relationId(d['material_purchase_item']);
+    _materialLotPick = null;
+    try {
+      final expand = _record?.expand?['material_purchase_item'];
+      final raw = (expand is List && expand.isNotEmpty) ? expand.first : expand;
+      if (raw != null) {
+        final pick = MaterialLotPick.fromRecord(raw);
+        if (pick.heatLot.isNotEmpty) {
+          _materialLotPick = pick;
+          _materialPurchaseItemId = pick.purchaseItemId;
+          if (_materialLotController.text.trim().isEmpty) {
+            _materialLotController.text = pick.heatLot;
+          }
+        }
+      }
+    } catch (_) {}
+    // Expand missing (older list payload) — fetch linked line for cert chips.
+    if (_materialLotPick == null &&
+        _materialPurchaseItemId != null &&
+        _materialPurchaseItemId!.isNotEmpty) {
+      _loadLinkedMaterialLot(_materialPurchaseItemId!);
+    }
+  }
+
+  Future<void> _loadLinkedMaterialLot(String purchaseItemId) async {
+    try {
+      final record = await PocketBaseService().getPurchaseItem(purchaseItemId);
+      if (!mounted) return;
+      final pick = MaterialLotPick.fromRecord(record);
+      if (pick.heatLot.isEmpty) return;
+      setState(() {
+        _materialLotPick = pick;
+        _materialPurchaseItemId = pick.purchaseItemId;
+        if (_materialLotController.text.trim().isEmpty) {
+          _materialLotController.text = pick.heatLot;
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _pickMaterialLot() async {
+    final picked = await showMaterialLotPicker(
+      context,
+      selectedPurchaseItemId: _materialPurchaseItemId,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _materialLotPick = picked;
+      _materialPurchaseItemId = picked.purchaseItemId;
+      _materialLotController.text = picked.heatLot;
+      if (picked.supplierId != null &&
+          picked.supplierId!.isNotEmpty &&
+          (_materialSourceVendorId == null ||
+              _materialSourceVendorId!.isEmpty)) {
+        _materialSourceVendorId = picked.supplierId;
+      }
+    });
+  }
+
+  void _clearMaterialLot() {
+    setState(() {
+      _materialLotPick = null;
+      _materialPurchaseItemId = null;
+      _materialLotController.clear();
+    });
+  }
+
+  Future<void> _openMillCert(dynamic record, String filename) async {
+    final url = PocketBaseService().pb.files.getUrl(record, filename);
+    final uri = Uri.parse(url.toString());
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
+        mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open $filename')),
+      );
+    }
+  }
+
+  Widget _materialLotPickerField(BuildContext context, {bool compact = false}) {
+    final scheme = Theme.of(context).colorScheme;
+    final lotText = _materialLotController.text.trim();
+    final hasLink = _materialPurchaseItemId != null;
+    final label = lotText.isNotEmpty
+        ? lotText
+        : (hasLink ? 'Linked lot' : 'Select heat/lot…');
+    final subtitle = _materialLotPick == null
+        ? null
+        : [
+            _materialLotPick!.materialLabel,
+            if (_materialLotPick!.supplierName.isNotEmpty)
+              _materialLotPick!.supplierName,
+          ].join(' · ');
+    final certs = _materialLotPick?.millCertNames ?? const <String>[];
+    final certRecord = _materialLotPick?.record;
+
+    final field = InputDecorator(
+      decoration: (compact
+              ? QuoteSidebarTheme.fieldDecoration(context).copyWith(
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                )
+              : QuoteSidebarTheme.fieldDecoration(context))
+          .copyWith(
+        suffixIcon: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (lotText.isNotEmpty || hasLink)
+              IconButton(
+                tooltip: 'Clear',
+                icon: const Icon(Icons.clear, size: 18),
+                onPressed: _clearMaterialLot,
+              ),
+            IconButton(
+              tooltip: 'Search lots',
+              icon: const Icon(Icons.search, size: 20),
+              onPressed: _pickMaterialLot,
+            ),
+          ],
+        ),
+      ),
+      child: InkWell(
+        onTap: _pickMaterialLot,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: compact ? 14 : 15,
+                  color: lotText.isEmpty && !hasLink
+                      ? scheme.onSurfaceVariant
+                      : null,
+                  fontWeight:
+                      lotText.isNotEmpty ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+              if (subtitle != null && subtitle.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        field,
+        if (certs.isNotEmpty && certRecord != null) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final name in certs)
+                ActionChip(
+                  avatar: const Icon(Icons.picture_as_pdf, size: 16),
+                  label: Text(name, overflow: TextOverflow.ellipsis),
+                  onPressed: () => _openMillCert(certRecord, name),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
   }
 
   @override
@@ -306,6 +491,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
       'wave_invoice_number': _optText(_waveInvoiceNumberController),
       'po_number': _optText(_poNumberController),
       'material_lot': _optText(_materialLotController),
+      'material_purchase_item': _materialPurchaseItemId,
       'material_source': _optText(_materialSourceController),
       'project_notes': _optText(_projectNotesController),
     };
@@ -956,15 +1142,8 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
               context,
               'Material LOT',
               ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 220),
-                child: TextField(
-                  controller: _materialLotController,
-                  style: const TextStyle(fontSize: 14),
-                  decoration: QuoteSidebarTheme.fieldDecoration(context).copyWith(
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  ),
-                ),
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: _materialLotPickerField(context, compact: true),
               ),
             ),
             _notionRow(
@@ -1448,10 +1627,20 @@ class _JobDetailScreenState extends State<JobDetailScreen> with AutoOpenDrawerMi
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: _labeledField(
-                    context,
-                    label: 'Material lot',
-                    controller: _materialLotController,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Material lot',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: _labelColor(context),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      _materialLotPickerField(context),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 12),
